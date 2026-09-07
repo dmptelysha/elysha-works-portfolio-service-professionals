@@ -70,7 +70,7 @@ test("navigation and hero match the approved service-professional direction", ()
   assert.match(html, /class="site-header"/);
   assert.match(html, /&lt; Elysha Works \/&gt;/);
   assert.match(html, /id="hero"/);
-  assert.match(html, /Websites and client systems built to turn interest into action\./);
+  assert.match(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " "), /Websites and client systems built to turn interest into action\./);
   assert.match(html, /assets\/elysha-portrait-cutout\.png/);
   for (const stage of ["Attract", "Capture", "Book", "Follow Up", "Manage"]) assert.match(html, new RegExp(stage));
 });
