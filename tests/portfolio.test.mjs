@@ -62,3 +62,74 @@ test("the existing portfolio remains byte-for-byte unchanged", () => {
     assert.equal(actual, hash, `existing portfolio configuration ${file} changed`);
   }
 });
+
+const html = readFileSync(join(root, "index.html"), "utf8");
+const css = readFileSync(join(root, "styles.css"), "utf8");
+
+test("navigation and hero match the approved service-professional direction", () => {
+  assert.match(html, /class="site-header"/);
+  assert.match(html, /&lt; Elysha Works \/&gt;/);
+  assert.match(html, /id="hero"/);
+  assert.match(html, /Websites and client systems built to turn interest into action\./);
+  assert.match(html, /assets\/elysha-portrait-cutout\.png/);
+  for (const stage of ["Attract", "Capture", "Book", "Follow Up", "Manage"]) assert.match(html, new RegExp(stage));
+});
+
+test("the palette remains monochrome and focus is visible", () => {
+  assert.doesNotMatch(css, /yellow|orange|#f59e0b|#e88900|#ffb000/i);
+  assert.match(css, /:focus-visible/);
+  for (const token of ["--ink:#080808", "--paper:#f5f3ee", "--graphite:#444", "--line:#c9c7c2"]) {
+    assert.match(css.replaceAll(" ", ""), new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+});
+
+test("How I Help and Selected Work carry the approved content", () => {
+  assert.match(html, /id="how-i-help"/);
+  assert.equal((html.match(/class="journey-step\b[^"]*"/g) ?? []).length, 5);
+  assert.match(html, /id="work"/);
+  assert.equal((html.match(/class="project-card reveal"/g) ?? []).length, 4);
+  for (const title of ["La Jaysiedel Cakes", "Elysha Works Client Portal", "Elysha Works Growth CRM", "Teacher Elysha"]) assert.match(html, new RegExp(title));
+});
+
+test("Process, About, and Good Fit use approved content", () => {
+  for (const id of ["process", "about", "fit"]) assert.match(html, new RegExp(`id="${id}"`));
+  for (const phase of ["Discover", "Plan", "Build", "Launch &amp; Support"]) assert.match(html, new RegExp(phase));
+  assert.equal((html.match(/class="photo-slot\b[^"]*"/g) ?? []).length, 3);
+  assert.match(html, /assets\/elysha-portrait-full\.png/);
+  assert.match(html, /Does this sound familiar\?/);
+});
+
+test("the lower funnel contains five services, seven native FAQs, final CTA, and footer", () => {
+  for (const id of ["services", "faq", "contact"]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.equal((html.match(/class="service-offer\b[^"]*"/g) ?? []).length, 5);
+  assert.equal((html.match(/<details class="faq-item"/g) ?? []).length, 7);
+  assert.equal((html.match(/<summary class="faq-trigger"/g) ?? []).length, 7);
+  assert.match(html, /class="site-footer"/);
+  assert.match(html, /support@elyshaworks\.com/);
+  assert.match(html, /data-back-to-top/);
+});
+
+test("landmarks, headings, project alternatives, and decorative art are semantic", () => {
+  const header = html.indexOf("<header");
+  const main = html.indexOf("<main");
+  const footer = html.indexOf("<footer");
+  assert.ok(header >= 0 && main > header && footer > main, "landmarks must appear in document order");
+  const headingLevels = [...html.matchAll(/<h([1-6])\b/g)].map(match => Number(match[1]));
+  assert.equal(headingLevels.filter(level => level === 1).length, 1, "the page needs exactly one h1");
+  assert.equal(headingLevels[0], 1, "the first heading must be h1");
+  for (let index = 1; index < headingLevels.length; index += 1) assert.ok(headingLevels[index] <= headingLevels[index - 1] + 1, `heading level jumps at index ${index}`);
+  assert.equal((html.match(/<section\b[^>]*aria-labelledby=/g) ?? []).length, 9, "every content section needs an accessible heading");
+  assert.equal((html.match(/<img\b[^>]*class="project-image"[^>]*alt="[^"]{12,}"/g) ?? []).length, 4, "project images need descriptive alternatives");
+  assert.match(html, /class="cta-path"[^>]*aria-hidden="true"/);
+});
+
+const script = readFileSync(join(root, "script.js"), "utf8");
+test("progressive enhancement exposes menu FAQ back-to-top and reduced motion", () => {
+  for (const name of ["setMenu", "setFaq", "initMotion"]) assert.match(script, new RegExp(`function ${name}`));
+  assert.match(script, /prefers-reduced-motion/);
+  assert.match(script, /aria-expanded/);
+  assert.match(script, /Escape/);
+  assert.match(script, /pointerdown/);
+  assert.match(script, /matchMedia\("\(max-width: 900px\)"\)/);
+  assert.match(script, /ScrollTrigger/);
+});
