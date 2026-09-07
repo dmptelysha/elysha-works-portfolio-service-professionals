@@ -96,6 +96,18 @@ About uses the supplied full portrait as a tall editorial image and the transpar
 
 Three capability rows cover Strategy, Design & Development, and Automation. The section ends with primary inquiry and selected-work actions.
 
+Approved biography:
+
+> I’m a funnel strategist, web designer, and automation builder helping service professionals create clearer digital client journeys.
+>
+> With a background in Computer Science and graphic design, I combine strategy, design, development, and systems so each step—from first visit to follow-up—feels connected and easier to manage.
+
+Capability copy:
+
+- Strategy — I clarify your offer, audience, and path to conversion so your message connects and converts.
+- Design & Development — I design and build conversion-focused websites and funnels that are clear, intuitive, and on-brand.
+- Automation — I set up smart automations that streamline follow-up, nurture leads, and keep your pipeline moving.
+
 ## Is This a Good Fit?
 
 A large left-side prompt, `Does this sound familiar?`, balances a right-side checklist. The checklist covers unclear offers, manual inquiries and scheduling, disconnected tools, inconsistent lead follow-up, and improving an existing client journey. The section ends with the international remote-collaboration note and an inquiry action.
@@ -112,11 +124,29 @@ Five offers are shown without colored accents:
 
 The first three offers form a balanced desktop row. Custom applications and focused support form a secondary row. Each service lists three concise inclusions where applicable and has an inquiry link. A note explains that final investment depends on scope, content, integrations, and support.
 
+Approved inclusions:
+
+- Websites & Landing Pages — Strategy and page structure; Responsive design and development; Forms and essential integrations.
+- Lead & Booking Funnels — Funnel strategy and flow; Lead capture and booking setup; Follow-up integration.
+- Follow-Up & CRM Automation — Workflow mapping; CRM and automation setup; Testing and handover.
+- Custom Web Applications — Discovery and system mapping; Custom dashboard or portal build; Testing and handover.
+- Focused Support — Site or system updates; Troubleshooting; Iteration guidance.
+
 ## FAQ
 
 The FAQ uses a split layout with a large introductory heading and an accessible accordion. Questions cover business fit, international work, project timeline, content readiness, improving existing systems, supported platforms, and post-launch support.
 
-Accordion buttons expose `aria-expanded` and connect to labelled answer panels. Only one answer needs to be open at a time. Keyboard and reduced-motion behavior remain usable.
+Each FAQ uses native `details` and `summary` semantics so every answer remains available without JavaScript. JavaScript progressively enhances the group by keeping one answer open at a time. Keyboard and reduced-motion behavior remain usable.
+
+Approved FAQ copy:
+
+1. **What kinds of businesses do you work with?** I work with service professionals and service-based businesses that need a clearer website, inquiry, booking, follow-up, or client-management journey.
+2. **Can we work together if I’m outside the Philippines?** Yes. Projects can be completed remotely with clients in the Philippines and worldwide. Communication, reviews, and approvals are managed online.
+3. **How long will my project take?** Most focused website and funnel projects take four to eight weeks. CRM and custom application timelines are confirmed after discovery because scope and integrations vary.
+4. **Do I need all my content before we start?** No. We can begin with your core offer, goals, and available materials. I can help organize the page structure, while final copy and approved images are needed before the build is completed.
+5. **Can you improve my existing website or system?** Yes. I can audit and refine an existing journey or rebuild the parts that no longer support your goals, depending on the condition of the current setup.
+6. **Which platforms can you work with?** I work with HTML, CSS, JavaScript, Firebase, and compatible website, CRM, booking, and automation tools. The platform is selected around your requirements and current systems.
+7. **Do you provide support after launch?** Yes. Every project includes testing and handover. Ongoing updates, troubleshooting, and focused support can be arranged after launch.
 
 ## Final CTA
 
@@ -166,10 +196,10 @@ Elysha Works Portfolio Service Professionals/
       gsap.min.js
       ScrollTrigger.min.js
     projects/
-      la-jaysiedel-cakes.png
-      client-portal.png
-      growth-crm.png
-      teacher-elysha.png
+      la-jaysiedel-cakes.jpg
+      client-portal.jpg
+      growth-crm.jpg
+      teacher-elysha.jpg
   docs/superpowers/specs/
     2026-09-07-service-professionals-portfolio-design.md
 ```
