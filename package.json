@@ -3,8 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "generate:booking-config": "node scripts/generate-booking-config.mjs",
+    "predev": "npm run generate:booking-config",
     "dev": "next dev",
+    "prepreview": "npm run generate:booking-config",
     "preview": "next dev",
+    "prebuild": "npm run generate:booking-config",
     "build": "next build",
     "start": "next start",
     "firebase:serve": "firebase emulators:start --only hosting",
@@ -13,7 +17,8 @@
     "test:supabase:db": "supabase test db",
     "lint": "eslint src next.config.ts eslint.config.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/live-copy.test.mjs",
+    "test": "node --test tests/live-copy.test.mjs tests/booking-config.test.mjs",
+    "test:booking-config": "node --test tests/booking-config.test.mjs",
     "test:legacy": "node --test tests/portfolio.test.mjs",
     "test:live-browser": "node tests/live-browser-check.mjs",
     "check:static": "node --check script.js && node --test tests/portfolio.test.mjs"

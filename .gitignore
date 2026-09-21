@@ -7,4 +7,5 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 .env.local
+public/booking/booking-config.mjs
 supabase/.temp/
