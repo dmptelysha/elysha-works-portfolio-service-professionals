@@ -56,17 +56,22 @@ flowchart TD
 
 ### Portfolio page order
 
-1. Navbar
-2. Hero
-3. Audience Selector / Qualifier Entry
-4. Multi-step Quiz
-5. Personalized Result
-6. Audience-Filtered Projects
-7. Founder / About Elysha
-8. Testimonial
-9. FAQ
-10. Final CTA
-11. Footer
+
+1. Hero
+2. Projects
+3. Founder / About Elysha
+4. Testimonial
+5. FAQ
+6. Final CTA
+7. Footer
+
+### Quiz page
+
+Choose audience type Card
+Multi-step Quiz
+Personalized Result
+Audience-Filtered Projects
+Footer
 
 The result appears in the same journey after quiz completion. The visitor can review the result without submitting personal information.
 
@@ -76,27 +81,41 @@ The result appears in the same journey after quiz completion. The visitor can re
 
 ### 3.1 Navbar
 
-- Centered or visually prominent `< elysha works />` logo.
-- Links: Work, About, FAQ.
-- Primary CTA: **Find Your Best-Fit System**.
-- Secondary CTA: **Book a Strategy Call**.
-- On mobile, use a compact menu and keep one primary CTA visible.
+- Do not place a navbar over the hero. The existing hero remains the complete first-screen composition.
+- When the Projects section reaches the top of the viewport, reveal a compact sticky navbar and keep it visible through the rest of the homepage.
+- Place the Elysha Works logo on the left.
+- Place the links **Projects**, **About**, and **FAQ** on the right with a gold **Get My Roadmap** CTA that opens `/quiz`.
+- Use a dark, slightly translucent surface and a restrained gold-tinted divider so the navbar remains legible without competing with the page.
+- Indicate the active homepage section while scrolling.
+- Hide the sticky navbar again when the visitor scrolls back into the hero.
+- On mobile, show the logo, the roadmap CTA, and an accessible menu button.
+- The quiz page uses a simpler always-visible header with the logo and a safe **Back to portfolio** action.
 
 ### 3.2 Hero
 
-**Eyebrow:** Websites · Funnels · Automation · Custom Systems  
-**Headline:** Turn inquiries into booked clients, enrolled students, and organized customers.  
-**Supporting copy:** Elysha Works designs the pages and connected systems behind your customer journey—built around how your business actually works.  
-**Primary CTA:** Find Your Best-Fit System  
-**Secondary CTA:** Explore Selected Work
+The current approved hero is the visual source of truth and must not be redesigned while the remaining homepage sections are rebuilt.
 
-Directly below the hero, introduce the qualifier with:
+**Eyebrow:** For coaches, educators, service businesses & custom order brands
 
-> Start with who you are. Answer a few questions and receive a complete recommendation with transparent package pricing.
+**Headline:** Before investing in a website, funnel, or automation, discover exactly what your business needs to grow.
+
+**Supporting copy:** In just 2 minutes, you'll receive a personalized roadmap showing the best solution for your goals.
+
+**Trust line:** Strategy-first guidance for growing businesses.
+
+**Benefits:** Personalized recommendations; Clear next steps; No sales pressure; 100% Free.
+
+**Primary CTA:** Get My Personalized Roadmap
+
+**Secondary CTA:** See how the assessment works
+
+Both hero actions open the separate `/quiz` journey without reloading the homepage. The hero continues using the established Inter typography, black atmospheric background, white text, `#FFD369` gold accents, restrained glow, and fluid responsive sizing.
 
 ### 3.3 Audience Selector
 
-Three selectable cards:
+The audience selector belongs on `/quiz`, not on the homepage. It is the first decision in the separate quiz journey.
+
+Show three selectable cards:
 
 | Audience | Short description | Result-focused label |
 |---|---|---|
@@ -115,13 +134,13 @@ Selecting a card:
 
 - One question per screen.
 - Six audience-specific questions followed by two universal platform/support questions.
-- Progress indicator, e.g. `Question 2 of 6`.
+- Progress indicator, e.g. `Question 2 of 8`.
 - Back button without losing answers.
 - Auto-save locally after every answer.
 - Resume the active session after refresh when possible.
 - Detect an unfinished quiz when the visitor returns using the same browser and device.
 - Show a resume prompt with **Resume Quiz**, **Start Over**, and **Not Now** actions.
-- Display the saved progress in the prompt, such as `Question 3 of 6`.
+- Display the saved progress in the prompt, such as `Question 3 of 8`.
 - Keep unfinished sessions available for 30 days from the last activity.
 - Clear single-select and multi-select states.
 - No name or email field before the result.
@@ -131,7 +150,7 @@ Selecting a card:
 Suggested interface copy:
 
 > **Welcome back!**  
-> You have an unfinished business system assessment at Question 3 of 6. Would you like to continue where you left off?
+> You have an unfinished business system assessment at Question 3 of 8. Would you like to continue where you left off?
 
 - **Resume Quiz** — restores the selected audience, saved answers, and last incomplete step.
 - **Start Over** — closes the old attempt and creates a new quiz session.
@@ -192,10 +211,12 @@ Do not invent performance metrics. Use honest project context, including beta or
 
 ### 3.8 Testimonial
 
-- One strong testimonial is enough for the first release.
-- Include client name/business only with permission.
-- Provide context about what was delivered.
-- Avoid a large empty carousel while proof is still growing.
+- Design one complete testimonial-style section for the first release.
+- Until an authentic quote is approved, show clearly labeled placeholder copy such as **Client testimonial will be added after review and approval.**
+- Do not invent a client name, business, quotation, outcome, or performance claim.
+- Replace the placeholder with one strong real testimonial when permission and final wording are available.
+- Provide context about what was delivered when the real testimonial is added.
+- Do not use a large empty carousel while proof is still growing.
 
 ### 3.9 FAQ
 
@@ -715,6 +736,7 @@ Recommended Offer: Custom Growth
 ### 6.7 Generated recommendation output
 
 ```text
+cortex_version
 audience_key
 recommended_build_route
 recommended_platform
@@ -747,38 +769,285 @@ estimated_project_investment_usd
 estimated_recurring_costs[]
 ```
 
+### 6.8 Approved local Cortex version and aggregation rules
+
+The first disconnected frontend implementation uses `cortex-local-v0.1`. This version is approved for the local portfolio quiz and must remain explicit in saved quiz state, calculation traces, and result snapshots. It is not yet a seeded production `quiz_definitions` version and must not be represented as remotely deployed database configuration.
+
+Each visible answer option has a stable key and one or more signal tags. The interface never derives business logic by parsing display copy. Signal tags add integer vectors to the diagnostic, solution, and platform-fit dimensions defined in Section 6.2.
+
+Rules:
+
+1. Score Q1–Q5 and the system-related selections in Q8.
+2. Q6 sets readiness only.
+3. Q7 adds `+2` to the selected platform-fit score. It does not add a genuine custom-operation signal and cannot override feasibility.
+4. For a single question, sum all selected signal vectors and cap each individual scoring dimension at `3`. Custom and critical flags are preserved even when a numeric dimension is capped.
+5. The maximum raw score for any diagnostic or solution dimension is therefore `18`: five audience questions plus Q8, each capped at `3`.
+6. A solution must score at least `4` to qualify.
+7. The highest qualifying solution is primary. Other qualified solutions within two raw points are supporting components when they support the same customer journey.
+8. Store raw integer scores for transparency. The UI may also show normalized percentages, but package and tie-break decisions use the raw scores and explicit rules below.
+9. Calculation must be deterministic: identical question-set version, Cortex version, catalog version, and answers produce identical output.
+10. Keep an explanation trace of the option keys, signal tags, score contributions, flags, and ordered rules that affected the result.
+
+### 6.9 Signal-weight dictionary
+
+Vector notation:
+
+- Diagnostic: `acquisition / automation / complexity`
+- Solution: `website / funnel / automation / crm / custom_app`
+- Platform: `systeme / ghl / custom_build`
+
+Only the following reviewed signals may be used by `cortex-local-v0.1`:
+
+| Signal tag | Diagnostic vector | Solution vector | Platform vector | Flag or interpretation |
+|---|---|---|---|---|
+| `credibility` | `2 / 0 / 0` | `3 / 1 / 0 / 0 / 0` | `1 / 1 / 0` | Presence, clarity, and trust |
+| `lead_generation` | `3 / 0 / 0` | `1 / 3 / 0 / 1 / 0` | `2 / 2 / 0` | Inquiry or lead acquisition |
+| `booking` | `2 / 1 / 0` | `0 / 3 / 2 / 1 / 0` | `1 / 3 / 0` | Call or appointment conversion |
+| `enrollment` | `2 / 1 / 1` | `0 / 3 / 2 / 1 / 0` | `3 / 1 / 0` | Program or student enrollment |
+| `checkout` | `2 / 1 / 1` | `0 / 3 / 2 / 0 / 0` | `3 / 1 / 0` | Payment or deposit journey |
+| `follow_up` | `1 / 3 / 0` | `0 / 1 / 3 / 2 / 0` | `2 / 3 / 0` | Reminders, nurture, or repeated communication |
+| `pipeline` | `0 / 1 / 1` | `0 / 0 / 1 / 3 / 0` | `0 / 3 / 1` | Lead/customer stages and visibility |
+| `onboarding` | `0 / 2 / 1` | `0 / 0 / 2 / 1 / 1` | `2 / 2 / 1` | Intake and post-conversion setup |
+| `course_delivery` | `0 / 1 / 2` | `1 / 0 / 1 / 0 / 2` | `3 / 0 / 2` | Learner resources or simple membership delivery |
+| `disconnected_tools` | `0 / 3 / 2` | `0 / 0 / 3 / 2 / 1` | `1 / 2 / 2` | Tools or spreadsheets do not work together |
+| `multiple_offers` | `1 / 1 / 2` | `0 / 2 / 1 / 1 / 0` | `2 / 2 / 1` | Several offers, segments, services, or locations |
+| `portal` | `0 / 1 / 3` | `0 / 0 / 1 / 1 / 3` | `1 / 1 / 3` | Genuine custom signal; simple course areas remain eligible for platform delivery |
+| `dashboard` | `0 / 1 / 3` | `0 / 0 / 1 / 2 / 3` | `0 / 1 / 3` | Genuine custom signal |
+| `custom_orders` | `1 / 2 / 2` | `0 / 2 / 1 / 1 / 3` | `1 / 1 / 3` | Genuine custom signal |
+| `approvals` | `0 / 2 / 3` | `0 / 0 / 1 / 2 / 3` | `0 / 1 / 3` | Genuine custom signal |
+| `inventory` | `0 / 2 / 3` | `0 / 0 / 1 / 1 / 3` | `0 / 0 / 3` | Critical custom signal |
+| `multiple_roles` | `0 / 1 / 3` | `0 / 0 / 1 / 2 / 3` | `0 / 1 / 3` | Critical custom signal when roles require distinct permissions |
+| `integration` | `0 / 1 / 2` | `0 / 0 / 1 / 0 / 1` | `1 / 1 / 1` | Does not force custom by itself |
+| `order_tracking` | `0 / 2 / 3` | `0 / 0 / 2 / 3 / 3` | `0 / 2 / 3` | Genuine custom signal |
+| `migration` | `0 / 0 / 1` | `0 / 0 / 0 / 0 / 0` | `0 / 0 / 0` | Scope-review signal only |
+| `simple_scope` | `0 / 0 / 0` | `0 / 0 / 0 / 0 / 0` | `0 / 0 / 0` | Confirms one focused path |
+| `no_system_effect` | `0 / 0 / 0` | `0 / 0 / 0 / 0 / 0` | `0 / 0 / 0` | Support or asset choice only |
+
+### 6.10 Complete option-to-signal mapping
+
+#### Coaches and educators
+
+| Question | Stable option key | Signal tags |
+|---|---|---|
+| Q1 | `coach_goal_book_calls` | `booking`, `lead_generation` |
+| Q1 | `coach_goal_enroll_students` | `enrollment`, `lead_generation` |
+| Q1 | `coach_goal_sell_digital_offer` | `enrollment`, `checkout` |
+| Q1 | `coach_goal_organized_material_access` | `course_delivery`, `onboarding` |
+| Q2 | `coach_setup_social_dm` | `lead_generation` |
+| Q2 | `coach_setup_unclear_website` | `credibility`, `lead_generation` |
+| Q2 | `coach_setup_funnel_needs_improvement` | `lead_generation`, `follow_up` |
+| Q2 | `coach_setup_disconnected_tools` | `disconnected_tools` |
+| Q3 | `coach_blocker_few_qualified_inquiries` | `lead_generation` |
+| Q3 | `coach_blocker_questions_no_booking` | `booking`, `lead_generation` |
+| Q3 | `coach_blocker_manual_follow_up` | `follow_up` |
+| Q3 | `coach_blocker_disorganized_onboarding` | `onboarding`, `course_delivery` |
+| Q4 | `coach_capability_offer_page` | `credibility` |
+| Q4 | `coach_capability_lead_capture` | `lead_generation` |
+| Q4 | `coach_capability_booking` | `booking` |
+| Q4 | `coach_capability_enrollment_payment` | `enrollment`, `checkout` |
+| Q4 | `coach_capability_email_follow_up` | `follow_up` |
+| Q4 | `coach_capability_student_onboarding` | `onboarding`, `course_delivery` |
+| Q4 | `coach_capability_progress_resources` | `course_delivery` |
+| Q5 | `coach_complexity_one_offer` | `simple_scope` |
+| Q5 | `coach_complexity_multiple_offers` | `multiple_offers` |
+| Q5 | `coach_complexity_program_delivery` | `enrollment`, `onboarding`, `course_delivery` |
+| Q5 | `coach_complexity_custom_experience` | `portal`, `integration` |
+
+#### Service-based businesses
+
+| Question | Stable option key | Signal tags |
+|---|---|---|
+| Q1 | `service_goal_qualified_inquiries` | `lead_generation` |
+| Q1 | `service_goal_book_appointments` | `booking`, `lead_generation` |
+| Q1 | `service_goal_reduce_no_shows` | `follow_up`, `booking` |
+| Q1 | `service_goal_organize_delivery` | `onboarding`, `pipeline`, `dashboard` |
+| Q2 | `service_setup_social_calls_dm` | `lead_generation` |
+| Q2 | `service_setup_basic_website_manual` | `credibility`, `follow_up` |
+| Q2 | `service_setup_disconnected_booking` | `booking`, `disconnected_tools` |
+| Q2 | `service_setup_tools_spreadsheets` | `disconnected_tools`, `pipeline` |
+| Q3 | `service_blocker_unclear_offer` | `credibility`, `lead_generation` |
+| Q3 | `service_blocker_inquiries_no_booking` | `booking`, `lead_generation` |
+| Q3 | `service_blocker_manual_intake_follow_up` | `follow_up`, `onboarding` |
+| Q3 | `service_blocker_tracking_status` | `pipeline`, `dashboard` |
+| Q4 | `service_capability_website` | `credibility` |
+| Q4 | `service_capability_qualification` | `lead_generation`, `pipeline` |
+| Q4 | `service_capability_booking` | `booking` |
+| Q4 | `service_capability_reminders` | `follow_up` |
+| Q4 | `service_capability_onboarding` | `onboarding` |
+| Q4 | `service_capability_crm` | `pipeline` |
+| Q4 | `service_capability_portal_dashboard` | `portal`, `dashboard` |
+| Q5 | `service_complexity_one_service` | `simple_scope`, `booking` |
+| Q5 | `service_complexity_multiple_services` | `multiple_offers`, `pipeline` |
+| Q5 | `service_complexity_multistep_approval` | `onboarding`, `approvals` |
+| Q5 | `service_complexity_custom_operations` | `multiple_roles`, `integration` |
+
+#### Custom-order businesses
+
+| Question | Stable option key | Signal tags |
+|---|---|---|
+| Q1 | `order_goal_more_orders` | `lead_generation`, `custom_orders` |
+| Q1 | `order_goal_easier_ordering` | `custom_orders`, `checkout` |
+| Q1 | `order_goal_reduce_questions_errors` | `follow_up`, `custom_orders` |
+| Q1 | `order_goal_organize_operations` | `pipeline`, `order_tracking` |
+| Q2 | `order_setup_social_messaging` | `lead_generation` |
+| Q2 | `order_setup_form_manual_confirmation` | `custom_orders`, `follow_up` |
+| Q2 | `order_setup_store_limited` | `checkout`, `custom_orders` |
+| Q2 | `order_setup_disconnected_tools` | `disconnected_tools`, `order_tracking` |
+| Q3 | `order_blocker_options_unclear` | `credibility`, `custom_orders` |
+| Q3 | `order_blocker_quotes_payments_slow` | `checkout`, `follow_up` |
+| Q3 | `order_blocker_details_scattered` | `pipeline`, `custom_orders` |
+| Q3 | `order_blocker_production_updates` | `order_tracking`, `follow_up` |
+| Q4 | `order_capability_catalog` | `credibility` |
+| Q4 | `order_capability_customization` | `custom_orders` |
+| Q4 | `order_capability_request` | `lead_generation`, `custom_orders` |
+| Q4 | `order_capability_checkout` | `checkout` |
+| Q4 | `order_capability_updates` | `follow_up`, `order_tracking` |
+| Q4 | `order_capability_dashboard` | `dashboard`, `order_tracking` |
+| Q4 | `order_capability_crm` | `pipeline` |
+| Q4 | `order_capability_inventory` | `inventory` |
+| Q5 | `order_complexity_simple_options` | `simple_scope`, `custom_orders` |
+| Q5 | `order_complexity_many_combinations` | `custom_orders` |
+| Q5 | `order_complexity_production_stages` | `approvals`, `order_tracking` |
+| Q5 | `order_complexity_roles_inventory` | `multiple_roles`, `inventory`, `integration` |
+
+#### Universal readiness, platform, and support choices
+
+| Question | Stable option key | Scoring or pricing behavior |
+|---|---|---|
+| Q6 | `readiness_ready_now` | `readiness_level = ready_now` |
+| Q6 | `readiness_within_30_days` | `readiness_level = within_30_days` |
+| Q6 | `readiness_within_1_2_months` | `readiness_level = planning_1_2_months` |
+| Q6 | `readiness_researching` | `readiness_level = researching`; does not lower package level |
+| Q7 | `platform_systeme` | `systeme_fit +2`; preference only |
+| Q7 | `platform_gohighlevel` | `ghl_fit +2`; preference only |
+| Q7 | `platform_custom_app` | `custom_build_fit +2`; preference only and not a custom signal |
+| Q7 | `platform_recommend` | No preference points |
+| Q8 | `support_conversion_copywriting` | `no_system_effect`; candidate add-on `conversion_copywriting` |
+| Q8 | `support_image_sourcing` | `no_system_effect`; candidate add-on `image_sourcing_selection` |
+| Q8 | `support_image_editing` | `no_system_effect`; candidate add-on `image_editing_optimization` |
+| Q8 | `support_brand_direction` | `no_system_effect`; candidate add-on `mini_brand_direction` |
+| Q8 | `support_additional_pages` | `credibility`; candidate add-on `additional_page_step` |
+| Q8 | `support_booking` | `booking`; candidate add-on `advanced_booking_setup` |
+| Q8 | `support_checkout` | `checkout`; candidate add-on `checkout_payment_integration` |
+| Q8 | `support_follow_up` | `follow_up`; candidate add-on `additional_email_automation`; SMS remains a disclosed scope confirmation |
+| Q8 | `support_crm` | `pipeline`; candidate add-on `additional_crm_pipeline` |
+| Q8 | `support_onboarding` | `onboarding`; candidate add-on `advanced_onboarding_workflow` |
+| Q8 | `support_portal` | `portal`; candidate add-on is route-dependent |
+| Q8 | `support_order_management` | `custom_orders`, `order_tracking`; candidate add-on `custom_order_management_module` |
+| Q8 | `support_dashboard` | `dashboard`; candidate add-on `custom_dashboard_reporting_module` |
+| Q8 | `support_inventory` | `inventory`; candidate add-on `inventory_production_module` |
+| Q8 | `support_integration` | `integration`; candidate add-on `standard_third_party_integration` |
+| Q8 | `support_migration` | `migration`; candidate add-on `content_data_migration` |
+| Q8 | `support_client_assets` | `no_system_effect`; no add-on |
+
+### 6.11 Deterministic route, tie-break, and offer rules
+
+Apply these rules in order:
+
+1. If an `inventory` critical flag is present, use the Custom App route and Complete Custom System.
+2. If a `multiple_roles` critical flag is present and the answer explicitly requires custom permissions or operational roles, use the Custom App route and Complete Custom System.
+3. Otherwise, the Custom App route requires at least one genuine custom signal and either:
+   - `custom_app_score` is the highest or tied-highest qualifying solution score; or
+   - `custom_build_fit_score` exceeds both platform-fit scores by at least two points.
+4. A platform preference alone never supplies the genuine custom signal required by rule 3.
+5. When Website and Funnel are tied or one point apart, credibility/information goals favor Website; booking, enrollment, checkout, or lead-generation goals favor Funnel.
+6. When CRM and Automation are tied or one point apart, pipeline/status visibility favors CRM; reminders, communication, and repetitive work favor Automation.
+7. If Systeme.io and GoHighLevel fit are tied, enrollment, course delivery, checkout, and straightforward digital-offer journeys favor Systeme.io. Booking, pipelines, SMS, service follow-up, and appointment journeys favor GoHighLevel.
+8. If no solution reaches `4`, use the Q1 goal signal as the primary solution and label the result as low-confidence rather than returning no recommendation.
+
+Offer selection uses the final raw `system_complexity_score`:
+
+| Route | Complexity and capability rule | Offer |
+|---|---|---|
+| Platform | `0–4`, one offer/action, and no advanced connected workflow | `platform_launch` |
+| Platform | `5–9`, or a connected lead-to-booking/enrollment/order journey | `platform_growth` |
+| Platform | `10–18`, multiple offers/audiences, advanced pipeline, or conditional automation | `platform_scale` |
+| Custom | `0–4`, exactly one focused workflow, and no portal/dashboard/advanced module | `custom_starter` |
+| Custom | `5–8`, up to two connected workflows with a basic admin/user experience | `custom_foundation` |
+| Custom | `9–12`, or any portal/dashboard/multiple connected workflow requirement | `custom_growth` |
+| Custom | `13–18`, inventory, production, advanced permissions, or specialized multi-stage operations | `custom_complete` |
+
+Guardrails override the numeric band upward, never downward. A portal or operational dashboard cannot return Custom Starter. Advanced roles, inventory, or production cannot return Custom Starter or Custom Foundation. Readiness never lowers the package selected for required scope.
+
+### 6.12 Add-on and estimate resolution
+
+Q8 creates candidate add-ons. Resolve each candidate against the chosen package's approved capability keys, limits, and inherited inclusions before pricing it.
+
+| Q8 support choice | Resolution rule |
+|---|---|
+| Conversion copywriting | `$500` when not included |
+| Image sourcing and selection | `$200` when not included |
+| Image editing and optimization | `$300` when not included |
+| Mini brand direction | `$400` when not included |
+| Additional page or step | One unit at `$250` |
+| Appointment booking | Included when covered; otherwise advanced setup starts at `$350` |
+| Checkout or payment | Included when covered; otherwise `$400` |
+| Email or SMS follow-up | Use included workflow first; otherwise estimate email automation at `$300`. Do not silently add SMS setup; disclose it for confirmation and list usage separately |
+| CRM or pipeline | Included when covered; otherwise `$500` |
+| Client/student onboarding | Included when covered; otherwise advanced workflow at `$500` |
+| Client/student portal | Use a platform-native area at `$750` where feasible; on the custom route, apply package inclusion before the `$1,500` portal-module price |
+| Order management | Included when explicitly covered by Complete scope; otherwise starts at `$2,000` |
+| Dashboard or reporting | Apply package inclusion first; otherwise `$1,500` |
+| Inventory or production | Forces Complete review; show the `$2,500` module only when it is outside the approved Complete scope |
+| Third-party integration | Consume an included integration allowance first; otherwise one standard integration at `$350` |
+| Data/content migration | Starts at `$500` and always requires scope review |
+| Client supplies assets | No add-on |
+
+The result must distinguish `selected_addons`, `included_capabilities`, `priced_addons`, and `scope_review_items`. It must not hide a priced item inside the base package or present an included item as a zero-dollar add-on. For `cortex-local-v0.1`, `adjustment_total_usd` is always `0`; no urgency or arbitrary complexity surcharge is implemented.
+
+### 6.13 Required Cortex acceptance personas
+
+Automated tests must lock these outcomes:
+
+1. A coach selling a program with enrollment, payment, follow-up, and simple learner access receives an Enrollment Funnel, Systeme.io, and Platform Growth unless stronger answers require a higher offer.
+2. A service business needing booking, reminders, pipeline visibility, and follow-up receives a Lead-to-Client System, GoHighLevel, and Platform Growth or Scale according to complexity.
+3. A simple one-service business needing credibility and one inquiry action receives a Conversion Website and Platform Launch.
+4. A business requiring a custom portal, operational dashboard, and several connected workflows receives a Custom Operations System and Custom Growth.
+5. A custom-order business requiring staff roles, inventory, approvals, production stages, and delivery tracking receives a Custom Order Management App and Complete Custom System starting at `$10,000`.
+6. A Website/Funnel tie is resolved by the stated business goal.
+7. A CRM/Automation tie is resolved by pipeline visibility versus repetitive communication.
+8. A Custom App preference without a genuine custom signal does not force the custom route.
+9. A selected add-on already included in the package is not charged twice.
+10. `readiness_researching` changes readiness copy but not the scope-appropriate package.
+
 ---
 
 ## 7. Portfolio State Management
 
 ### Client-side state
 
-- Supabase anonymous user ID and owned visitor ID.
-- Quiz session ID.
+- Local quiz-attempt ID for the disconnected frontend phase.
+- Cortex, question-set, catalog, and storage-schema versions.
 - Selected audience.
 - Current quiz step.
 - Answers by question key.
-- Scores and result.
+- Scores, explanation trace, and immutable local result snapshot.
 - Project filter.
 - UTM/referral parameters.
-- Last active quiz session ID.
+- Last active local quiz-attempt ID.
 - Resume-prompt dismissed timestamp.
+
+After the separately approved Supabase connection phase, client state also carries the Supabase anonymous user ID, owned visitor ID, and owned quiz-session ID. These remote identifiers are not required by the initial disconnected quiz implementation.
 
 ### Persistence behavior
 
-- Store active answers locally during the quiz.
-- Silently establish a Supabase Anonymous Auth session, then create the owned Supabase visitor, portfolio-session, and quiz-session records when meaningful engagement begins.
-- Update progress after each completed step or in safe batches.
-- Refresh `last_activity_at` whenever an answer or quiz step is saved.
-- On return, restore only the current browser's latest eligible unfinished session.
-- Keep an unfinished session resumable for 30 days after `last_activity_at`.
-- When **Start Over** is selected, mark the previous attempt `restarted` and create a new quiz session instead of overwriting its analytics history.
-- When an unfinished session passes 30 days, mark it `expired` and begin a new session.
-- Mark the session completed when the result is generated.
+- In the initial disconnected frontend phase, store active answers and the completed result snapshot only in versioned browser local storage. Do not import a Supabase client or make quiz-related network requests.
+- Save after each completed answer and update the local `last_activity_at` value.
+- On return, restore only the current browser's latest eligible unfinished attempt.
+- Keep an unfinished attempt resumable for 30 days after its local `last_activity_at` value.
+- When **Start Over** is selected, remove the current application's local active-attempt record and create a new local attempt ID.
+- When an unfinished attempt passes 30 days, treat it as expired and offer a clean new attempt.
+- Mark the local attempt completed and preserve its versioned result snapshot when the result is generated.
 - Never require personally identifiable information to show the result.
-- Link the quiz session to a lead only after the visitor voluntarily books or submits contact details.
-- The frontend uses only public/publishable Supabase credentials and relies on tested RLS and narrowly scoped RPC functions; the `service_role` key never appears in browser code.
-- Clearing browser data, signing out, using a different browser, or switching devices may make an anonymous session unrecoverable. Same-device recovery remains available for 30 days while the anonymous auth session and local session reference remain available.
+- Clearing browser data, using private/incognito mode, blocking local storage, or switching devices or browsers may make the local attempt unrecoverable.
+
+In the later separately approved Supabase connection phase:
+
+- Silently establish a Supabase Anonymous Auth session, then create owned visitor, portfolio-session, and quiz-session records when meaningful engagement begins.
+- Update remote progress after each completed step or in safe batches and refresh `last_activity_at`.
+- Mark previous remote attempts `restarted` or `expired` rather than overwriting analytics history.
+- Link a quiz session to a lead only after the visitor voluntarily books or submits contact details.
+- Use only public/publishable Supabase credentials with tested RLS and narrowly scoped RPC functions; the `service_role` key never appears in browser code.
 
 ---
 
@@ -1310,6 +1579,17 @@ Existing Firebase projects, Firestore databases, applications, `firebase.json`, 
 
 ## 12. Delivery Phases
 
+### Current interface milestone — disconnected portfolio and quiz
+
+Before the separately approved Supabase connection work:
+
+1. Preserve the existing approved hero and rebuild the remaining homepage sections as typed React components in the exact Section 2 order.
+2. Add the contextual sticky navbar beginning at the Projects section.
+3. Build `/quiz` with the audience selector, eight no-reload questions, local 30-day persistence, `cortex-local-v0.1`, complete results, audience-relevant projects, and booking CTA.
+4. Use local version-controlled quiz, package, and add-on configuration shaped for a later Supabase adapter.
+5. Run Cortex, state, accessibility, responsive, and no-network boundary tests.
+6. Do not connect the portfolio frontend to Supabase during this milestone.
+
 ### Phase 1 — Existing hosting verification and backend preparation
 
 1. Keep and verify existing Firebase Hosting, custom domain, SSL, `firebase.json`, hosting targets, projects, applications, and Firestore databases without changing them.
@@ -1343,23 +1623,35 @@ Existing Firebase projects, Firestore databases, applications, `firebase.json`, 
 
 ## 13. Portfolio-First Acceptance Criteria
 
-The first release is ready when:
+### Current disconnected frontend milestone
+
+The current interface milestone is ready when:
 
 - Visitors can clearly identify whether Elysha Works serves their business type.
 - Each audience receives six relevant questions followed by the universal platform and support questions.
+- The homepage contains exactly Hero, Projects, Founder/About, Testimonial placeholder, FAQ, Final CTA, and Footer.
+- The sticky navbar is absent over the hero, appears at Projects, and provides logo, section links, and a `/quiz` CTA.
 - The quiz survives back navigation and normal refresh behavior.
 - Returning visitors on the same browser/device are offered the option to resume an eligible unfinished quiz.
 - Resuming restores the selected audience, saved answers, and correct next step.
 - Unfinished sessions expire after 30 days of inactivity.
-- Starting over preserves the earlier attempt for analytics and creates a fresh quiz session.
+- Starting over replaces the active local attempt with a fresh local attempt ID; remote history behavior remains deferred until database connection.
 - The complete result appears without requiring contact information.
 - Results recommend a technically justified platform/build route and base offer starting at $1,500.
 - Results itemize base inclusions, non-included add-ons, adjustments, and recurring costs paid separately by the client.
 - Projects automatically filter to the selected audience.
-- Strategy-call clicks and completed bookings can be attributed to the originating session and quiz.
 - No personally identifiable information is collected before voluntary submission.
-- Content, questions, package data, and projects can be updated without rewriting core scoring logic.
+- Content, questions, package data, and projects are isolated from UI rendering, and display-copy edits do not rewrite core scoring logic.
 - Mobile, tablet, and desktop layouts are usable and visually consistent.
+- The quiz performs no Supabase/database/analytics network request and imports no Supabase client.
+- Existing Firebase Hosting configuration, custom domain, SSL, hosting targets, Firestore databases, booking flow, legal pages, and protected project previews remain unchanged.
+- `cortex-local-v0.1` passes the Section 6.13 acceptance personas and produces a versioned explanation trace and local result snapshot.
+
+### Later integrated release
+
+The database-connected release additionally requires:
+
+- Strategy-call clicks and completed bookings can be attributed to the originating session and quiz.
 - Firebase Hosting continues to serve the existing frontend, custom domain, SSL, and deployments without changing existing hosting configuration.
 - The frontend uses Supabase Anonymous Auth and cannot read or mutate another visitor's records.
 - All 11 Phase 1 PostgreSQL tables, required foreign keys, constraints, indexes, triggers, grants, RLS policies, and restricted functions are covered by version-controlled migrations.
@@ -1381,11 +1673,14 @@ Build now:
 - Complete result.
 - Fixed package recommendation.
 - Audience-filtered projects.
-- Supabase-backed portfolio data using the 11 Phase 1 relational tables.
-- Essential analytics and booking attribution.
+- Local 30-day resume state.
+- `cortex-local-v0.1` scoring and transparent estimate.
+- Local version-controlled package and add-on configuration.
 
 Do not build yet:
 
+- Portfolio-to-Supabase frontend connection.
+- Supabase-backed quiz persistence, analytics, lead submission, or booking attribution.
 - Full client portal rewrite.
 - Full admin portal rewrite.
 - Visual annotator integration.

@@ -66,7 +66,7 @@ Booking provider webhook processing is deferred until the provider is selected. 
 
 `supabase/seed.sql` inserts the seven approved package records and the approved add-on catalog using conflict-safe inserts. It inserts no visitor, session, lead, booking, analytics, client, testimonial, project claim, or other transactional/fake data.
 
-Quiz definitions are not seeded yet: the blueprint includes questions but does not contain complete approved scoring rules or an explicitly approved version. Projects and site-content documents are also omitted because complete approved records are not present. These are deployment blockers for the corresponding frontend reads and must be supplied through a reviewed seed migration or authorized admin workflow.
+Quiz definitions are not seeded yet. The blueprint now contains the approved disconnected-frontend rules for `cortex-local-v0.1`, but that local version has not been promoted to an approved production `quiz_definitions` version or converted into reviewed seed data. Projects and site-content documents are also omitted because complete approved records are not present. These are deployment blockers for the corresponding frontend reads and must be supplied through a reviewed seed migration or authorized admin workflow.
 
 ## Retention
 
@@ -113,7 +113,7 @@ Create the generated directory first if needed and mark the file as generated. D
 ## Deferred production decisions
 
 - Exact production admin-claim lifecycle and who may assign `app_metadata.role`.
-- Complete quiz scoring rules and approved quiz-definition version.
+- Review and promote `cortex-local-v0.1` into an approved production quiz-definition version and seed payload.
 - Booking provider, webhook verification, meeting URL, cancellation, and reschedule synchronization.
 - Legal/business retention durations and any future cleanup schedule.
 - Approved real project and published site-content seed records.
