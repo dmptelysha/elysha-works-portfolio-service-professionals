@@ -1,37 +1,11 @@
 @import "tailwindcss";
 
-:root {
-  --ink: #111111;
-  --warm-white: #f7f5f0;
-  --paper: #ffffff;
-  --graphite: #4a4a47;
-  --soft-gray: #ecebe7;
-  --line: #d8d6d0;
-}
-
-@theme inline {
-  --color-background: var(--warm-white);
-  --color-foreground: var(--ink);
-  --font-sans: var(--font-manrope);
-}
-
 * {
   box-sizing: border-box;
 }
 
-html {
-  background: var(--warm-white);
-}
-
+html,
 body {
-  min-height: 100vh;
   margin: 0;
-  background: var(--warm-white);
-  color: var(--ink);
-  font-family: var(--font-manrope), sans-serif;
-}
-
-::selection {
-  background: var(--ink);
-  color: var(--warm-white);
+  min-height: 100%;
 }

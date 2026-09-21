@@ -1,0 +1,45 @@
+/* Portfolio V3 project viewer. Styles never target the portfolio outside this dialog. */
+html:has(.v3-project-viewer[open]) { overflow: hidden; }
+.v3-project-viewer {
+  box-sizing: border-box; position: fixed; inset: 0; width: 100%; max-width: none;
+  height: 100dvh; max-height: none; margin: 0; padding: 0; border: 0;
+  background: #090b0a; color: #edefe8; font-family: Inter, Arial, sans-serif;
+  overscroll-behavior: contain; overflow: hidden;
+}
+.v3-project-viewer[open] { display: flex; flex-direction: column; }
+.v3-project-viewer::backdrop { background: #090b0a; }
+.v3-project-viewer *, .v3-project-viewer *::before { box-sizing: border-box; }
+.v3-viewer-bar { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-shrink: 0; min-height: 64px; padding: 8px 24px; border-bottom: 1px solid #343d2e; }
+.v3-viewer-title { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; line-height: 1.5; }
+.v3-viewer-controls, .v3-viewer-devices { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.v3-viewer-controls { gap: 12px; }
+.v3-project-viewer button { margin: 0; padding: 0 16px; min-height: 44px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #edefe8; cursor: pointer; font: 500 13px/1 Inter, Arial, sans-serif; white-space: nowrap; }
+.v3-project-viewer button:hover { background: #182015; }
+.v3-project-viewer button[aria-pressed="true"] { background: #c4f168; color: #090b0a; }
+.v3-project-viewer button:focus-visible { outline: 2px solid #c4f168; outline-offset: 2px; }
+.v3-project-viewer button:active { transform: translateY(1px); }
+.v3-viewer-stage { position: relative; flex: 1; min-height: 0; display: flex; justify-content: center; overflow: hidden; background: #182015; }
+.v3-viewer-viewport { position: relative; height: 100%; overflow: hidden; background: #f4f4f2; }
+.v3-viewer-frame { position: absolute; inset: 0; display: block; border: 0; max-width: none; transform-origin: top left; background: #f4f4f2; }
+.v3-viewer-frame:focus-visible { outline: 2px solid #c4f168; outline-offset: -2px; }
+.v3-viewer-watermark { position: absolute; inset: 0; z-index: 1; pointer-events: none; background-repeat: repeat; background-size: 440px 190px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='440' height='190'%3E%3Cg transform='rotate(-24 220 95)' fill='%23090b0a' fill-opacity='.025' font-family='Arial,sans-serif' font-size='15' font-weight='700' letter-spacing='2'%3E%3Ctext x='55' y='100'%3EPROPERTY%20OF%20ELYSHA%20WORKS%3C/text%3E%3C/g%3E%3C/svg%3E"); }
+.v3-viewer-stage { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: pan-y pinch-zoom; }
+.v3-viewer-description { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(180px, 1fr); gap: 32px; flex-shrink: 0; max-height: 34dvh; overflow: auto; padding: 16px 24px; border-bottom: 1px solid #343d2e; background: #0f140e; }
+.v3-viewer-description[hidden] { display: none; }
+.v3-viewer-description p { margin: 0; font: 400 14px/1.55 Inter, Arial, sans-serif; color: #edefe8; }
+.v3-viewer-description .v3-viewer-kind { margin-bottom: 5px; color: #c4f168; font-size: 12px; }
+.v3-viewer-description .v3-viewer-audience { display: grid; align-content: center; gap: 3px; color: #bbc2b5; }
+.v3-viewer-audience > span:first-child { font-size: 12px; color: #edefe8; }
+.v3-viewer-instructions { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 620px) {
+  .v3-viewer-bar { padding: 8px 12px; gap: 4px; flex-wrap: wrap; }
+  .v3-viewer-title { width: calc(100% - 64px); min-height: 40px; display: flex; align-items: center; font-size: 12px; }
+  .v3-viewer-controls { width: 100%; justify-content: space-between; gap: 4px; }
+  .v3-project-viewer button { padding: 0 10px; font-size: 12px; }
+  .v3-project-viewer [data-viewer-close] { position: absolute; top: 6px; right: 8px; }
+  .v3-viewer-description { grid-template-columns: 1fr; gap: 10px; padding: 12px 16px; }
+  .v3-viewer-description p { font-size: 13px; }
+  .v3-viewer-description .v3-viewer-audience { display: block; }
+  .v3-viewer-audience > span:first-child { margin-right: 6px; }
+}
+@media print { .v3-project-viewer[open] .v3-viewer-stage { visibility: hidden; } }

@@ -4,11 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "preview": "next dev",
     "build": "next build",
     "start": "next start",
+    "firebase:serve": "firebase emulators:start --only hosting",
     "lint": "eslint src next.config.ts eslint.config.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/portfolio.test.mjs",
+    "test": "node --test tests/live-copy.test.mjs",
+    "test:legacy": "node --test tests/portfolio.test.mjs",
+    "test:live-browser": "node tests/live-browser-check.mjs",
     "check:static": "node --check script.js && node --test tests/portfolio.test.mjs"
   },
   "dependencies": {

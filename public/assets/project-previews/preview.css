@@ -1,0 +1,10 @@
+:root { color-scheme: light; background: #f4f4f2; color: #090b0a; font-family: Arial, sans-serif; }
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: pan-y pinch-zoom; }
+body:focus { outline: none; }
+.protected-preview { position: relative; min-height: 100vh; }
+.protected-preview picture, .protected-preview img { display: block; width: 100%; height: auto; }
+.protected-preview img { -webkit-user-drag: none; pointer-events: none; }
+.protected-preview-watermark { position: fixed; inset: 0; z-index: 2; pointer-events: none; background-repeat: repeat; background-size: 440px 190px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='440' height='190'%3E%3Cg transform='rotate(-24 220 95)' fill='%23090b0a' fill-opacity='.045' font-family='Arial,sans-serif' font-size='15' font-weight='700' letter-spacing='2'%3E%3Ctext x='55' y='100'%3EPROPERTY%20OF%20ELYSHA%20WORKS%3C/text%3E%3C/g%3E%3C/svg%3E"); }
+@media print { .protected-preview { display: none !important; } body::before { content: "PROPERTY OF ELYSHA WORKS"; display: block; padding: 32px; } }

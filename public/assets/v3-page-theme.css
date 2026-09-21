@@ -1,0 +1,49 @@
+@import url('fonts/fonts.css');
+/* Shared visual language for the offline V3 visitor pages. */
+:root{--v3-canvas:#090b0a;--v3-panel:#0f140e;--v3-surface:#182015;--v3-text:#edefe8;--v3-muted:#bbc2b5;--v3-line:#343d2e;--v3-accent:#c4f168;--v3-hover:#d0f58d}
+html{color-scheme:dark;background:var(--v3-canvas);color:var(--v3-text);font-family:Inter,Arial,sans-serif}
+html body{background:var(--v3-canvas);color:var(--v3-text);font-family:Inter,Arial,sans-serif}
+html :focus-visible{outline:2px solid var(--v3-accent);outline-offset:5px}
+html ::selection{background:var(--v3-accent);color:var(--v3-canvas)}
+html h1,html h2,html h3{font-family:Inter,Arial,sans-serif;font-weight:500;text-wrap:balance}
+html a:hover{color:var(--v3-accent)}
+.v3-page-brand{display:inline-flex;flex-direction:column;align-items:flex-start;gap:12px;text-decoration:none;flex-shrink:0}
+.v3-page-brand img{display:block;width:208px;max-width:100%;height:auto;filter:url('#logo-lime')}
+.v3-page-brand span{font:400 13px/1.5 Inter,Arial,sans-serif;color:var(--v3-muted)}
+html .booking-top,html .ty-top{padding-block:28px;border-bottom:1px solid var(--v3-line)}
+html .booking-top span:not(.v3-page-brand span){font-family:'JetBrains Mono',monospace;font-size:12px}
+html .booking-shell{margin-top:56px}
+html .booking-intro h1{font-size:clamp(34px,3.3vw,50px);line-height:1.12;max-width:16ch}
+html .booking-intro>p,html .ty-lead,html .legal-summary{font-family:'Playfair Display',Georgia,serif;font-size:21px;line-height:1.65;color:var(--v3-muted)}
+html .booking-intro>.booking-fine{font:400 14px/1.7 Inter,Arial,sans-serif}
+html .booking-content{border-radius:5px;border-color:var(--v3-line);background:var(--v3-panel)}
+html .booking-field label{font-size:15px;font-weight:500}
+html .booking-field input,html .booking-field textarea,html .booking-field select,html .booking-zone{border-radius:4px;background:var(--v3-canvas);color:var(--v3-text);caret-color:var(--v3-accent);min-height:48px}
+html input::placeholder,html textarea::placeholder{color:#98a18f;opacity:1}
+html .booking-primary,html .ty-primary,html .skip-link{background:var(--v3-accent);border-color:var(--v3-accent);color:var(--v3-canvas)}
+html .booking-primary:hover,html .ty-primary:hover{background:var(--v3-hover);border-color:var(--v3-hover);color:var(--v3-canvas)}
+html .booking-secondary,html .ty-button:not(.ty-primary){background:var(--v3-surface);border-color:#536344;color:var(--v3-text)}
+html .booking-secondary:hover,html .ty-button:not(.ty-primary):hover{background:#29351e;color:var(--v3-text)}
+html .booking-primary,html .booking-secondary,html .ty-button{border-radius:4px;min-height:52px;font:500 15px/1.5 Inter,Arial,sans-serif}
+html .booking-progress [aria-current]{color:var(--v3-accent);font-weight:500;border-color:var(--v3-accent)}
+html .booking-progress li{font-size:14px}
+html .booking-error{color:var(--v3-text);border:1px solid #728255;border-radius:4px;padding:12px 16px}
+html .booking-error:empty{display:none}
+html .booking-policy,html .booking-status,html .booking-notice{color:var(--v3-muted)}
+html .booking-policy a,html .legal-article a{color:var(--v3-accent)}
+html .calendar-date[aria-pressed=true],html .calendar-date[aria-pressed=true]:hover{background:var(--v3-accent);border-color:var(--v3-accent);color:var(--v3-canvas)}
+html .calendar-date:hover:not(:disabled){background:#29351e;color:var(--v3-text);border-color:var(--v3-accent)}
+html .calendar-times .booking-slots button:hover,html .booking-slots button:hover{background:var(--v3-accent);border-color:var(--v3-accent);color:var(--v3-canvas)}
+html .calendar-arrow{min-width:44px;min-height:44px}
+html .calendar-arrow:hover:not(:disabled){background:var(--v3-surface);border-color:var(--v3-line)}
+html .legal-top [aria-current=page]{color:var(--v3-accent)}
+html .legal-eyebrow{font-family:'JetBrains Mono',monospace;color:var(--v3-accent);font-weight:500;letter-spacing:.03em}
+html .legal-article{font-size:17px;line-height:1.85}
+html .legal-top a,html .legal-footer a,html .ty-footer a{min-height:44px;display:inline-flex;align-items:center}
+html .legal-top .v3-page-brand{align-items:flex-start}
+html .legal-top nav{gap:12px 24px}
+html .legal-contents a{display:inline-block;padding-block:5px}
+html .ty-main{min-height:65vh}
+html .ty-message video{border-radius:4px}
+@media(max-width:620px){html .booking-shell{margin-top:32px}html .booking-intro h1{font-size:36px;max-width:18ch}html .booking-intro>p,html .ty-lead,html .legal-summary{font-size:19px}.v3-page-brand img{width:180px}html .booking-top,html .ty-top{padding-block:22px}html .booking-progress{gap:12px}html .booking-progress li{font-size:13px}html .legal-article{font-size:17px}html .legal-contents a{min-height:44px}html .booking-top span:not(.v3-page-brand span){font-size:11px}}
+@media print{html body{background:#fff;color:#111}html .legal-article p,html .legal-article ul,html .legal-article strong,html .legal-meta,html .legal-summary{color:#111}html .legal-article a{color:#111}}
