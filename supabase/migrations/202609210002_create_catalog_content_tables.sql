@@ -1,0 +1,112 @@
+-- Phase 1 configuration and public content tables.
+
+create table public.projects (
+  id uuid primary key default gen_random_uuid(),
+  slug text not null,
+  title text not null,
+  client_display_name text,
+  summary text not null,
+  problem text not null,
+  solution text not null,
+  outcome text,
+  audience_keys text[] not null default '{}'::text[],
+  service_keys text[] not null default '{}'::text[],
+  platform_keys text[] not null default '{}'::text[],
+  cover_image_url text,
+  gallery jsonb not null default '[]'::jsonb,
+  case_study_url text,
+  project_status text not null default 'concept',
+  featured boolean not null default false,
+  display_order integer not null default 0,
+  published boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint projects_slug_key unique (slug),
+  constraint projects_slug_check check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
+  constraint projects_title_check check (length(btrim(title)) > 0),
+  constraint projects_required_copy_check check (length(btrim(summary)) > 0 and length(btrim(problem)) > 0 and length(btrim(solution)) > 0),
+  constraint projects_gallery_check check (jsonb_typeof(gallery) = 'array'),
+  constraint projects_project_status_check check (project_status in ('concept', 'beta', 'live')),
+  constraint projects_display_order_check check (display_order >= 0),
+  constraint projects_cover_image_url_check check (cover_image_url is null or cover_image_url ~* '^(https?://|/)[^[:space:]]+$'),
+  constraint projects_case_study_url_check check (case_study_url is null or case_study_url ~* '^(https?://|/)[^[:space:]]+$')
+);
+
+create table public.package_catalog (
+  offer_key text primary key,
+  name text not null,
+  build_route text not null,
+  supported_platforms text[] not null default '{}'::text[],
+  base_price_usd numeric(12,2) not null,
+  level integer not null,
+  active boolean not null default true,
+  display_order integer not null default 0,
+  description text not null,
+  included_capability_keys text[] not null default '{}'::text[],
+  limits jsonb not null default '{}'::jsonb,
+  support_days integer not null default 0,
+  revision_rounds integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint package_catalog_offer_key_check check (offer_key ~ '^[a-z0-9_]+$'),
+  constraint package_catalog_name_check check (length(btrim(name)) > 0),
+  constraint package_catalog_build_route_check check (build_route in ('platform', 'custom')),
+  constraint package_catalog_base_price_check check (base_price_usd >= 0),
+  constraint package_catalog_level_check check (level > 0),
+  constraint package_catalog_display_order_check check (display_order >= 0),
+  constraint package_catalog_description_check check (length(btrim(description)) > 0),
+  constraint package_catalog_limits_check check (jsonb_typeof(limits) = 'object'),
+  constraint package_catalog_support_days_check check (support_days >= 0),
+  constraint package_catalog_revision_rounds_check check (revision_rounds >= 0)
+);
+
+create table public.addon_catalog (
+  addon_key text primary key,
+  name text not null,
+  description text not null,
+  starting_price_usd numeric(12,2) not null,
+  pricing_unit text not null,
+  allowed_build_routes text[] not null default '{}'::text[],
+  included_in_offer_keys text[] not null default '{}'::text[],
+  requires_scope_review boolean not null default false,
+  active boolean not null default true,
+  display_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint addon_catalog_addon_key_check check (addon_key ~ '^[a-z0-9_]+$'),
+  constraint addon_catalog_name_check check (length(btrim(name)) > 0),
+  constraint addon_catalog_description_check check (length(btrim(description)) > 0),
+  constraint addon_catalog_starting_price_check check (starting_price_usd >= 0),
+  constraint addon_catalog_pricing_unit_check check (length(btrim(pricing_unit)) > 0),
+  constraint addon_catalog_display_order_check check (display_order >= 0)
+);
+
+create table public.quiz_definitions (
+  id uuid primary key default gen_random_uuid(),
+  audience_key text not null,
+  version integer not null default 1,
+  active boolean not null default false,
+  questions jsonb not null default '[]'::jsonb,
+  scoring_rules jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint quiz_definitions_audience_version_key unique (audience_key, version),
+  constraint quiz_definitions_audience_key_check check (length(btrim(audience_key)) > 0),
+  constraint quiz_definitions_version_check check (version > 0),
+  constraint quiz_definitions_questions_check check (jsonb_typeof(questions) = 'array' and jsonb_array_length(questions) > 0),
+  constraint quiz_definitions_scoring_rules_check check (jsonb_typeof(scoring_rules) = 'object')
+);
+
+create table public.site_content (
+  document_key text primary key,
+  content jsonb not null default '{}'::jsonb,
+  published boolean not null default false,
+  version integer not null default 1,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by_user_id uuid,
+  constraint site_content_updated_by_user_id_fkey foreign key (updated_by_user_id) references auth.users(id) on delete set null,
+  constraint site_content_document_key_check check (document_key ~ '^[a-z0-9_]+$'),
+  constraint site_content_content_check check (jsonb_typeof(content) = 'object'),
+  constraint site_content_version_check check (version > 0)
+);

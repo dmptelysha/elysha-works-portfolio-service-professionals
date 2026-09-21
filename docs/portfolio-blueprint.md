@@ -2,7 +2,7 @@
 
 **Owner:** Elysha Dumpit  
 **Brand:** `< elysha works />`  
-**Current priority:** Launch the improved public portfolio and lead qualifier on Firebase.  
+**Current priority:** Launch the improved public portfolio and lead qualifier with Firebase Hosting for the frontend and Supabase for backend services.
 **Future modules:** Client Portal, Admin Portal, Visual Annotator, and CRM.
 
 ---
@@ -11,7 +11,9 @@
 
 Build a conversion-focused Elysha Works portfolio that helps three specific audiences identify what their business needs, receive a personalized system recommendation with transparent fixed pricing, view relevant projects, and optionally book a strategy call.
 
-The first live release includes only the public portfolio, qualifier, results, project filtering, and analytics. Its data model uses stable identifiers and reserved connection points so future modules can be attached without rebuilding the portfolio.
+The first live release includes only the public portfolio, qualifier, results, project filtering, and analytics. Firebase Hosting remains responsible for the existing deployment, custom domain, and SSL. A dedicated Elysha Works Supabase project will provide PostgreSQL, authentication, Row Level Security (RLS), database functions, and storage when required. Its relational model uses stable identifiers and reserved connection points so future modules can be attached without rebuilding the portfolio.
+
+Existing Firebase projects, Firestore databases, applications, `firebase.json`, and hosting targets are outside this change and remain untouched. Client custom applications must use their own separate Supabase projects, credentials, storage, and data; they must never share the Elysha Works internal Supabase database.
 
 ### Primary audiences
 
@@ -474,7 +476,7 @@ Platform boundary: features must remain within supported Systeme.io or GoHighLev
 
 ### 5.2 Route B — Custom Apps
 
-Client Custom Apps use **Next.js, React, TypeScript, Tailwind CSS, and Supabase**. Supabase provides the client app's database, authentication, file storage, and backend services. Firebase remains the backend for the Elysha Works portfolio, qualifier, analytics, and pricing catalog only.
+Client Custom Apps use **Next.js, React, TypeScript, Tailwind CSS, and Supabase**. Each client application receives its own isolated Supabase project for its database, authentication, file storage, and backend services. The Elysha Works portfolio uses a separate internal Supabase project for its qualifier, CRM-connected analytics, pricing catalog, and future modules; client data and Elysha Works internal data must never be mixed. Firebase remains responsible only for hosting the existing portfolio frontend, custom domain, SSL, and deployment.
 
 #### Custom Starter — Base Price $3,000
 
@@ -608,7 +610,7 @@ recommended_base_offer
 
 The result shows each part separately: build route, platform, base offer, included features, add-ons, adjustments, one-time estimated project investment, and separate recurring costs.
 
-All prices and inclusions are stored in Firebase configuration documents and must not be hard-coded across multiple interface components.
+All prices and inclusions are stored in the Supabase `package_catalog` and `addon_catalog` tables and must not be hard-coded across multiple interface components. Public reads expose only active catalog records; pricing changes require authorized admin access.
 
 ---
 
@@ -751,7 +753,7 @@ estimated_recurring_costs[]
 
 ### Client-side state
 
-- Anonymous visitor ID.
+- Supabase anonymous user ID and owned visitor ID.
 - Quiz session ID.
 - Selected audience.
 - Current quiz step.
@@ -765,7 +767,7 @@ estimated_recurring_costs[]
 ### Persistence behavior
 
 - Store active answers locally during the quiz.
-- Create a Firestore quiz-session document when meaningful engagement begins.
+- Silently establish a Supabase Anonymous Auth session, then create the owned Supabase visitor, portfolio-session, and quiz-session records when meaningful engagement begins.
 - Update progress after each completed step or in safe batches.
 - Refresh `last_activity_at` whenever an answer or quiz step is saved.
 - On return, restore only the current browser's latest eligible unfinished session.
@@ -775,288 +777,363 @@ estimated_recurring_costs[]
 - Mark the session completed when the result is generated.
 - Never require personally identifiable information to show the result.
 - Link the quiz session to a lead only after the visitor voluntarily books or submits contact details.
+- The frontend uses only public/publishable Supabase credentials and relies on tested RLS and narrowly scoped RPC functions; the `service_role` key never appears in browser code.
+- Clearing browser data, signing out, using a different browser, or switching devices may make an anonymous session unrecoverable. Same-device recovery remains available for 30 days while the anonymous auth session and local session reference remain available.
 
 ---
 
-## 8. Firebase Memory — Portfolio-First Database Schema
+## 8. Supabase/PostgreSQL Portfolio-First Relational Model
 
-Use Firestore collection names in plural `snake_case`. Use stable random document IDs. Store timestamps using Firebase server timestamps.
+The Elysha Works portfolio frontend remains on Firebase Hosting and connects securely to one dedicated Elysha Works Supabase project. Supabase provides PostgreSQL, Anonymous Auth, future admin/client authentication, RLS, database functions/RPC, and Storage when required. Existing Firestore databases are not migrated, modified, or deleted by this blueprint.
 
-### 8.1 Phase 1 collections
+Transactional records use `UUID` primary keys with `gen_random_uuid()`. Stable configuration records retain natural `TEXT` keys where useful. Timestamps use `TIMESTAMPTZ`, money uses `NUMERIC(12,2)`, structured payloads use `JSONB`, and simple stable-key lists use `TEXT[]`. Mutable tables receive `created_at` and `updated_at` where applicable; a shared `BEFORE UPDATE` trigger sets `updated_at = now()` rather than trusting browser input.
 
-#### `site_visitors/{visitor_id}`
+### 8.1 Phase 1 table summary
 
-Anonymous first-party visitor record.
+| Table | Responsibility | Browser path |
+|---|---|---|
+| `site_visitors` | Anonymous visitor identity, first-touch attribution, consent, and counters | Owned direct read/create; safe updates only |
+| `portfolio_sessions` | One portfolio browsing and conversion-attribution session | Owned direct read/create; safe updates only |
+| `quiz_sessions` | Quiz progress, scoring, recommendation, immutable result snapshot, and resume state | Owned direct read/create; constrained update/RPC |
+| `leads` | Voluntarily submitted identity and CRM-controlled lead record | Restricted lead-submission/linking RPC only |
+| `bookings` | Booking and original visitor/session/quiz attribution | Restricted RPC or trusted webhook only |
+| `analytics_events` | CRM-connectable business-critical events | Restricted event RPC; no public listing |
+| `projects` | Portfolio projects and case studies | Read published rows only |
+| `package_catalog` | Stable package definitions and current pricing | Read active rows only |
+| `addon_catalog` | Stable add-on definitions and pricing | Read active rows only |
+| `quiz_definitions` | Versioned questions and scoring rules | Read active rows only |
+| `site_content` | Versioned editable portfolio copy | Read published rows only |
 
-```text
-visitor_id
-first_seen_at
-last_seen_at
-first_touch_source
-first_touch_medium
-first_touch_campaign
-landing_path
-referrer_domain
-consent_status
-quiz_started_count
-quiz_completed_count
-booking_click_count
-latest_quiz_session_id (nullable)
-```
+### 8.2 Phase 1 tables
 
-Do not store raw IP addresses in this collection.
+#### `site_visitors`
 
-#### `portfolio_sessions/{session_id}`
+Purpose: one first-party anonymous visitor owned by a Supabase Anonymous Auth user. Raw IP addresses must not be stored.
 
-One browsing/engagement session.
+| Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
+|---|---|---:|---|---|---|
+| `id` | `UUID` | Yes | `gen_random_uuid()` | Primary key | Stable visitor ID |
+| `owner_user_id` | `UUID` | Yes | — | FK to `auth.users(id)`; unique; immutable | `auth.uid()` ownership identity |
+| `first_seen_at` | `TIMESTAMPTZ` | Yes | `now()` | Must not be after `last_seen_at` | First activity |
+| `last_seen_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Latest activity |
+| `first_touch_source` | `TEXT` | No | `NULL` | — | First acquisition source |
+| `first_touch_medium` | `TEXT` | No | `NULL` | — | First acquisition medium |
+| `first_touch_campaign` | `TEXT` | No | `NULL` | — | First campaign |
+| `landing_path` | `TEXT` | Yes | — | Non-empty | First landing path |
+| `referrer_domain` | `TEXT` | No | `NULL` | Domain only; no raw IP | Referrer |
+| `consent_status` | `TEXT` | Yes | `'unknown'` | Approved consent values only | Consent state |
+| `quiz_started_count` | `INTEGER` | Yes | `0` | `>= 0` | Started quizzes |
+| `quiz_completed_count` | `INTEGER` | Yes | `0` | `>= 0` | Completed quizzes |
+| `booking_cta_click_count` | `INTEGER` | Yes | `0` | `>= 0` | Booking CTA clicks |
+| `latest_quiz_session_id` | `UUID` | No | `NULL` | FK to `quiz_sessions(id)` added after both tables; `ON DELETE SET NULL` | Resume lookup |
+| `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Creation time |
+| `updated_at` | `TIMESTAMPTZ` | Yes | `now()` | Trigger maintained | Last mutation |
 
-```text
-session_id
-visitor_id
-started_at
-last_activity_at
-landing_path
-audience_key
-utm_source
-utm_medium
-utm_campaign
-referrer_domain
-device_category
-result_viewed
-booking_cta_clicked
-converted_to_lead
-lead_id (nullable)
-```
+Indexes: unique `owner_user_id`; `last_seen_at`; `latest_quiz_session_id`. Access: owner can create/read the row and invoke safe activity/counter updates. RLS requires `auth.uid() = owner_user_id`; direct updates must not change owner, first-touch fields, counters, or latest-session links. Those database-controlled fields use restricted functions.
 
-#### `quiz_sessions/{quiz_session_id}`
+#### `portfolio_sessions`
 
-```text
-quiz_session_id
-visitor_id
-portfolio_session_id
-lead_id (nullable)
-audience_key
-question_set_version
-status (in_progress | completed | restarted | expired | abandoned)
-current_step
-last_completed_step
-started_at
-completed_at
-last_activity_at
-resume_expires_at
-resumed_count
-last_resumed_at (nullable)
-answers (map)
-acquisition_need_score
-automation_need_score
-system_complexity_score
-website_score
-funnel_score
-automation_score
-crm_score
-custom_app_score
-systeme_fit_score
-ghl_fit_score
-custom_build_fit_score
-readiness_level
-recommended_build_route
-recommended_platform
-recommended_offer_key
-primary_solution_type
-supporting_solution_types[]
-selected_addon_keys[]
-priced_addons[]
-base_price_usd
-addon_total_usd
-adjustment_total_usd
-estimated_project_investment_usd
-result_snapshot (map)
-result_viewed_at
-```
+Purpose: one browsing/engagement session with acquisition and conversion attribution.
 
-`result_snapshot` preserves what the visitor saw even if prices or package content change later.
+| Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
+|---|---|---:|---|---|---|
+| `id` | `UUID` | Yes | `gen_random_uuid()` | Primary key | Session ID |
+| `visitor_id` | `UUID` | Yes | — | FK to `site_visitors(id)`; `ON DELETE RESTRICT`; immutable | Owning visitor |
+| `owner_user_id` | `UUID` | Yes | — | FK to `auth.users(id)`; immutable | Anonymous owner |
+| `started_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Start time |
+| `last_activity_at` | `TIMESTAMPTZ` | Yes | `now()` | `>= started_at` | Latest activity |
+| `landing_path` | `TEXT` | Yes | — | Non-empty | Entry path |
+| `audience_key` | `TEXT` | No | `NULL` | Approved audience key when set | Selected audience |
+| `utm_source` | `TEXT` | No | `NULL` | — | UTM source |
+| `utm_medium` | `TEXT` | No | `NULL` | — | UTM medium |
+| `utm_campaign` | `TEXT` | No | `NULL` | — | UTM campaign |
+| `referrer_domain` | `TEXT` | No | `NULL` | — | Referrer |
+| `device_category` | `TEXT` | No | `NULL` | Approved device values | Coarse device class |
+| `result_viewed` | `BOOLEAN` | Yes | `false` | — | Result-view state |
+| `booking_cta_clicked` | `BOOLEAN` | Yes | `false` | — | Booking intent |
+| `converted_to_lead` | `BOOLEAN` | Yes | `false` | Set only by conversion RPC | Conversion state |
+| `lead_id` | `UUID` | No | `NULL` | FK to `leads(id)` added after leads; `ON DELETE SET NULL` | Converted lead |
+| `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Creation time |
+| `updated_at` | `TIMESTAMPTZ` | Yes | `now()` | Trigger maintained | Last mutation |
 
-#### `leads/{lead_id}`
+Indexes: `visitor_id`; `owner_user_id`; `last_activity_at`; `(audience_key, started_at)`. Access: owner can create/read and safely update owned rows. Insert/update policies also verify the referenced visitor is owned by the same `auth.uid()`. Conversion flags and `lead_id` are RPC-controlled.
 
-Created only after voluntary identification through booking or contact submission.
+#### `quiz_sessions`
 
-```text
-lead_id
-visitor_id (nullable)
-first_name
-last_name (nullable)
-email
-phone (nullable)
-business_name (nullable)
-business_url (nullable)
-audience_key
-source
-source_session_id
-source_quiz_session_id
-crm_stage
-lead_status
-assigned_to_user_id (nullable)
-created_at
-updated_at
-last_contact_at (nullable)
-lost_reason (nullable)
-notes_summary (nullable)
-```
+Purpose: durable quiz progress, scores, recommendation, pricing, resume state, and the exact historical result shown.
 
-#### `bookings/{booking_id}`
+| Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
+|---|---|---:|---|---|---|
+| `id` | `UUID` | Yes | `gen_random_uuid()` | Primary key | Quiz-session ID |
+| `visitor_id` | `UUID` | Yes | — | FK to `site_visitors(id)`; `ON DELETE RESTRICT`; immutable | Visitor attribution |
+| `owner_user_id` | `UUID` | Yes | — | FK to `auth.users(id)`; immutable | Anonymous owner |
+| `portfolio_session_id` | `UUID` | Yes | — | FK to `portfolio_sessions(id)`; `ON DELETE RESTRICT`; immutable | Origin session |
+| `question_set_id` | `UUID` | Yes | — | FK to `quiz_definitions(id)`; `ON DELETE RESTRICT`; immutable | Versioned definition |
+| `lead_id` | `UUID` | No | `NULL` | FK to `leads(id)` added after leads; `ON DELETE SET NULL` | Later identity link |
+| `audience_key` | `TEXT` | Yes | — | Must match definition audience | Quiz audience |
+| `question_set_version` | `INTEGER` | Yes | — | `> 0`; historical version | Definition version |
+| `status` | `TEXT` | Yes | `'in_progress'` | Check: `in_progress`, `completed`, `restarted`, `expired`, `abandoned` | Lifecycle |
+| `current_step` | `INTEGER` | Yes | `0` | `>= 0` | Current UI step |
+| `last_completed_step` | `INTEGER` | Yes | `0` | `>= 0` and `<= current_step` | Resume point |
+| `started_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Start time |
+| `completed_at` | `TIMESTAMPTZ` | No | `NULL` | Required when completed | Completion time |
+| `last_activity_at` | `TIMESTAMPTZ` | Yes | `now()` | `>= started_at` | Latest activity |
+| `resume_expires_at` | `TIMESTAMPTZ` | Yes | `now() + interval '30 days'` | Later than activity while resumable | Resume expiry |
+| `resume_count` | `INTEGER` | Yes | `0` | `>= 0` | Resume count |
+| `last_resumed_at` | `TIMESTAMPTZ` | No | `NULL` | — | Latest resume |
+| `answers` | `JSONB` | Yes | `'{}'::jsonb` | JSON object; bounded size | Answers by question key |
+| `acquisition_need_score` | `INTEGER` | Yes | `0` | `>= 0` | Acquisition need |
+| `automation_need_score` | `INTEGER` | Yes | `0` | `>= 0` | Automation need |
+| `system_complexity_score` | `INTEGER` | Yes | `0` | `>= 0` | Complexity |
+| `website_score` | `INTEGER` | Yes | `0` | `>= 0` | Website score |
+| `funnel_score` | `INTEGER` | Yes | `0` | `>= 0` | Funnel score |
+| `automation_score` | `INTEGER` | Yes | `0` | `>= 0` | Automation score |
+| `crm_score` | `INTEGER` | Yes | `0` | `>= 0` | CRM score |
+| `custom_app_score` | `INTEGER` | Yes | `0` | `>= 0` | Custom-app score |
+| `systeme_fit_score` | `INTEGER` | Yes | `0` | `>= 0` | Systeme.io fit |
+| `ghl_fit_score` | `INTEGER` | Yes | `0` | `>= 0` | GoHighLevel fit |
+| `custom_build_fit_score` | `INTEGER` | Yes | `0` | `>= 0` | Custom-build fit |
+| `readiness_level` | `TEXT` | No | `NULL` | Approved calculated value | Readiness result |
+| `recommended_build_route` | `TEXT` | No | `NULL` | Approved route | Build route |
+| `recommended_platform` | `TEXT` | No | `NULL` | Approved platform key | Platform result |
+| `recommended_offer_key` | `TEXT` | No | `NULL` | FK to `package_catalog(offer_key)`; `ON DELETE SET NULL` | Offer result |
+| `primary_solution_type` | `TEXT` | No | `NULL` | — | Main solution |
+| `supporting_solution_types` | `TEXT[]` | Yes | `'{}'::text[]` | Stable keys | Supporting solutions |
+| `selected_addon_keys` | `TEXT[]` | Yes | `'{}'::text[]` | Stable keys | Requested add-ons |
+| `priced_addons` | `JSONB` | Yes | `'[]'::jsonb` | JSON array | Price/quantity snapshot |
+| `base_price_usd` | `NUMERIC(12,2)` | Yes | `0` | `>= 0` | Base price shown |
+| `addon_total_usd` | `NUMERIC(12,2)` | Yes | `0` | `>= 0` | Add-on total |
+| `adjustment_total_usd` | `NUMERIC(12,2)` | Yes | `0` | — | Signed adjustment |
+| `estimated_project_investment_usd` | `NUMERIC(12,2)` | Yes | `0` | `>= 0` | Total shown |
+| `result_snapshot` | `JSONB` | No | `NULL` | Required on completion; immutable afterward | Exact result and price shown |
+| `result_viewed_at` | `TIMESTAMPTZ` | No | `NULL` | — | Result-view time |
+| `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Creation time |
+| `updated_at` | `TIMESTAMPTZ` | Yes | `now()` | Trigger maintained | Last mutation |
 
-```text
-booking_id
-lead_id
-visitor_id (nullable)
-portfolio_session_id (nullable)
-quiz_session_id (nullable)
-booking_provider
-external_booking_id (nullable)
-scheduled_start
-scheduled_end
-timezone
-status (scheduled | completed | cancelled | no_show)
-created_at
-updated_at
-```
+Indexes: `visitor_id`; `owner_user_id`; `portfolio_session_id`; `question_set_id`; `lead_id`; `(status, resume_expires_at)`; `(owner_user_id, last_activity_at DESC)`. Access: owner can create/read and save permitted progress fields only. Policies verify the visitor and portfolio session belong to the same `auth.uid()`. Calculated scores, official prices, result snapshot, status transitions, and lead linkage use constrained functions or column-level privileges. `result_snapshot` remains historically accurate after catalog changes.
 
-#### `analytics_events/{event_id}`
+#### `leads`
 
-```text
-event_id
-event_name
-occurred_at
-visitor_id
-portfolio_session_id
-quiz_session_id (nullable)
-lead_id (nullable)
-audience_key (nullable)
-page_path
-properties (map)
-```
+Purpose: a person who voluntarily submits contact details or completes a booking, plus CRM-controlled state.
 
-Keep event properties small. Use Firebase Analytics for aggregate reporting and Firestore only for business-critical funnel events that must connect to CRM records.
+| Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
+|---|---|---:|---|---|---|
+| `id` | `UUID` | Yes | `gen_random_uuid()` | Primary key | Lead ID |
+| `visitor_id` | `UUID` | No | `NULL` | FK to `site_visitors(id)`; `ON DELETE SET NULL` | Anonymous origin |
+| `first_name` | `TEXT` | Yes | — | Non-empty | Contact name |
+| `last_name` | `TEXT` | No | `NULL` | — | Contact surname |
+| `email` | `TEXT` | Yes | — | Normalized and validated | Contact email |
+| `phone` | `TEXT` | No | `NULL` | Validated length/format | Contact phone |
+| `business_name` | `TEXT` | No | `NULL` | — | Business name |
+| `business_url` | `TEXT` | No | `NULL` | Valid URL when set | Business site |
+| `audience_key` | `TEXT` | No | `NULL` | Approved audience key | Segment |
+| `acquisition_source` | `TEXT` | No | `NULL` | — | Lead source |
+| `source_portfolio_session_id` | `UUID` | No | `NULL` | FK to `portfolio_sessions(id)`; `ON DELETE SET NULL` | Origin portfolio session |
+| `source_quiz_session_id` | `UUID` | No | `NULL` | FK to `quiz_sessions(id)`; `ON DELETE SET NULL`; unique when set | Canonical quiz attribution |
+| `crm_stage` | `TEXT` | Yes | `'new'` | Database-controlled | Pipeline stage |
+| `lead_status` | `TEXT` | Yes | `'open'` | Database-controlled | Lead status |
+| `assigned_to_user_id` | `UUID` | No | `NULL` | FK to `auth.users(id)`; admin-controlled | Assigned admin |
+| `last_contact_at` | `TIMESTAMPTZ` | No | `NULL` | — | Latest contact |
+| `lost_reason` | `TEXT` | No | `NULL` | Admin-controlled | Loss reason |
+| `notes_summary` | `TEXT` | No | `NULL` | Admin-controlled | Internal summary |
+| `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Creation time |
+| `updated_at` | `TIMESTAMPTZ` | Yes | `now()` | Trigger maintained | Last mutation |
 
-#### `projects/{project_id}`
+Indexes: `visitor_id`; `source_portfolio_session_id`; unique partial `source_quiz_session_id` where non-null; `(crm_stage, lead_status)`; `created_at DESC`; `assigned_to_user_id`. Access: no public list/read/update/delete and no unrestricted direct insert. A restricted lead-submission RPC accepts only approved public identity/business fields, verifies ownership of supplied attribution IDs, normalizes input, and assigns CRM defaults internally.
 
-```text
-project_id
-slug
-title
-client_display_name
-summary
-problem
-solution
-outcome
-audience_keys[]
-service_keys[]
-platform_keys[]
-cover_image_url
-gallery[]
-case_study_url (nullable)
-project_status (concept | beta | live)
-featured
-display_order
-published
-created_at
-updated_at
-```
+#### `bookings`
 
-#### `package_catalog/{offer_key}`
+Purpose: a strategy-call booking linked to its lead and original journey without becoming a calendar platform.
 
-Documents include `platform_launch`, `platform_growth`, `platform_scale`, `custom_starter`, `custom_foundation`, `custom_growth`, and `custom_complete`.
+| Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
+|---|---|---:|---|---|---|
+| `id` | `UUID` | Yes | `gen_random_uuid()` | Primary key | Booking ID |
+| `lead_id` | `UUID` | Yes | — | FK to `leads(id)`; `ON DELETE RESTRICT` | Required lead |
+| `visitor_id` | `UUID` | No | `NULL` | FK to `site_visitors(id)`; `ON DELETE SET NULL` | Visitor attribution |
+| `portfolio_session_id` | `UUID` | No | `NULL` | FK to `portfolio_sessions(id)`; `ON DELETE SET NULL` | Session attribution |
+| `quiz_session_id` | `UUID` | No | `NULL` | FK to `quiz_sessions(id)`; `ON DELETE SET NULL` | Quiz attribution |
+| `booking_provider` | `TEXT` | Yes | — | Non-empty | Scheduling provider |
+| `external_booking_id` | `TEXT` | No | `NULL` | Unique with provider when set | Provider identifier |
+| `scheduled_start` | `TIMESTAMPTZ` | Yes | — | Before end | Start |
+| `scheduled_end` | `TIMESTAMPTZ` | Yes | — | After start | End |
+| `time_zone` | `TEXT` | Yes | — | IANA time-zone name | Display zone |
+| `status` | `TEXT` | Yes | `'scheduled'` | Check: `scheduled`, `completed`, `cancelled`, `no_show` | Booking state |
+| `meeting_url` | `TEXT` | No | `NULL` | Valid URL when set | Join link |
+| `rescheduled_from_booking_id` | `UUID` | No | `NULL` | Self-FK; `ON DELETE SET NULL` | Reschedule chain |
+| `cancellation_reason` | `TEXT` | No | `NULL` | — | Cancellation context |
+| `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Creation time |
+| `updated_at` | `TIMESTAMPTZ` | Yes | `now()` | Trigger maintained | Last mutation |
 
-```text
-offer_key
-name
-build_route
-supported_platforms[]
-base_price_usd
-level
-active
-display_order
-general_description
-included_capability_keys[]
-limits (map)
-support_days
-revision_rounds
-created_at
-updated_at
-```
+Indexes: `lead_id`; `visitor_id`; `portfolio_session_id`; `quiz_session_id`; unique `(booking_provider, external_booking_id)` where external ID is non-null; `(scheduled_start, status)`. Access: no public table listing or arbitrary direct insert/update. Create through a restricted submission RPC or trusted booking webhook; status, meeting URL, external IDs, and reschedule data are server/admin-controlled.
 
-#### `addon_catalog/{addon_key}`
+#### `analytics_events`
 
-```text
-addon_key
-name
-description
-starting_price_usd
-pricing_unit
-allowed_build_routes[]
-included_in_offer_keys[]
-requires_scope_review
-active
-display_order
-created_at
-updated_at
-```
+Purpose: small, CRM-connectable business-critical funnel events, not unrestricted raw telemetry.
 
-#### `quiz_definitions/{question_set_id}`
+| Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
+|---|---|---:|---|---|---|
+| `id` | `UUID` | Yes | `gen_random_uuid()` | Primary key | Event ID |
+| `owner_user_id` | `UUID` | No | `NULL` | FK to `auth.users(id)`; must equal caller when browser-created | Ownership where applicable |
+| `event_name` | `TEXT` | Yes | — | Allowlisted event name | Event type |
+| `occurred_at` | `TIMESTAMPTZ` | Yes | `now()` | Server-assigned for critical events | Event time |
+| `visitor_id` | `UUID` | No | `NULL` | FK to `site_visitors(id)`; `ON DELETE SET NULL` | Visitor attribution |
+| `portfolio_session_id` | `UUID` | No | `NULL` | FK to `portfolio_sessions(id)`; `ON DELETE SET NULL` | Session attribution |
+| `quiz_session_id` | `UUID` | No | `NULL` | FK to `quiz_sessions(id)`; `ON DELETE SET NULL` | Quiz attribution |
+| `lead_id` | `UUID` | No | `NULL` | FK to `leads(id)`; `ON DELETE SET NULL` | Lead attribution |
+| `audience_key` | `TEXT` | No | `NULL` | Approved audience key | Segment |
+| `page_path` | `TEXT` | No | `NULL` | — | Page context |
+| `properties` | `JSONB` | Yes | `'{}'::jsonb` | JSON object with size/key allowlist | Small metadata |
+| `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Ingestion time |
 
-```text
-question_set_id
-audience_key
-version
-active
-questions[]
-scoring_rules
-created_at
-updated_at
-```
+Indexes: `owner_user_id`; `visitor_id`; `portfolio_session_id`; `quiz_session_id`; `lead_id`; `(event_name, occurred_at DESC)`; `occurred_at DESC`. Access: no public listing or updates/deletes. A restricted function validates owned attribution IDs and allowlists events/properties; trusted workflows may attach `lead_id`.
 
-#### `site_content/{document_key}`
+#### `projects`
 
-Editable content such as hero, founder, FAQ, testimonial, social links, and navigation.
+Purpose: portfolio project and case-study content.
 
-```text
-document_key
-content
-published
-version
-updated_at
-updated_by_user_id (nullable)
-```
+| Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
+|---|---|---:|---|---|---|
+| `id` | `UUID` | Yes | `gen_random_uuid()` | Primary key | Project ID |
+| `slug` | `TEXT` | Yes | — | Unique; URL-safe | Stable route |
+| `title` | `TEXT` | Yes | — | Non-empty | Project title |
+| `client_display_name` | `TEXT` | No | `NULL` | — | Public client name |
+| `summary` | `TEXT` | Yes | — | — | Card summary |
+| `problem` | `TEXT` | Yes | — | — | Problem statement |
+| `solution` | `TEXT` | Yes | — | — | Delivered solution |
+| `outcome` | `TEXT` | No | `NULL` | — | Outcome |
+| `audience_keys` | `TEXT[]` | Yes | `'{}'::text[]` | Stable keys | Audience filters |
+| `service_keys` | `TEXT[]` | Yes | `'{}'::text[]` | Stable keys | Service tags |
+| `platform_keys` | `TEXT[]` | Yes | `'{}'::text[]` | Stable keys | Platform tags |
+| `cover_image_url` | `TEXT` | No | `NULL` | Valid URL/path | Cover media |
+| `gallery` | `JSONB` | Yes | `'[]'::jsonb` | Structured media array | Gallery |
+| `case_study_url` | `TEXT` | No | `NULL` | Valid URL/path | Detail link |
+| `project_status` | `TEXT` | Yes | `'concept'` | Check: `concept`, `beta`, `live` | Delivery status |
+| `featured` | `BOOLEAN` | Yes | `false` | — | Featured state |
+| `display_order` | `INTEGER` | Yes | `0` | `>= 0` | Sort order |
+| `published` | `BOOLEAN` | Yes | `false` | — | Public visibility |
+| `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Creation time |
+| `updated_at` | `TIMESTAMPTZ` | Yes | `now()` | Trigger maintained | Last mutation |
 
-### 8.2 Reserved future collections
+Indexes: unique `slug`; `(published, display_order)`; partial featured/display index where published. Access: public frontend users can select only `published = true`; only authorized admins can create/update/delete. No visitor write path.
 
-These are documented now but do not need to be implemented for the first portfolio release.
+#### `package_catalog`
 
-| Collection | Future purpose |
+Purpose: stable definitions for `platform_launch`, `platform_growth`, `platform_scale`, `custom_starter`, `custom_foundation`, `custom_growth`, and `custom_complete`.
+
+| Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
+|---|---|---:|---|---|---|
+| `offer_key` | `TEXT` | Yes | — | Primary key; stable immutable key | Offer identity |
+| `name` | `TEXT` | Yes | — | Non-empty | Display name |
+| `build_route` | `TEXT` | Yes | — | Approved route | Platform/custom route |
+| `supported_platforms` | `TEXT[]` | Yes | `'{}'::text[]` | Stable keys | Supported platforms |
+| `base_price_usd` | `NUMERIC(12,2)` | Yes | — | `>= 0` | Base price |
+| `level` | `INTEGER` | Yes | — | `> 0` | Package tier |
+| `active` | `BOOLEAN` | Yes | `true` | — | Public availability |
+| `display_order` | `INTEGER` | Yes | `0` | `>= 0` | Sort order |
+| `description` | `TEXT` | Yes | — | — | General description |
+| `included_capability_keys` | `TEXT[]` | Yes | `'{}'::text[]` | Stable keys | Included capabilities |
+| `limits` | `JSONB` | Yes | `'{}'::jsonb` | JSON object | Pages, workflows, roles, etc. |
+| `support_days` | `INTEGER` | Yes | `0` | `>= 0` | Support period |
+| `revision_rounds` | `INTEGER` | Yes | `0` | `>= 0` | Included revisions |
+| `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Creation time |
+| `updated_at` | `TIMESTAMPTZ` | Yes | `now()` | Trigger maintained | Last mutation |
+
+Indexes: `(active, display_order)`; `(build_route, level)`. Access: public frontend selects only `active = true`; only authorized admins modify pricing/inclusions. Direct read after anonymous sign-in; no visitor writes.
+
+#### `addon_catalog`
+
+Purpose: stable add-on definitions and pricing rules.
+
+| Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
+|---|---|---:|---|---|---|
+| `addon_key` | `TEXT` | Yes | — | Primary key; stable immutable key | Add-on identity |
+| `name` | `TEXT` | Yes | — | Non-empty | Display name |
+| `description` | `TEXT` | Yes | — | — | Scope description |
+| `starting_price_usd` | `NUMERIC(12,2)` | Yes | — | `>= 0` | Starting price |
+| `pricing_unit` | `TEXT` | Yes | — | Non-empty | Unit text |
+| `allowed_build_routes` | `TEXT[]` | Yes | `'{}'::text[]` | Stable route keys | Eligible routes |
+| `included_in_offer_keys` | `TEXT[]` | Yes | `'{}'::text[]` | Validate against offers when seeded | Double-charge prevention |
+| `requires_scope_review` | `BOOLEAN` | Yes | `false` | — | Manual quote flag |
+| `active` | `BOOLEAN` | Yes | `true` | — | Public availability |
+| `display_order` | `INTEGER` | Yes | `0` | `>= 0` | Sort order |
+| `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Creation time |
+| `updated_at` | `TIMESTAMPTZ` | Yes | `now()` | Trigger maintained | Last mutation |
+
+Indexes: `(active, display_order)`. Access: public frontend selects only `active = true`; only authorized admins modify. Direct read after anonymous sign-in; no visitor writes.
+
+#### `quiz_definitions`
+
+Purpose: versioned audience-specific questions and scoring rules.
+
+| Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
+|---|---|---:|---|---|---|
+| `id` | `UUID` | Yes | `gen_random_uuid()` | Primary key | Definition ID |
+| `audience_key` | `TEXT` | Yes | — | Unique with version | Audience |
+| `version` | `INTEGER` | Yes | `1` | `> 0`; unique with audience | Definition version |
+| `active` | `BOOLEAN` | Yes | `false` | At most one active version per audience recommended | Availability |
+| `questions` | `JSONB` | Yes | `'[]'::jsonb` | Non-empty JSON array | Questions/options |
+| `scoring_rules` | `JSONB` | Yes | `'{}'::jsonb` | JSON object | Scoring configuration |
+| `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Creation time |
+| `updated_at` | `TIMESTAMPTZ` | Yes | `now()` | Trigger maintained | Last mutation |
+
+Indexes: unique `(audience_key, version)`; `(audience_key, active, version DESC)`; optional partial unique index for one active version per audience. Access: public frontend selects only `active = true`; only authorized admins modify. Direct read after anonymous sign-in; no visitor writes.
+
+#### `site_content`
+
+Purpose: editable hero, founder, FAQ, testimonial, social-link, navigation, and other portfolio copy documents.
+
+| Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
+|---|---|---:|---|---|---|
+| `document_key` | `TEXT` | Yes | — | Primary key; stable immutable key | Content identity |
+| `content` | `JSONB` | Yes | `'{}'::jsonb` | JSON object | Structured copy |
+| `published` | `BOOLEAN` | Yes | `false` | — | Public visibility |
+| `version` | `INTEGER` | Yes | `1` | `> 0` | Content revision |
+| `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Creation time |
+| `updated_at` | `TIMESTAMPTZ` | Yes | `now()` | Trigger maintained | Last update |
+| `updated_by_user_id` | `UUID` | No | `NULL` | FK to `auth.users(id)`; `ON DELETE SET NULL` | Last admin editor |
+
+Indexes: `(published, document_key)`; `updated_by_user_id`. Access: public frontend selects only `published = true`; only authorized admins create/update/delete. Direct read after anonymous sign-in; no visitor writes.
+
+### 8.3 Reserved future CRM and portal tables
+
+These are reserved design targets only and must not be created in the initial portfolio migration without separate approval.
+
+| Reserved table | Future purpose |
 |---|---|
-| `users` | Admin and client identities linked to Firebase Auth UID |
-| `clients` | Won-client business records |
+| `profiles` | Admin/client profiles linked one-to-one with Supabase `auth.users` |
+| `clients` | Won-client business records derived from leads |
 | `client_members` | User-to-client membership and roles |
+| `pipeline_stages` | Ordered CRM pipeline configuration |
+| `lead_stage_history` | Auditable stage changes |
+| `tasks` | CRM/admin work items |
+| `follow_ups` | Scheduled lead/client follow-up |
 | `projects_workspace` | Active client projects and lifecycle stages |
-| `project_members` | Access control for staff and clients |
+| `project_members` | Staff/client workspace access |
 | `deliverables` | Pages, designs, files, and reviewable outputs |
-| `annotations` | Visual comments anchored to a deliverable |
-| `annotation_threads` | Replies, resolution status, and revision discussion |
+| `annotations` | Visual comments anchored to deliverables |
+| `annotation_threads` | Replies, resolution, and revision discussion |
 | `revision_rounds` | Revision limits and approval history |
 | `crm_activities` | Calls, emails, notes, stage changes, and follow-ups |
-| `proposals` | Scope, package, price, and proposal status |
-| `contracts` | Contract metadata and signature status |
-| `payments` | Deposit, balance, status, and external payment reference |
+| `proposals` | Scope, package, price, and proposal state |
+| `contracts` | Contract metadata and signature state |
+| `payments` | Deposit/balance state and provider references |
 | `notifications` | In-app/email notification queue and read state |
-| `audit_logs` | Sensitive admin and access events |
+| `audit_logs` | Sensitive admin, authorization, and data-change events |
 
-### 8.3 Stable relationships
+### 8.4 Stable relationships and circular-link sequence
 
 ```mermaid
 erDiagram
+    AUTH_USER ||--|| SITE_VISITOR : owns
+    AUTH_USER ||--o{ PORTFOLIO_SESSION : owns
+    AUTH_USER ||--o{ QUIZ_SESSION : owns
     SITE_VISITOR ||--o{ PORTFOLIO_SESSION : starts
     SITE_VISITOR ||--o{ QUIZ_SESSION : takes
-    QUIZ_SESSION o|--o| LEAD : identifies_as
+    PORTFOLIO_SESSION ||--o{ QUIZ_SESSION : contains
+    QUIZ_DEFINITION ||--o{ QUIZ_SESSION : defines
+    SITE_VISITOR o|--o{ LEAD : identifies_as
+    PORTFOLIO_SESSION o|--o{ LEAD : originates
+    QUIZ_SESSION o|--o| LEAD : originates
     LEAD ||--o{ BOOKING : schedules
     LEAD o|--o| CLIENT : converts_to
     CLIENT ||--o{ PROJECT_WORKSPACE : owns
@@ -1064,7 +1141,54 @@ erDiagram
     DELIVERABLE ||--o{ ANNOTATION : receives
 ```
 
-The future modules should reference the existing `lead_id`, `client_id`, and `project_id`; they should not create duplicate client records.
+To avoid the `quiz_sessions.lead_id` / `leads.source_quiz_session_id` creation cycle, migrations create `quiz_sessions` first without `lead_id`, create `leads` with `source_quiz_session_id`, then add `quiz_sessions.lead_id` afterward. `leads.source_quiz_session_id` is the canonical acquisition relationship and is unique when present; `quiz_sessions.lead_id` is a convenience back-link populated only by the safe conversion/linking RPC.
+
+Required Phase 1 foreign keys:
+
+```text
+portfolio_sessions.visitor_id → site_visitors.id
+quiz_sessions.visitor_id → site_visitors.id
+quiz_sessions.portfolio_session_id → portfolio_sessions.id
+quiz_sessions.question_set_id → quiz_definitions.id
+quiz_sessions.lead_id → leads.id (nullable; added after leads)
+leads.visitor_id → site_visitors.id (nullable)
+leads.source_portfolio_session_id → portfolio_sessions.id (nullable)
+leads.source_quiz_session_id → quiz_sessions.id (nullable; canonical acquisition link)
+bookings.lead_id → leads.id
+bookings.visitor_id → site_visitors.id (nullable)
+bookings.portfolio_session_id → portfolio_sessions.id (nullable)
+bookings.quiz_session_id → quiz_sessions.id (nullable)
+analytics_events.visitor_id → site_visitors.id (nullable)
+analytics_events.portfolio_session_id → portfolio_sessions.id (nullable)
+analytics_events.quiz_session_id → quiz_sessions.id (nullable)
+analytics_events.lead_id → leads.id (nullable)
+```
+
+Stable lifecycle:
+
+```text
+Anonymous Visitor
+→ Portfolio Session
+→ Quiz Session
+→ Lead
+→ Booking
+→ Qualified Lead
+→ Client
+→ Project Workspace
+→ Deliverables and Annotations
+```
+
+Future modules use the original `lead_id`, later `client_id`, and project/workspace relationships instead of duplicating records. They use the same internal Elysha Works Supabase project. Client custom applications remain isolated in their own Supabase projects.
+
+### 8.5 Anonymous Auth ownership and cleanup
+
+The browser silently calls Supabase Anonymous Auth before creating portfolio records. Supabase anonymous users operate under the PostgreSQL `authenticated` role, not `anon`; ownership uses `auth.uid() = owner_user_id` plus checks that referenced parent rows have the same owner. The JWT `is_anonymous` claim may distinguish anonymous visitors from permanent users where necessary. The unauthenticated `anon` role receives no table access by default; the normal flow signs in anonymously before reading configuration.
+
+Anonymous identity is durable only while local auth state remains available. Clearing browser data, signing out, private browsing, or changing device/browser may prevent recovery. Owned incomplete quiz sessions remain recoverable on the same device for 30 days. No personal information is required for a result, and a lead exists only after voluntary contact submission or a successful booking. Later conversion links existing stable IDs rather than replacing them.
+
+Abuse controls include CAPTCHA or Cloudflare Turnstile around anonymous-account creation, rate limits for sensitive submissions/RPCs, payload-size and allowlist validation, and scheduled cleanup of expired anonymous users and abandoned sessions. Mark eligible sessions `expired` after 30 days before later cleanup. Preserve completed result snapshots and conversion attribution under the approved retention policy. Portfolio tables never store raw IP addresses; legal/business retention periods must be approved before production rather than guessed here.
+
+Foreign-key deletion conventions are explicit: required visitor/session/quiz lineage uses `ON DELETE RESTRICT`; optional attribution and convenience links use `ON DELETE SET NULL`; booking-to-lead uses `ON DELETE RESTRICT`; catalog/definition links used by historical results use `RESTRICT` or deactivation rather than deletion; admin/editor assignments use `ON DELETE SET NULL`. Required ownership links from `site_visitors`, `portfolio_sessions`, and `quiz_sessions` to `auth.users` use `ON DELETE RESTRICT` so removing an auth identity cannot silently erase business history. The trusted anonymous-user cleanup job deletes eligible unconverted dependent records in dependency order before deleting the auth user. `analytics_events.owner_user_id` uses `ON DELETE SET NULL` because event attribution can outlive an anonymous identity.
 
 ---
 
@@ -1118,69 +1242,102 @@ Preserve first-touch and latest-session source data. When a visitor becomes a le
 
 ---
 
-## 10. Firebase Security Boundaries
+## 10. Supabase Security Boundaries
 
-- Public visitors may read only published portfolio content, active question definitions, active packages, and published projects.
-- Public visitors may create/update only their own anonymous session and quiz documents through constrained rules or trusted server endpoints.
-- Public visitors cannot list other sessions, leads, or analytics events.
-- Only authenticated admin users may read all leads, bookings, and conversion records.
-- Client users will later read only projects and deliverables linked through `client_members` or `project_members`.
-- Annotation writes will later require authenticated project membership.
-- Prices and result snapshots must be validated by trusted server logic before being treated as official.
-- Never place admin credentials or service-account keys in frontend code.
+RLS is enabled on every Phase 1 table. Migrations explicitly revoke broad default table, sequence, and function privileges from `anon` and `authenticated`, then grant only required operations. Public/publishable Supabase credentials are safe only with tested RLS; the `service_role` key is server-only and never appears in browser code.
+
+| Table | Visitor/public behavior | Admin behavior | Browser write route |
+|---|---|---|---|
+| `site_visitors` | Owner create/read; safe owned updates only | Authorized management | Direct create/read; restricted activity/counter RPC or column-safe update |
+| `portfolio_sessions` | Owner create/read; safe owned updates only | Authorized management | Direct create/read; constrained update/RPC |
+| `quiz_sessions` | Owner create/read; safe owned progress updates only | Authorized management | Direct create/read; constrained autosave/result/link RPC |
+| `leads` | No list/read/update/delete or arbitrary insert | Authorized CRM access | Lead-submission/linking RPC only |
+| `bookings` | No list or arbitrary mutation | Authorized booking access | Submission RPC or trusted webhook |
+| `analytics_events` | No listing/update/delete | Authorized reporting access | Restricted event RPC only |
+| `projects` | Select only `published = true` | Full authorized management | Direct read only |
+| `package_catalog` | Select only `active = true` | Full authorized pricing management | Direct read only |
+| `addon_catalog` | Select only `active = true` | Full authorized pricing management | Direct read only |
+| `quiz_definitions` | Select only `active = true` | Full authorized management | Direct read only |
+| `site_content` | Select only `published = true` | Full authorized management | Direct read only |
+
+Owner policies use both `USING` and `WITH CHECK`, prohibit owner/FK reassignment, and verify ownership of referenced parents. Table-level RLS is supplemented by column-level grants and restricted RPCs so an owner cannot forge counters, conversion flags, lead links, calculated scores, official prices, immutable result snapshots, or admin fields. Visitor deletes are rejected; retention cleanup is trusted maintenance work.
+
+Phase 1 admin authorization uses a server-controlled JWT `app_metadata` role claim or equivalent server-managed authorization table. Policies must never trust user-editable `user_metadata`. A future `profiles` table can enrich identity without replacing `auth.users` as the authentication source. Client users later read only records allowed through `client_members`/`project_members`; annotation writes require project membership.
+
+### 10.1 Restricted RPC/database functions
+
+| Responsibility | Caller | Minimum behavior |
+|---|---|---|
+| Lead submission | Owned anonymous/permanent user | Accept approved contact/business and source IDs only; validate ownership; normalize input; set safe CRM defaults internally |
+| Booking submission or webhook processing | Owned user for submission; trusted server for webhook | Link a lead, preserve visitor/session/quiz attribution, validate provider data, set status/provider fields internally |
+| Business-critical analytics creation | Owned user or trusted server | Allowlist event names/properties, validate owned attribution IDs, assign owner/time internally, prevent arbitrary lead attachment |
+| Quiz-to-lead conversion/linking | Owned user or trusted server | Verify quiz ownership/canonical source, set both relationship directions transactionally, reject conflicts/reassignment |
+
+Every `SECURITY DEFINER` function sets a fixed minimal `search_path`, schema-qualifies objects, validates `auth.uid()`, accepts only minimum arguments, and assigns IDs, owners, statuses, prices, timestamps, and CRM fields internally. Revoke default `PUBLIC` execute privilege and grant `EXECUTE` only to roles that need each function. Edge Functions are reserved for external secrets, third-party APIs, advanced rate limiting, and webhooks—not every quiz autosave.
+
+### 10.2 Required security tests
+
+- Owner can create/read/update only permitted fields on their own visitor/session/quiz rows.
+- Owner cannot read or mutate another owner's rows or attach another owner's parent IDs.
+- Anonymous users cannot list leads, bookings, or analytics events.
+- Published content and active configuration are visible; drafts and inactive records are hidden.
+- Unauthorized updates and deletes are rejected, including owner/FK reassignment and forged calculated fields.
+- Sensitive RPCs reject unexpected fields, foreign IDs, statuses, prices, owners, oversized payloads, and invalid transitions.
+- Admin access succeeds only for a server-authorized admin role; `user_metadata` alone never authorizes it.
+
+### 10.3 Recommended index summary
+
+Index every foreign key used in joins unless an existing unique index already covers it. Prioritize `owner_user_id`, visitor/session/quiz/lead attribution IDs, visitor/session activity time, `(quiz status, resume_expires_at)`, lead CRM stage/status and creation time, booking start/status, analytics event name/time, project slug and `(published, display_order)`, active catalog display order, and `(audience_key, active, version)` for quiz definitions. Avoid speculative indexes without a known filter, sort, uniqueness rule, or join.
 
 ---
 
-## 11. Recommended Firebase Services
+## 11. Firebase Hosting and Supabase Responsibilities
 
-| Service | Portfolio-first use |
+| Service | Portfolio responsibility |
 |---|---|
-| Firebase Hosting | Deploy the portfolio |
-| Firestore | Content, quiz sessions, results, leads, bookings, CRM-ready events |
-| Firebase Analytics | Aggregate traffic and behavior analytics |
-| Firebase Storage | Project thumbnails and case-study media |
-| Firebase Authentication | Admin login now; client login later |
-| Cloud Functions or trusted server routes | Secure scoring, booking webhooks, and lead linking when required |
+| Firebase Hosting | Existing frontend hosting, custom domain, SSL, hosting targets, and deployment only |
+| Supabase PostgreSQL | All 11 Phase 1 tables, relationships, pricing/configuration, quiz records, leads, bookings, and CRM-connected events |
+| Supabase Anonymous Auth | Silent visitor identity and `auth.uid()` ownership |
+| Supabase Auth | Future permanent admin and client authentication |
+| Supabase RLS and grants | Row ownership, public visibility, admin boundaries, and least privilege |
+| Supabase database functions/RPC | Restricted lead, booking, analytics, result, and linking writes |
+| Supabase Storage | Portfolio or future-module files only when required and with bucket/object policies |
+| Supabase Edge Functions | External-secret workflows, third-party API calls, advanced rate limiting, or webhooks when genuinely needed |
+
+Existing Firebase projects, Firestore databases, applications, `firebase.json`, and hosting targets remain untouched. No production infrastructure is deployed, deleted, disconnected, or mutated by this blueprint update.
 
 ---
 
 ## 12. Delivery Phases
 
-### Phase 1 — Portfolio View
+### Phase 1 — Existing hosting verification and backend preparation
 
-- Build full homepage sections.
-- Add audience selector.
-- Build responsive project cards and filters.
-- Add founder, testimonial, FAQ, final CTA, and footer.
-- Connect published content and project data.
+1. Keep and verify existing Firebase Hosting, custom domain, SSL, `firebase.json`, hosting targets, projects, applications, and Firestore databases without changing them.
+2. Create or select a dedicated Elysha Works Supabase project only when implementation is separately approved.
+3. Generate version-controlled Supabase SQL migrations.
+4. Create the 11 Phase 1 tables.
+5. Add constraints, relationships, indexes, shared `updated_at` triggers, grants, RLS policies, and restricted RPC functions.
+6. Seed only approved package, add-on, quiz-definition, project, and site-content configuration data.
+7. Enable Supabase Anonymous Auth and the required CAPTCHA/Turnstile, rate-limiting, and cleanup protections.
 
-### Phase 2 — Quiz and Result
+### Phase 2 — Portfolio connection, quiz, and result
 
-- Build the three audience-specific six-question paths plus two universal platform/support questions.
-- Add state persistence and progress recovery.
-- Implement recommendation scoring.
-- Show the recommended platform/build route, detailed base offer, selected add-ons, and transparent estimate.
-- Preserve complete result snapshots.
+8. Connect the existing portfolio frontend to Supabase without changing its UI or quiz behavior.
+9. Test visitor/session creation, quiz autosave, same-device 30-day resume, completion, results, voluntary lead submission, and booking attribution.
+10. Test every RLS allow-and-deny case, RPC input boundary, and admin-role check.
 
-### Phase 3 — Analytics and Booking
+### Phase 3 — Production verification and later modules
 
-- Track portfolio, quiz, result, CTA, and booking events.
-- Connect booking completion to lead creation.
-- Add basic admin reporting for portfolio funnel performance.
+11. Verify production behavior before discontinuing any unused Firestore portfolio configuration.
+12. Do not delete existing Firestore databases or other Firebase resources without separate explicit approval.
+13. Add CRM, Client Portal, Admin Portal, and Visual Annotator tables/features only in later approved phases.
 
-### Phase 4 — Existing-System Audit
+### Existing-system audit
 
-- Verify whether the five existing applications use the same Firebase project, Auth, Firestore, and Storage.
-- Inventory their collections and security rules.
-- Detect duplicate users, clients, projects, or leads.
-- Define the safest connection or migration sequence.
-
-### Phase 5 — Future Modules
-
-- CRM expansion.
-- Client Portal connection.
-- Admin Portal expansion.
-- Visual Annotator connection.
+- Inventory the five existing applications, their Firebase projects, Auth, Firestore, Storage, hosting targets, rules, and dependencies without modifying them.
+- Identify whether any historic portfolio configuration is still consumed before declaring it unused.
+- Detect duplicate users, clients, projects, or leads and define a separately approved connection/migration plan.
+- Never mix client custom-application Supabase projects with the internal Elysha Works Supabase project.
 
 ---
 
@@ -1203,6 +1360,14 @@ The first release is ready when:
 - No personally identifiable information is collected before voluntary submission.
 - Content, questions, package data, and projects can be updated without rewriting core scoring logic.
 - Mobile, tablet, and desktop layouts are usable and visually consistent.
+- Firebase Hosting continues to serve the existing frontend, custom domain, SSL, and deployments without changing existing hosting configuration.
+- The frontend uses Supabase Anonymous Auth and cannot read or mutate another visitor's records.
+- All 11 Phase 1 PostgreSQL tables, required foreign keys, constraints, indexes, triggers, grants, RLS policies, and restricted functions are covered by version-controlled migrations.
+- Public users cannot enumerate leads, bookings, or analytics events, cannot see draft/inactive content, and cannot assign CRM/admin fields.
+- Booking records retain their `lead_id` and original visitor, portfolio-session, and quiz-session attribution.
+- Result snapshots preserve the exact recommendation and price shown even after catalog changes.
+- Future CRM/portal records reuse stable lead, client, project, session, and quiz relationships rather than creating duplicate identities.
+- Existing Firestore databases and other Firebase resources remain untouched unless a later explicit migration/deletion approval is given.
 
 ---
 
@@ -1216,7 +1381,7 @@ Build now:
 - Complete result.
 - Fixed package recommendation.
 - Audience-filtered projects.
-- Firebase portfolio data.
+- Supabase-backed portfolio data using the 11 Phase 1 relational tables.
 - Essential analytics and booking attribution.
 
 Do not build yet:
@@ -1225,6 +1390,18 @@ Do not build yet:
 - Full admin portal rewrite.
 - Visual annotator integration.
 - Full CRM interface.
-- Supabase migration.
+- Reserved future CRM/portal tables.
+- Any production deployment, Supabase-project creation, or destructive Firestore/Firebase migration.
 
 Those modules remain represented in the future-ready data relationships, but they do not block the portfolio launch.
+
+---
+
+## 15. Migration and Implementation Notes
+
+- This document finalizes the relational design; it does not contain executable production SQL and does not authorize deployment.
+- Migrations must be reviewed and applied in the Section 12 order. Create base referenced tables first, then dependent tables, then the deferred back-links that resolve circular relationships.
+- Seed data must preserve the pricing, package names, quiz questions, scoring decisions, copy, and project information already approved in this blueprint.
+- Supabase Storage buckets are introduced only when a portfolio or future-module workflow actually requires files; bucket policies follow the same ownership/admin boundaries as database records.
+- Edge Functions are optional integration boundaries, not a replacement for RLS or routine quiz persistence.
+- Any discontinuation of old portfolio-specific Firestore configuration follows successful production verification and separate approval. Existing Firestore databases themselves are never deleted under this plan.

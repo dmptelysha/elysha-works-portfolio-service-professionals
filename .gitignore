@@ -6,3 +6,5 @@ out/
 node_modules/
 next-env.d.ts
 *.tsbuildinfo
+.env.local
+supabase/.temp/

@@ -1,0 +1,229 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function validId(value) {
+      return value is string && value.size() >= 1 && value.size() <= 128;
+    }
+
+    function validString(value, maxSize) {
+      return value is string && value.size() <= maxSize;
+    }
+
+    function nullableString(value, maxSize) {
+      return value == null || validString(value, maxSize);
+    }
+
+    function nullableTimestamp(value) {
+      return value == null || value is timestamp;
+    }
+
+    function validNonNegativeNumber(value) {
+      return (value is int || value is float) && value >= 0;
+    }
+
+    function validSiteVisitor(visitorId, data) {
+      return data.keys().hasAll([
+          'visitor_id', 'first_seen_at', 'last_seen_at', 'first_touch_source',
+          'first_touch_medium', 'first_touch_campaign', 'landing_path',
+          'referrer_domain', 'consent_status', 'quiz_started_count',
+          'quiz_completed_count', 'booking_click_count', 'latest_quiz_session_id'
+        ])
+        && data.keys().hasOnly([
+          'visitor_id', 'first_seen_at', 'last_seen_at', 'first_touch_source',
+          'first_touch_medium', 'first_touch_campaign', 'landing_path',
+          'referrer_domain', 'consent_status', 'quiz_started_count',
+          'quiz_completed_count', 'booking_click_count', 'latest_quiz_session_id'
+        ])
+        && data.visitor_id == visitorId && validId(data.visitor_id)
+        && data.first_seen_at == request.time && data.last_seen_at == request.time
+        && validString(data.first_touch_source, 128)
+        && validString(data.first_touch_medium, 128)
+        && validString(data.first_touch_campaign, 256)
+        && validString(data.landing_path, 2048)
+        && validString(data.referrer_domain, 255)
+        && validString(data.consent_status, 32)
+        && data.quiz_started_count is int && data.quiz_started_count >= 0
+        && data.quiz_completed_count is int && data.quiz_completed_count >= 0
+        && data.booking_click_count is int && data.booking_click_count >= 0
+        && nullableString(data.latest_quiz_session_id, 128);
+    }
+
+    function validPortfolioSession(sessionId, data) {
+      return data.keys().hasAll([
+          'session_id', 'visitor_id', 'started_at', 'last_activity_at',
+          'landing_path', 'audience_key', 'utm_source', 'utm_medium',
+          'utm_campaign', 'referrer_domain', 'device_category', 'result_viewed',
+          'booking_cta_clicked', 'converted_to_lead', 'lead_id'
+        ])
+        && data.keys().hasOnly([
+          'session_id', 'visitor_id', 'started_at', 'last_activity_at',
+          'landing_path', 'audience_key', 'utm_source', 'utm_medium',
+          'utm_campaign', 'referrer_domain', 'device_category', 'result_viewed',
+          'booking_cta_clicked', 'converted_to_lead', 'lead_id'
+        ])
+        && data.session_id == sessionId && validId(data.session_id)
+        && validId(data.visitor_id)
+        && data.started_at == request.time && data.last_activity_at == request.time
+        && validString(data.landing_path, 2048)
+        && validString(data.audience_key, 128)
+        && validString(data.utm_source, 128)
+        && validString(data.utm_medium, 128)
+        && validString(data.utm_campaign, 256)
+        && validString(data.referrer_domain, 255)
+        && validString(data.device_category, 32)
+        && data.result_viewed is bool
+        && data.booking_cta_clicked is bool
+        && data.converted_to_lead is bool
+        && nullableString(data.lead_id, 128);
+    }
+
+    function validQuizSession(quizSessionId, data) {
+      return data.keys().hasAll([
+          'quiz_session_id', 'visitor_id', 'portfolio_session_id', 'lead_id',
+          'audience_key', 'question_set_version', 'status', 'current_step',
+          'last_completed_step', 'started_at', 'completed_at', 'last_activity_at',
+          'resume_expires_at', 'resumed_count', 'last_resumed_at', 'answers',
+          'acquisition_need_score', 'automation_need_score', 'system_complexity_score',
+          'website_score', 'funnel_score', 'automation_score', 'crm_score',
+          'custom_app_score', 'systeme_fit_score', 'ghl_fit_score',
+          'custom_build_fit_score', 'readiness_level', 'recommended_build_route',
+          'recommended_platform', 'recommended_offer_key', 'primary_solution_type',
+          'supporting_solution_types', 'selected_addon_keys', 'priced_addons',
+          'base_price_usd', 'addon_total_usd', 'adjustment_total_usd',
+          'estimated_project_investment_usd', 'result_snapshot', 'result_viewed_at'
+        ])
+        && data.keys().hasOnly([
+          'quiz_session_id', 'visitor_id', 'portfolio_session_id', 'lead_id',
+          'audience_key', 'question_set_version', 'status', 'current_step',
+          'last_completed_step', 'started_at', 'completed_at', 'last_activity_at',
+          'resume_expires_at', 'resumed_count', 'last_resumed_at', 'answers',
+          'acquisition_need_score', 'automation_need_score', 'system_complexity_score',
+          'website_score', 'funnel_score', 'automation_score', 'crm_score',
+          'custom_app_score', 'systeme_fit_score', 'ghl_fit_score',
+          'custom_build_fit_score', 'readiness_level', 'recommended_build_route',
+          'recommended_platform', 'recommended_offer_key', 'primary_solution_type',
+          'supporting_solution_types', 'selected_addon_keys', 'priced_addons',
+          'base_price_usd', 'addon_total_usd', 'adjustment_total_usd',
+          'estimated_project_investment_usd', 'result_snapshot', 'result_viewed_at'
+        ])
+        && data.quiz_session_id == quizSessionId && validId(data.quiz_session_id)
+        && validId(data.visitor_id) && validId(data.portfolio_session_id)
+        && nullableString(data.lead_id, 128)
+        && validString(data.audience_key, 128)
+        && validString(data.question_set_version, 64)
+        && data.status in ['in_progress', 'completed', 'restarted', 'expired', 'abandoned']
+        && data.current_step is int && data.current_step >= 0 && data.current_step <= 100
+        && data.last_completed_step is int && data.last_completed_step >= 0 && data.last_completed_step <= 100
+        && data.started_at == request.time && nullableTimestamp(data.completed_at)
+        && data.last_activity_at == request.time && data.resume_expires_at is timestamp
+        && data.resumed_count is int && data.resumed_count >= 0
+        && nullableTimestamp(data.last_resumed_at)
+        && data.answers is map && data.answers.size() <= 100
+        && validNonNegativeNumber(data.acquisition_need_score)
+        && validNonNegativeNumber(data.automation_need_score)
+        && validNonNegativeNumber(data.system_complexity_score)
+        && validNonNegativeNumber(data.website_score)
+        && validNonNegativeNumber(data.funnel_score)
+        && validNonNegativeNumber(data.automation_score)
+        && validNonNegativeNumber(data.crm_score)
+        && validNonNegativeNumber(data.custom_app_score)
+        && validNonNegativeNumber(data.systeme_fit_score)
+        && validNonNegativeNumber(data.ghl_fit_score)
+        && validNonNegativeNumber(data.custom_build_fit_score)
+        && validString(data.readiness_level, 128)
+        && validString(data.recommended_build_route, 128)
+        && validString(data.recommended_platform, 128)
+        && validString(data.recommended_offer_key, 128)
+        && validString(data.primary_solution_type, 128)
+        && data.supporting_solution_types is list && data.supporting_solution_types.size() <= 20
+        && data.selected_addon_keys is list && data.selected_addon_keys.size() <= 20
+        && data.priced_addons is list && data.priced_addons.size() <= 20
+        && validNonNegativeNumber(data.base_price_usd)
+        && validNonNegativeNumber(data.addon_total_usd)
+        && (data.adjustment_total_usd is int || data.adjustment_total_usd is float)
+        && validNonNegativeNumber(data.estimated_project_investment_usd)
+        && data.result_snapshot is map && data.result_snapshot.size() <= 100
+        && nullableTimestamp(data.result_viewed_at);
+    }
+
+    function validLead(leadId, data) {
+      return data.keys().hasAll([
+          'lead_id', 'visitor_id', 'first_name', 'last_name', 'email', 'phone',
+          'business_name', 'business_url', 'audience_key', 'source',
+          'source_session_id', 'source_quiz_session_id', 'crm_stage', 'lead_status',
+          'assigned_to_user_id', 'created_at', 'updated_at', 'last_contact_at',
+          'lost_reason', 'notes_summary'
+        ])
+        && data.keys().hasOnly([
+          'lead_id', 'visitor_id', 'first_name', 'last_name', 'email', 'phone',
+          'business_name', 'business_url', 'audience_key', 'source',
+          'source_session_id', 'source_quiz_session_id', 'crm_stage', 'lead_status',
+          'assigned_to_user_id', 'created_at', 'updated_at', 'last_contact_at',
+          'lost_reason', 'notes_summary'
+        ])
+        && data.lead_id == leadId && validId(data.lead_id)
+        && nullableString(data.visitor_id, 128)
+        && validString(data.first_name, 100) && data.first_name.size() >= 1
+        && nullableString(data.last_name, 100)
+        && validString(data.email, 320) && data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && nullableString(data.phone, 32)
+        && nullableString(data.business_name, 200)
+        && nullableString(data.business_url, 2048)
+        && validString(data.audience_key, 128)
+        && validString(data.source, 128)
+        && nullableString(data.source_session_id, 128)
+        && nullableString(data.source_quiz_session_id, 128)
+        && data.crm_stage == 'new' && data.lead_status == 'new'
+        && data.assigned_to_user_id == null
+        && data.created_at == request.time && data.updated_at == request.time
+        && data.last_contact_at == null && data.lost_reason == null && data.notes_summary == null;
+    }
+
+    function validAnalyticsEvent(eventId, data) {
+      return data.keys().hasAll([
+          'event_id', 'event_name', 'occurred_at', 'visitor_id',
+          'portfolio_session_id', 'quiz_session_id', 'lead_id', 'audience_key',
+          'page_path', 'properties'
+        ])
+        && data.keys().hasOnly([
+          'event_id', 'event_name', 'occurred_at', 'visitor_id',
+          'portfolio_session_id', 'quiz_session_id', 'lead_id', 'audience_key',
+          'page_path', 'properties'
+        ])
+        && data.event_id == eventId && validId(data.event_id)
+        && validString(data.event_name, 128) && data.event_name.size() >= 1
+        && data.occurred_at == request.time
+        && validId(data.visitor_id) && validId(data.portfolio_session_id)
+        && nullableString(data.quiz_session_id, 128)
+        && nullableString(data.lead_id, 128)
+        && nullableString(data.audience_key, 128)
+        && validString(data.page_path, 2048)
+        && data.properties is map && data.properties.size() <= 20;
+    }
+
+    match /site_visitors/{visitorId} {
+      allow create: if validSiteVisitor(visitorId, request.resource.data);
+    }
+
+    match /portfolio_sessions/{sessionId} {
+      allow create: if validPortfolioSession(sessionId, request.resource.data);
+    }
+
+    match /quiz_sessions/{quizSessionId} {
+      allow create: if validQuizSession(quizSessionId, request.resource.data);
+    }
+
+    match /leads/{leadId} {
+      allow create: if validLead(leadId, request.resource.data);
+    }
+
+    match /analytics_events/{eventId} {
+      allow create: if validAnalyticsEvent(eventId, request.resource.data);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

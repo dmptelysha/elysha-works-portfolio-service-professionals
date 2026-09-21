@@ -69,7 +69,17 @@
       }
     ]
   },
+  "firestore": [
+    {
+      "database": "portfolio",
+      "rules": "firestore.rules",
+      "indexes": "firestore.indexes.json"
+    }
+  ],
   "emulators": {
+    "firestore": {
+      "port": 8085
+    },
     "hosting": {
       "port": 5002
     }
