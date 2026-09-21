@@ -1,2 +1,7 @@
 .tmp/
 *.log
+.next/
+out/
+node_modules/
+next-env.d.ts
+*.tsbuildinfo
