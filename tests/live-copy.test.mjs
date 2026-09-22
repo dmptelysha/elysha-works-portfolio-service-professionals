@@ -153,3 +153,28 @@ test("the protected proposal route is client-verified and does not embed private
   assert.doesNotMatch(`${page}\n${access}`, /mara@example|Mara Consulting/i);
   assert.doesNotMatch(access, /localStorage/);
 });
+
+test("the Make proposal automation guide locks the inactive delivery and follow-up contracts", () => {
+  const guide = readFileSync(fromRoot("docs/make-proposal-automation.md"), "utf8");
+  const initial = readFileSync(fromRoot("docs/make-payload-examples/redacted-initial-proposal.json"), "utf8");
+  const followup = readFileSync(fromRoot("docs/make-payload-examples/redacted-follow-up-claim.json"), "utf8");
+
+  assert.match(guide, /Elysha Works — Proposal Delivery/);
+  assert.match(guide, /Custom Webhook.*Secret\/shape filter.*Data Store lookup.*Router.*Data Store create.*Gmail Send Email.*Data Store update.*Webhook Response/is);
+  assert.match(guide, /Elysha Works — Proposal Follow-up/);
+  assert.match(guide, /15-minute Scheduler.*HTTP claim.*Empty-work filter.*HTTP final booking check.*Gmail Send Email.*HTTP acknowledge/is);
+  assert.match(guide, /confidential scenario data/i);
+  assert.match(guide, /delivery_id.*idempotency/is);
+  assert.match(guide, /\+24.*\+48.*\+72.*cold.*\+96/is);
+  assert.match(guide, /deactivate both scenarios.*revoke.*secret.*disable Edge delivery.*retain/is);
+  assert.match(guide, /inactive.*backend.*verified/is);
+  assert.match(guide, /does not generate or attach a PDF/i);
+
+  for (const payload of [initial, followup]) {
+    assert.doesNotMatch(payload, /@(?:gmail|outlook|yahoo|elyshaworks)\./i);
+    assert.doesNotMatch(payload, /hook\.(?:us\d+\.)?make\.com|sb_secret_|eyJ[A-Za-z0-9_-]{20,}/i);
+  }
+  assert.match(initial, /"access_key": "REDACTED"/);
+  assert.match(initial, /"stop_url": "https:\/\/example\.invalid\/stop\?token=REDACTED"/);
+  assert.match(followup, /"work_kind": "follow_up"/);
+});

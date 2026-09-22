@@ -1,0 +1,21 @@
+{
+  "work": [
+    {
+      "work_kind": "follow_up",
+      "lead_id": "00000000-0000-4000-8000-000000000000",
+      "claim_id": "00000000-0000-4000-8000-000000000000",
+      "sequence_number": 1,
+      "recipient_email": "owner-approved-test@example.invalid",
+      "first_name": "Example",
+      "business_name": "Example Business",
+      "proposal_reference": "00000000-0000-4000-8000-000000000000",
+      "proposal_expires_at": "2030-01-01T00:00:00Z",
+      "result_snapshot": {
+        "summary": "Redacted example"
+      },
+      "selected_roadmap_snapshot": {
+        "summary": "Redacted example"
+      }
+    }
+  ]
+}

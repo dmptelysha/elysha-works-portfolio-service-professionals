@@ -10,6 +10,7 @@ export interface InitialProposalDelivery {
     accessKey: string;
     expiresAt: string;
     stopUrl: string;
+    discoveryCallUrl: string;
     pointA: string;
     pointB: string;
     recommendation: string;
@@ -24,7 +25,23 @@ export async function deliverInitialProposal(
   fetcher: typeof fetch = fetch,
 ): Promise<void> {
   const environment = getMakeWebhookEnv();
-  const body = JSON.stringify(payload);
+  const body = JSON.stringify({
+    delivery_id: payload.operationId,
+    first_name: payload.recipient.firstName,
+    business_name: payload.recipient.businessName,
+    recipient_email: payload.recipient.email,
+    point_a_summary: payload.proposal.pointA,
+    point_b_summary: payload.proposal.pointB,
+    recommendation: payload.proposal.recommendation,
+    tier_key: payload.proposal.tierKey,
+    platform: payload.proposal.platform,
+    offer_key: payload.proposal.offerKey,
+    proposal_url: payload.proposal.url,
+    access_key: payload.proposal.accessKey,
+    expires_at: payload.proposal.expiresAt,
+    discovery_call_url: payload.proposal.discoveryCallUrl,
+    stop_url: payload.proposal.stopUrl,
+  });
   const signature = await hmacSha256Hex(body, environment.webhookSecret);
   const response = await fetcher(environment.webhookUrl, {
     method: "POST",

@@ -1,0 +1,17 @@
+{
+  "delivery_id": "00000000-0000-4000-8000-000000000000",
+  "first_name": "Example",
+  "business_name": "Example Business",
+  "recipient_email": "owner-approved-test@example.invalid",
+  "point_a_summary": "Redacted example",
+  "point_b_summary": "Redacted example",
+  "recommendation": "Redacted example",
+  "tier_key": "advanced",
+  "platform": "gohighlevel",
+  "offer_key": "platform_growth",
+  "proposal_url": "https://elyshaworks.com/proposal/?ref=00000000-0000-4000-8000-000000000000",
+  "access_key": "REDACTED",
+  "expires_at": "2030-01-01T00:00:00Z",
+  "discovery_call_url": "https://elyshaworks.com/booking/",
+  "stop_url": "https://example.invalid/stop?token=REDACTED"
+}

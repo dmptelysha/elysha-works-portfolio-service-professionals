@@ -257,6 +257,7 @@ export function createFinalizeProposalHandler(
           }`,
           accessKey,
           expiresAt,
+          discoveryCallUrl: `${dependencies.publicBaseUrl}/booking/`,
           stopUrl:
             `${dependencies.supabaseUrl}/functions/v1/stop-proposal-followups?token=${
               encodeURIComponent(stopToken)

@@ -392,6 +392,7 @@ Deno.test("Make delivery signs the exact minimum-data body without putting the s
           "https://elyshaworks.com/proposal/?ref=70000000-0000-4000-8000-000000000001",
         accessKey: "ABCD234567",
         expiresAt: "2026-09-25T05:00:00.000Z",
+        discoveryCallUrl: "https://elyshaworks.com/booking/",
         stopUrl:
           "https://project.supabase.co/functions/v1/stop-proposal-followups?token=signed",
         pointA: "Current state",
@@ -413,6 +414,12 @@ Deno.test("Make delivery signs the exact minimum-data body without putting the s
     } else Deno.env.set("MAKE_PROPOSAL_WEBHOOK_SECRET", oldSecret);
   }
   const headers = new Headers(captured?.headers);
+  const body = JSON.parse(String(captured?.body)) as Record<string, unknown>;
   assert(headers.get("x-elysha-signature")?.startsWith("sha256="));
   assert(!String(captured?.body).includes("webhook-secret-for-tests"));
+  assertEquals(body.delivery_id, "70000000-0000-4000-8000-000000000001");
+  assertEquals(body.access_key, "ABCD234567");
+  assertEquals(body.discovery_call_url, "https://elyshaworks.com/booking/");
+  assert(!("recipient" in body));
+  assert(!("proposal" in body));
 });
