@@ -2,7 +2,7 @@
 
 **Date:** September 22, 2026
 
-**Status:** Approved architecture; written specification awaiting owner review
+**Status:** Owner-approved on September 22, 2026
 
 **Source of truth to update during implementation:** `docs/portfolio-blueprint.md`
 
@@ -22,9 +22,9 @@ The experience should show that Elysha Works understands how to move the busines
 3. The form clearly states that these details are used to save and email the personalized proposal and discovery-call follow-ups. Submission is voluntary, but it is required to continue into this lead-qualified quiz flow.
 4. Supabase Anonymous Auth silently provides the ownership identity. A restricted RPC creates or reuses the lead and links it to the owned portfolio and quiz sessions.
 5. The visitor answers the quiz without a page reload. Progress autosaves to the owned Supabase quiz session and to the same browser as a temporary resilience copy.
-6. At completion, trusted server-side logic verifies the answers, recalculates the Cortex recommendation, resolves the catalog-controlled prices, and stores a historical proposal snapshot.
-7. The visitor immediately sees the personalized result in the same browser.
-8. Supabase issues a proposal reference plus a separate auto-generated access key. The access key is emailed through Make and is never included in the proposal URL.
+6. At completion, trusted server-side logic verifies the answers, recalculates the Cortex recommendation, resolves catalog-controlled prices, and returns a proposal draft containing the recommendation and three feasible comparison tiers.
+7. The visitor immediately sees the personalized draft in the same browser, selects a feasible tier/platform, and chooses **Create My 3-Day Proposal** to lock that selection. This explicit action prevents an email from being sent before the visitor has reviewed the recommendation.
+8. Trusted finalization reruns the same calculation, validates the selected tier/platform, stores the historical snapshots, and issues a proposal reference plus a separate auto-generated access key. The access key is emailed through Make and is never included in the proposal URL.
 9. The client can open `/proposal/?ref=<proposal-reference>`, enter the access key, and view the protected proposal until its exact expiration timestamp.
 10. If no discovery call has been requested or booked, follow-up emails are sent at 24, 48, and 72 hours after the initial proposal email.
 11. The 72-hour email is the final automated follow-up and states the exact proposal expiration time.
@@ -137,6 +137,8 @@ Add these orchestration columns:
 | Column | Type | Required/default | Rule |
 |---|---|---|---|
 | `proposal_delivery_status` | `TEXT` | `pending` | `pending`, `sent`, `failed`, `stopped`, or `cold` |
+| `proposal_email_consent_at` | `TIMESTAMPTZ` | Nullable | Set by the contact RPC only after the required consent is accepted |
+| `proposal_email_consent_version` | `TEXT` | Nullable | Exact approved consent-copy version, initially `proposal_followup_v1` |
 | `proposal_sent_at` | `TIMESTAMPTZ` | Nullable | Authoritative start of the follow-up clock |
 | `proposal_follow_up_count` | `INTEGER` | `0` | Between 0 and 3 |
 | `next_proposal_follow_up_at` | `TIMESTAMPTZ` | Nullable | Indexed due-work timestamp |
@@ -180,7 +182,12 @@ The current broad `persist_quiz_result(...)` execution grant is removed from `au
 
 #### `finalize-proposal`
 
-Requires the visitor's Anonymous Auth JWT. It:
+Requires the visitor's Anonymous Auth JWT and exposes two explicit operations:
+
+- `preview`: verifies ownership/answers and returns a server-calculated proposal draft without issuing a key or contacting Make.
+- `issue`: reruns the calculation, validates the requested feasible selection, stores snapshots, issues access, and starts delivery.
+
+For `issue`, it:
 
 1. Validates ownership and the linked lead.
 2. Reads the server-approved quiz definition and catalog.
@@ -191,7 +198,7 @@ Requires the visitor's Anonymous Auth JWT. It:
 7. Generates the reference and access key, stores only the HMAC digest, and marks the proposal pending delivery.
 8. Calls the private Make immediate-delivery webhook with a signed, minimal payload.
 9. After successful Make acknowledgement, sets `proposal_sent_at`, `proposal_issued_at`, `proposal_expires_at = proposal_sent_at + interval '72 hours'`, `next_proposal_follow_up_at = proposal_sent_at + interval '24 hours'`, and proposal status `active`.
-10. Returns only the immediate result view model and expiration time to the owning browser.
+10. Returns only the finalized result view model and expiration time to the owning browser.
 
 If Make delivery fails, the quiz result still appears in the current browser, but the proposal is not represented as emailed or active. The UI shows a retry-email action. Retries reuse the same idempotency identifier and never create a duplicate lead or quiz session.
 
@@ -201,9 +208,10 @@ Accepts only proposal reference and access key. It performs expiry, status, lock
 
 #### `make-proposal-followups`
 
-Accepts only requests authenticated by a server-held Make shared secret. It has two operations:
+Accepts only requests authenticated by a server-held Make shared secret. It has three operations:
 
 - `claim`: transactionally claims due follow-ups or cold transitions with a UUID lease and returns the minimum email payload.
+- `revalidate`: immediately before Gmail send, confirms the claim is current and that no booking or stop event has appeared since the claim.
 - `acknowledge`: accepts the claim UUID and delivery outcome, then advances the count and next timestamp or records a safe failure for retry.
 
 The service-role key remains inside Edge Function secrets and is never configured in Make. Make knows only the dedicated Edge endpoint and shared automation secret.
