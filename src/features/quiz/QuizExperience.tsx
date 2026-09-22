@@ -54,6 +54,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const [issueError, setIssueError] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaError, setCaptchaError] = useState(false);
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const createdAtRef = useRef(new Date().toISOString());
   const ownedContextRef = useRef<OwnedQuizContext | null>(null);
   const contextPromiseRef = useRef<Promise<OwnedQuizContext> | null>(null);
@@ -281,7 +282,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
             const context = await ensureOwnedContext(state.audienceKey!);
             await service.submitLeadContact(context, contact);
             dispatch({ type: "CONTACT_ACCEPTED", contact });
-          }} securityReady={securityReady} />
+          }} securityError={captchaError} securityReady={securityReady} />
         ) : null}
 
         {hydrated && state.screen === "intro" && definition ? (
@@ -358,6 +359,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
       {hydrated && captchaSiteKey ? (
         <div className="quiz-security-runtime" aria-live="polite">
           <Turnstile
+            key={captchaAttempt}
             siteKey={captchaSiteKey}
             onSuccess={(token) => {
               setCaptchaToken(token);
@@ -375,7 +377,19 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
               theme: "dark",
             }}
           />
-          {captchaError ? <span>Security check failed. Please retry before continuing.</span> : null}
+          {captchaError ? (
+            <button
+              className="quiz-security-retry"
+              onClick={() => {
+                setCaptchaError(false);
+                setCaptchaToken(null);
+                setCaptchaAttempt((attempt) => attempt + 1);
+              }}
+              type="button"
+            >
+              Retry security check
+            </button>
+          ) : null}
         </div>
       ) : productionCaptchaMissing ? (
         <p className="quiz-security-runtime" role="status">Secure assessment setup is temporarily unavailable.</p>

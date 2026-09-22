@@ -92,6 +92,18 @@
 
 .quiz-security-runtime > span { line-height: 1.45; }
 
+.quiz-security-retry {
+  border: 0;
+  padding: 0;
+  color: var(--portfolio-gold);
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: .2em;
+  cursor: pointer;
+}
+
 .audience-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

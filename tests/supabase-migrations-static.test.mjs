@@ -16,6 +16,7 @@ const expectedMigrations = [
   '202609210006_add_retention_helpers.sql',
   '202609220001_add_expiring_proposal_flow.sql',
   '202609220002_qualify_proposal_reference_update.sql',
+  '202609220003_grant_edge_function_table_access.sql',
 ];
 
 const phaseOneTables = [
@@ -83,6 +84,16 @@ test('proposal finalization qualifies the existing proposal reference column', (
     sql,
     /proposal_reference\s*=\s*coalesce\(proposal_reference,\s*p_proposal_reference\)/i,
   );
+});
+
+test('trusted Edge Functions can read only the Phase 1 records required to build proposals', () => {
+  const sql = read('supabase/migrations/202609220003_grant_edge_function_table_access.sql');
+  assert.doesNotMatch(sql, /drop\s+(?:table|schema)\b|truncate\b|delete\s+from\b/i);
+  for (const table of ['leads', 'quiz_sessions', 'quiz_definitions', 'package_catalog', 'addon_catalog']) {
+    assert.match(sql, new RegExp(`grant\\s+select\\s*\\([^;]+\\)\\s+on\\s+public\\.${table}\\s+to\\s+service_role`, 'is'), table);
+  }
+  assert.doesNotMatch(sql, /grant\s+(?:all|insert|update|delete)[^;]*to\s+service_role/i);
+  assert.doesNotMatch(sql, /\b(?:anon|authenticated)\b/i);
 });
 
 test('migrations create exactly the Phase 1 public tables', () => {

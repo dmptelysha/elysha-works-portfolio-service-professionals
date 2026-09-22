@@ -18,6 +18,7 @@ import {
 } from "@/features/quiz/types";
 
 const turnstileControls = vi.hoisted(() => ({
+  mounts: 0,
   onError: null as null | (() => void),
   onExpire: null as null | (() => void),
   onSuccess: null as null | ((token: string) => void),
@@ -25,6 +26,7 @@ const turnstileControls = vi.hoisted(() => ({
 
 vi.mock("@marsidev/react-turnstile", () => ({
   Turnstile: (props: { onError: () => void; onExpire: () => void; onSuccess: (token: string) => void }) => {
+    turnstileControls.mounts += 1;
     turnstileControls.onError = props.onError;
     turnstileControls.onExpire = props.onExpire;
     turnstileControls.onSuccess = props.onSuccess;
@@ -87,6 +89,7 @@ describe("local portfolio quiz", () => {
     turnstileControls.onError = null;
     turnstileControls.onExpire = null;
     turnstileControls.onSuccess = null;
+    turnstileControls.mounts = 0;
   });
 
   it("shows the three audience choices immediately while the security check initializes", async () => {
@@ -131,7 +134,12 @@ describe("local portfolio quiz", () => {
 
     act(() => turnstileControls.onError?.());
     await waitFor(() => expect(submit).toBeDisabled());
-    expect(screen.getByText(/security check failed/i)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/security verification is paused/i);
+    const retry = screen.getByRole("button", { name: /retry security check/i });
+    const previousMounts = turnstileControls.mounts;
+    await user.click(retry);
+    await waitFor(() => expect(turnstileControls.mounts).toBe(previousMounts + 1));
+    expect(screen.getByRole("status")).toHaveTextContent(/preparing the secure assessment/i);
   });
 
   it("validates and normalizes required lead contact details without navigating", async () => {
