@@ -43,6 +43,14 @@
   animation: quiz-enter .45s cubic-bezier(.2, .8, .2, 1) both;
 }
 
+.assessment-instructions { margin: 0 0 clamp(3.5rem, 8vw, 6rem); padding: clamp(1.5rem, 3.5vw, 3rem); border: 1px solid rgba(255,211,105,.24); background: linear-gradient(135deg, rgba(255,211,105,.08), rgba(255,255,255,.018)); scroll-margin-top: 6rem; }
+.assessment-instructions h2 { max-width: 48rem; margin: 0; color: var(--portfolio-text); font-size: clamp(1.8rem, 3.8vw, 3.6rem); line-height: 1; letter-spacing: -.045em; }
+.assessment-instructions ol { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1px; margin: 2rem 0 0; padding: 0; background: rgba(255,255,255,.12); list-style: none; }
+.assessment-instructions li { display: grid; align-content: start; gap: .75rem; min-height: 12rem; padding: 1.25rem; background: #090a09; }
+.assessment-instructions li > span { color: var(--portfolio-gold); font-size: .68rem; font-weight: 750; letter-spacing: .14em; }
+.assessment-instructions li > strong { color: var(--portfolio-text); font-size: 1rem; line-height: 1.35; }
+.assessment-instructions li > small { color: var(--portfolio-muted); font-size: .82rem; line-height: 1.55; }
+
 .quiz-kicker,
 .result-number {
   margin: 0 0 1rem;
@@ -220,6 +228,45 @@
 .result-projects { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-top: 2.5rem; }
 .result-projects article { padding: 1.5rem; border: 1px solid rgba(255,255,255,.13); }
 .result-projects span { color: var(--portfolio-gold); font-size: .68rem; text-transform: uppercase; letter-spacing: .12em; }
+.result-card--comparison, .result-card--selection { padding: 0; }
+.roadmap-comparison, .roadmap-selection-summary { padding: clamp(1.5rem, 4vw, 3.5rem); }
+.roadmap-comparison > header { max-width: 56rem; }
+.roadmap-comparison > header h2, .roadmap-selection-summary h2 { margin: 0; font-size: clamp(2.1rem, 4.5vw, 4.8rem); line-height: .96; letter-spacing: -.05em; }
+.roadmap-comparison > header > p:last-child { max-width: 48rem; color: var(--portfolio-muted); line-height: 1.65; }
+.roadmap-tier-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1rem; margin-top: clamp(2rem, 4vw, 3.5rem); }
+.roadmap-tier-card { display: flex; min-width: 0; flex-direction: column; padding: clamp(1.25rem, 2.2vw, 2rem); border: 1px solid rgba(255,255,255,.14); background: #090a09; }
+.roadmap-tier-card--selected { border-color: var(--portfolio-gold); box-shadow: 0 0 0 1px rgba(255,211,105,.15), 0 24px 65px rgba(0,0,0,.32); }
+.roadmap-tier-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.roadmap-tier-heading p { margin: 0 0 .45rem; color: var(--portfolio-gold); font-size: .64rem; font-weight: 760; letter-spacing: .12em; text-transform: uppercase; }
+.roadmap-tier-heading h3 { margin: 0; font-size: clamp(1.8rem, 3vw, 3rem); line-height: 1; }
+.roadmap-tier-heading > strong { padding: .35rem .5rem; background: var(--portfolio-gold); color: #050606; font-size: .62rem; text-transform: uppercase; }
+.roadmap-tier-promise { min-height: 4.5rem; color: var(--portfolio-muted); line-height: 1.5; }
+.roadmap-platforms { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .35rem; }
+.roadmap-platforms button { min-height: 2.75rem; padding: .5rem .35rem; border: 1px solid rgba(255,255,255,.14); background: transparent; color: var(--portfolio-muted); font: 650 .7rem/1.2 Inter,Arial,sans-serif; cursor: pointer; }
+.roadmap-platforms button:hover:not(:disabled), .roadmap-platforms button[aria-pressed="true"] { border-color: var(--portfolio-gold); color: var(--portfolio-gold); }
+.roadmap-platforms button[aria-pressed="true"] { background: rgba(255,211,105,.1); }
+.roadmap-platforms button:disabled { cursor: not-allowed; opacity: .36; text-decoration: line-through; }
+.roadmap-unavailable { padding: .75rem; border-left: 2px solid var(--portfolio-gold); background: rgba(255,211,105,.06); color: #d4d1c9; font-size: .74rem; line-height: 1.5; }
+.roadmap-tier-price { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; padding-block: 1rem; border-block: 1px solid rgba(255,255,255,.1); }
+.roadmap-tier-price span { color: var(--portfolio-muted); font-size: .72rem; }
+.roadmap-tier-price strong { color: var(--portfolio-gold); font-size: clamp(1.4rem, 2.4vw, 2.2rem); }
+.roadmap-tier-card > ul { display: grid; gap: .6rem; margin: 1.25rem 0; padding: 0; list-style: none; }
+.roadmap-tier-card > ul li { position: relative; padding-left: 1.15rem; color: var(--portfolio-muted); font-size: .78rem; line-height: 1.45; }
+.roadmap-tier-card > ul li::before { content: "✓"; position: absolute; left: 0; color: var(--portfolio-gold); }
+.roadmap-choose { min-height: 3rem; margin-top: auto; border: 1px solid var(--portfolio-gold); background: transparent; color: var(--portfolio-gold); font-weight: 750; cursor: pointer; }
+.roadmap-tier-card--selected .roadmap-choose { background: var(--portfolio-gold); color: #050606; }
+.roadmap-selection-heading { display: flex; align-items: end; justify-content: space-between; gap: 1.5rem; }
+.roadmap-selection-heading > span { color: var(--portfolio-gold); font-size: .72rem; font-weight: 750; text-transform: uppercase; }
+.selected-roadmap-offer { display: grid; grid-template-columns: 1fr auto; gap: 1rem; margin-top: 2rem; padding: 1.5rem; border: 1px solid rgba(255,211,105,.35); background: rgba(255,211,105,.06); }
+.selected-roadmap-offer div { display: grid; gap: .35rem; }
+.selected-roadmap-offer div:last-child { text-align: right; }
+.selected-roadmap-offer span { color: var(--portfolio-muted); font-size: .68rem; text-transform: uppercase; }
+.selected-roadmap-offer strong { color: var(--portfolio-text); font-size: clamp(1.25rem,2.4vw,2.2rem); }
+.roadmap-selection-summary > p:not(.result-number) { max-width: 56rem; color: var(--portfolio-muted); line-height: 1.65; }
+.selected-roadmap-columns { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(18rem,.75fr); gap: clamp(2rem,4vw,4rem); margin-top: 2rem; }
+.selected-roadmap-columns h3 { margin: 0 0 1rem; font-size: 1rem; color: var(--portfolio-gold); text-transform: uppercase; letter-spacing: .08em; }
+.selected-scope-review { margin-top: 1.25rem; padding: 1rem; border: 1px solid rgba(255,211,105,.25); color: var(--portfolio-muted); }
+.selected-scope-review ul { margin-bottom: 0; }
 .result-card--next { background: #11120f; }
 .result-card--next .quiz-primary { margin-top: 1.5rem; }
 .result-control { display: flex; align-items: center; justify-content: space-between; gap: 2rem; padding: clamp(2rem, 4vw, 3.5rem); border: 1px solid rgba(255,255,255,.14); border-top: 0; background: #080908; }
@@ -238,6 +285,8 @@
 
 @media (max-width: 780px) {
   .quiz-main { place-items: start center; }
+  .assessment-instructions ol { grid-template-columns: 1fr; }
+  .assessment-instructions li { min-height: 0; }
   .audience-grid, .quiz-options, .result-grid, .result-projects { grid-template-columns: 1fr; }
   .audience-card { min-height: 15rem; }
   .result-card--wide { grid-column: auto; }
@@ -245,6 +294,9 @@
   .snapshot-list { grid-template-columns: 1fr; }
   .result-card { min-height: 0; }
   .result-control { align-items: flex-start; flex-direction: column; }
+  .roadmap-selection-heading { align-items: flex-start; flex-direction: column; }
+  .selected-roadmap-offer, .selected-roadmap-columns { grid-template-columns: 1fr; }
+  .selected-roadmap-offer div:last-child { text-align: left; }
 }
 
 @media (max-width: 520px) {

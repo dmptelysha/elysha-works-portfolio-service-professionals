@@ -32,7 +32,7 @@ class ThrowingStorage extends MemoryStorage {
 
 const NOW = Date.UTC(2026, 8, 22, 0, 0, 0);
 const attempt = (overrides: Partial<SavedQuizAttempt> = {}): SavedQuizAttempt => ({
-  storageVersion: 1,
+  storageVersion: 2,
   cortexVersion: CORTEX_VERSION,
   questionSetVersion: QUESTION_SET_VERSION,
   catalogVersion: CATALOG_VERSION,
@@ -41,6 +41,7 @@ const attempt = (overrides: Partial<SavedQuizAttempt> = {}): SavedQuizAttempt =>
   answers: { q1_goal: ["coach_goal_enroll_students"] },
   currentQuestionIndex: 1,
   result: null,
+  roadmapSelection: null,
   createdAt: new Date(NOW - 60_000).toISOString(),
   updatedAt: new Date(NOW).toISOString(),
   expiresAt: new Date(NOW + QUIZ_TTL_MS).toISOString(),
@@ -64,9 +65,9 @@ describe("quiz local persistence", () => {
     const cases: Array<[string, string, string]> = [
       ["expired", JSON.stringify(attempt({ expiresAt: new Date(NOW - 1).toISOString() })), "expired"],
       ["corrupt", "{not-json", "corrupt_json"],
-      ["missing", JSON.stringify({ storageVersion: 1 }), "invalid_shape"],
+      ["missing", JSON.stringify({ storageVersion: 2 }), "invalid_shape"],
       ["audience", JSON.stringify({ ...attempt(), audienceKey: "unknown" }), "invalid_shape"],
-      ["storage version", JSON.stringify({ ...attempt(), storageVersion: 2 }), "version_mismatch"],
+      ["storage version", JSON.stringify({ ...attempt(), storageVersion: 3 }), "version_mismatch"],
       ["cortex version", JSON.stringify({ ...attempt(), cortexVersion: "future" }), "version_mismatch"],
       ["question version", JSON.stringify({ ...attempt(), questionSetVersion: "future" }), "version_mismatch"],
       ["catalog version", JSON.stringify({ ...attempt(), catalogVersion: "future" }), "version_mismatch"],
@@ -141,6 +142,8 @@ describe("quiz local persistence", () => {
         recommendedSolutionTitle: "Enrollment Funnel",
         diagnosisSummary: "Snapshot",
         recommendationReason: "Reason",
+        technicalConstraintSignals: [],
+        selectedSupportOptionKeys: ["support_client_assets"],
         includedCapabilities: [],
         selectedAddons: [],
         selectedSupportItems: [],
@@ -165,8 +168,38 @@ describe("quiz local persistence", () => {
         confidenceLevel: "standard",
         confidenceMessage: "Qualified recommendation.",
       },
+      roadmapSelection: { tierKey: "advanced", platform: "systeme_io", offerKey: "platform_growth" },
     });
     saveQuizAttempt(storage, completed);
     expect(loadQuizAttempt(storage, NOW)).toEqual({ status: "valid", attempt: completed });
+  });
+
+  it("normalizes version-one attempts and ignores tampered selections", () => {
+    const storage = new MemoryStorage();
+    const completed = attempt({
+      status: "completed",
+      currentQuestionIndex: 7,
+      answers: {
+        q1_goal: ["coach_goal_enroll_students"], q2_setup: ["coach_setup_unclear_website"],
+        q3_blocker: ["coach_blocker_questions_no_booking"], q4_capabilities: ["coach_capability_booking"],
+        q5_complexity: ["coach_complexity_one_offer"], q6_readiness: ["readiness_ready_now"],
+        q7_platform: ["platform_recommend"], q8_support: ["support_client_assets"],
+      },
+      result: null,
+    });
+    const result = {
+      ...(attempt({ status: "completed", currentQuestionIndex: 7, answers: completed.answers }) as SavedQuizAttempt),
+    };
+    const source = JSON.parse(JSON.stringify(attempt())) as Record<string, unknown>;
+    source.storageVersion = 1;
+    source.roadmapSelection = { tierKey: "basic", platform: "custom_app", offerKey: "platform_scale" };
+    storage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(source));
+    const loaded = loadQuizAttempt(storage, NOW);
+    expect(loaded.status).toBe("valid");
+    if (loaded.status === "valid") {
+      expect(loaded.attempt.storageVersion).toBe(2);
+      expect(loaded.attempt.roadmapSelection).toBeNull();
+    }
+    expect(result).toBeDefined();
   });
 });

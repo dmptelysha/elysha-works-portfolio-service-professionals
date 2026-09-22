@@ -1,12 +1,12 @@
 @import url('./rhea-booking.css');
 :root {
-  --rhea-ink: #edefe8;
-  --rhea-paper: #0f140e;
-  --rhea-white: #182015;
-  --rhea-muted: #bbc2b5;
-  --rhea-line: #536344;
-  --rhea-soft-line: #343d2e;
-  --rhea-accent: #c4f168;
+  --rhea-ink: #f3f1eb;
+  --rhea-paper: #0d0d0d;
+  --rhea-white: #171717;
+  --rhea-muted: #c7c4bb;
+  --rhea-line: #4a4539;
+  --rhea-soft-line: #302e29;
+  --rhea-accent: #ffd369;
 }
 
 .rhea-chat-scrim { position: fixed; inset: 0; z-index: 280; border: 0; background: rgba(11, 11, 11, 0.28); cursor: default; }
@@ -35,7 +35,10 @@
 }
 
 .portfolio-chat-launcher svg { width: 27px; height: 27px; }
-.portfolio-chat-launcher:hover { background: #d0f58d; }
+.portfolio-chat-launcher { transition: opacity .2s ease, visibility .2s ease, transform .2s ease, background-color .18s ease; }
+body.hero-in-view .portfolio-chat-launcher { opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(12px); }
+.portfolio-chat-launcher.is-hero-hidden { opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(12px); }
+.portfolio-chat-launcher:hover { background: #ffe19a; }
 .portfolio-chat-launcher:focus-visible,
 .portfolio-chat-panel button:focus-visible,
 .portfolio-chat-panel textarea:focus-visible { outline: 2px solid var(--rhea-accent); outline-offset: 3px; }
@@ -74,9 +77,9 @@
 .portfolio-chat-close:hover { border-color: var(--rhea-line); background: var(--rhea-white); }
 
 .portfolio-chat-content { min-height: 0; flex: 1; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
-.rhea-chat-scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-color: #536344 transparent; scrollbar-width: thin; }
+.rhea-chat-scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-color: #4a4539 transparent; scrollbar-width: thin; }
 .rhea-chat-scroll::-webkit-scrollbar { width: 8px; }
-.rhea-chat-scroll::-webkit-scrollbar-thumb { border: 2px solid var(--rhea-paper); border-radius: 999px; background: #536344; }
+.rhea-chat-scroll::-webkit-scrollbar-thumb { border: 2px solid var(--rhea-paper); border-radius: 999px; background: #4a4539; }
 
 .rhea-chat-intro { padding: 28px 26px 22px; border-bottom: 1px solid var(--rhea-soft-line); }
 .rhea-chat-intro h2 { max-width: 390px; margin: 0 0 10px; color: var(--rhea-ink) !important; font-size: clamp(25px, 3vw, 34px); font-weight: 720; letter-spacing: -0.035em; line-height: 1.08; }
@@ -99,7 +102,7 @@
 .rhea-answer-actions button, .rhea-answer-suggestions button, .rhea-answer-feedback button { min-height: 44px; padding: 7px 11px; border: 1px solid var(--rhea-line); border-radius: 4px; background: transparent; color: var(--rhea-ink); font-size: 16px; font-weight: 500; cursor: pointer; }
 .rhea-answer-actions button[data-rhea-action="book"] { border-color: var(--rhea-accent); background: var(--rhea-accent); color: #090b0a; }
 .rhea-answer-actions button:hover, .rhea-answer-suggestions button:hover, .rhea-answer-feedback button:hover { background: var(--rhea-white); }
-.rhea-answer-actions button[data-rhea-action="book"]:hover { background: #d0f58d; }
+.rhea-answer-actions button[data-rhea-action="book"]:hover { background: #ffe19a; }
 
 .rhea-chat-composer { padding: 14px; display: grid; grid-template-columns: minmax(0, 1fr) 48px; align-items: end; gap: 8px; border-top: 1px solid var(--rhea-line); background: var(--rhea-white); }
 .rhea-chat-composer label { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

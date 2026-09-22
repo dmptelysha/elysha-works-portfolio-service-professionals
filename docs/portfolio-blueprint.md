@@ -186,6 +186,20 @@ Pricing note:
 
 > Your result is a planning recommendation based on your answers. Final scope is confirmed during the strategy call before any proposal or payment.
 
+#### Approved package-choice and emailed-roadmap experience — implementation pending
+
+This proposed revision keeps the result ungated and adds a choice step after the Cortex recommendation:
+
+1. Show the full personalized diagnosis and roadmap immediately, without asking for contact information.
+2. Present three public tiers—**Basic**, **Advanced**, and **Complete**—with the Cortex-recommended tier highlighted.
+3. Let the visitor compare **Systeme.io**, **HighLevel**, and **Custom App** inside each tier. Changing the platform updates the base price and platform-specific inclusions without reloading the page.
+4. Disable a platform when the visitor's required workflow cannot be delivered reliably on it. The disabled option must explain the exact limiting requirement; it must not silently remove capabilities.
+5. Personalize the inclusions and relevant add-ons from the selected audience and quiz answers. Booking is shown only when the visitor needs it or the chosen package includes it; it is not a universal default add-on.
+6. Preserve the Cortex recommendation separately from the visitor's final feasible choice so future CRM records can show both `recommended_offer_key` and `selected_offer_key`.
+7. After the on-page roadmap is visible, offer an optional **Email My PDF Roadmap** action. Name and email are collected only after voluntary submission and are not required to view the result.
+
+The approved tier-to-catalog mapping, prices, inclusion boundaries, and Make delivery flow are documented in Section 5.0. Implementation must follow a reviewed plan and must not change production data or activate external automation without the applicable deployment checks.
+
 ### 3.6 Projects
 
 Projects are tagged by one or more audiences. Before the quiz, the section may show all selected projects. After audience selection, it defaults to the matching audience.
@@ -431,6 +445,104 @@ Platform preference is considered, but it does not override technical fit. If th
 ---
 
 ## 5. Offer Model and Dynamic Pricing
+
+### 5.0 Approved Three-Tier Presentation and Email Delivery — Implementation Pending
+
+**Status:** Approved design direction on September 22, 2026; implementation and deployment remain pending. These rules replace the public seven-card presentation while preserving the seven existing stable catalog keys underneath. Approval of this design does not bypass database deployment checks, secret handling, test requirements, or the separate activation check for the external Make scenario.
+
+#### Recommended approach
+
+Keep the seven approved `package_catalog.offer_key` records and their existing prices. Group them into three public comparison tiers instead of renaming or deleting catalog records. This avoids a destructive database migration, preserves historical result snapshots, and provides the simpler Basic/Advanced/Complete choice requested for the quiz result.
+
+| Public tier | Systeme.io | HighLevel | Custom App | Public promise |
+|---|---|---|---|---|
+| **Basic** | `platform_launch` — **$1,500** | `platform_launch` — **$1,500** | `custom_starter` — **$3,000** | A complete working version of the visitor's primary journey or core workflow |
+| **Advanced** | `platform_growth` — **$2,500** | `platform_growth` — **$2,500** | `custom_foundation` — **$5,000** | A more connected journey with qualification, automation, and operational visibility |
+| **Complete** | `platform_scale` — **$4,000** | `platform_scale` — **$4,000** | `custom_growth` — **$7,500** | The broadest standard implementation with advanced automation, roles, portals, or dashboards where supported |
+
+Systeme.io and HighLevel retain the same one-time build price when the tier and implementation effort are equivalent. Their different subscription costs are paid directly by the client and are disclosed separately after platform selection, not used to distort the Elysha Works build price. Custom App pricing is higher because it includes a custom interface, isolated Supabase backend, authentication, permissions, and business logic.
+
+`custom_complete` remains a stable catalog record at **$10,000+**, but it is not displayed as a fourth public tier. It appears as **Complete — Custom Scope Review** when inventory, production tracking, advanced permissions, multiple operational departments, complex approvals, or specialized business rules exceed the standard `custom_growth` boundary.
+
+#### Tier inclusion boundaries
+
+Every tier must deliver a functional core outcome. Higher tiers add breadth, automation, capacity, and operational depth; they must not manufacture a broken Basic option merely to force an upgrade.
+
+| Tier and route | Approved inclusion summary |
+|---|---|
+| **Basic — Systeme.io or HighLevel** | One offer/audience/action; compact conversion website or landing journey; responsive setup; one lead/application/inquiry form; confirmation page; one basic booking or checkout connection where relevant; confirmation plus up to three follow-up emails; basic tags/segmentation and analytics; one revision round; launch testing and handover |
+| **Basic — Custom App** | One focused module; responsive custom interface; isolated Supabase setup; authentication for one primary user type; one core create/view/edit/status workflow; simple admin view; search/filtering; one basic notification; one revision round; testing, deployment, handover, and 30-day technical support |
+| **Advanced — Systeme.io or HighLevel** | Everything applicable in Basic; multi-step journey of up to five primary pages/steps; lead qualification; booking/checkout/enrollment/deposit connection; core CRM pipeline; up to seven automated emails/messages; basic onboarding; segmentation; up to two standard integrations; two revision rounds; testing and recorded handover/training |
+| **Advanced — Custom App** | Everything applicable in Basic; detailed workflow/data planning; one primary user type plus admin; up to two connected core workflows; operational admin dashboard; file/image upload; expanded record management; up to two standard integrations; activity history and email notifications; two revision rounds; testing, handover, and 30-day technical support |
+| **Complete — Systeme.io or HighLevel** | Everything applicable in Advanced; up to two offers/audience paths; advanced pipeline and conditional platform-native workflows; up to twelve nurture messages; platform-native onboarding/member area where available; up to four standard integrations; basic reporting; supported team access; two revision rounds; end-to-end QA, training, and 30-day support |
+| **Complete — Custom App** | Everything applicable in Advanced; up to three permission-based user roles; one portal; multiple connected workflows; advanced admin dashboard; file/document management; operational reporting; up to three standard integrations; automated workflow triggers; audit-friendly activity history; two revision rounds; training and 60-day technical support |
+| **Complete — Custom Scope Review** | `custom_complete` at $10,000+ for advanced roles, multiple portals/departments, inventory, production/order/delivery operations, complex approvals/calculations, expanded integrations, advanced reporting, migration planning, extended QA, phased rollout, three revision rounds, and 90-day support |
+
+#### Result-page selection rules
+
+1. The Cortex still determines the primary solution, technically recommended platform, recommended tier, answer-based explanation, and relevant add-ons.
+2. The result page shows all three public tiers together so the visitor can compare the advantage of Advanced and Complete against a working Basic option.
+3. Each tier exposes only feasible platform choices. A visitor may choose another feasible platform, but preference never overrides a technical incompatibility.
+4. Requirements such as inventory, production stages, specialized permissions, or non-standard operational workflows disable Systeme.io and HighLevel and explain why Custom App is required.
+5. Selecting a platform recalculates the tier's base offer key, base price, included capabilities, priced add-ons, and scope-review items from the catalog and Cortex rules.
+6. Only add-ons supported by the visitor's audience and answers are shown. Included capabilities are labeled **Included**, not displayed as zero-dollar add-ons, and never charged twice.
+7. The final on-page and emailed roadmap snapshot records both the recommendation and the visitor's choice, including audience, tier, platform, stable offer key, inclusions, add-ons, estimate, explanation, and Cortex/catalog versions.
+
+#### Proposed no-reload journey
+
+```mermaid
+flowchart TD
+    A[Complete audience-specific quiz] --> B[Cortex creates recommendation]
+    B --> C[Show full ungated roadmap]
+    C --> D[Compare Basic, Advanced, Complete]
+    D --> E[Choose feasible platform]
+    E --> F[Recalculate inclusions and estimate locally]
+    F --> G{Visitor action}
+    G -->|Keep on page| H[No contact details required]
+    G -->|Email PDF| I[Voluntary name, email, and consent]
+    G -->|Discovery call| J[Booking request or confirmed booking]
+    I --> K[Create or link Supabase lead]
+    K --> L[Supabase Edge Function]
+    L --> M[Private Make webhook]
+    M --> N[Create PDF from approved template]
+    N --> O[Send through connected Gmail account]
+```
+
+#### Make scenario and Gmail delivery proposal
+
+The browser must never call Make directly. After a valid owned quiz result and voluntary lead submission, a Supabase Edge Function sends the minimum required signed payload to a private Make custom webhook. The Make scenario then:
+
+1. Receives the signed, idempotent roadmap-delivery request.
+2. Rejects missing/duplicate request identifiers and payloads that do not match the server-created result snapshot.
+3. Creates a Google Docs document from an approved Elysha Works roadmap template.
+4. Exports that document as PDF.
+5. Routes on the server-supplied booking state.
+6. Sends the short summary and PDF through a Gmail connection authorized inside Make.
+7. Returns a delivery outcome to the Edge Function; the application records only the required delivery event/status and does not expose Make or Gmail credentials.
+
+| Booking state at send time | Email behavior |
+|---|---|
+| `none` | Include the discovery-call link as an optional next step |
+| `requested` | Omit the booking CTA and acknowledge that the request was received |
+| `scheduled` | Omit the booking CTA and acknowledge the scheduled call |
+| `completed` | Omit the booking CTA |
+| `cancelled` or `no_show` | Do not automatically re-add the booking CTA; follow-up policy requires separate approval |
+
+An email already delivered before a later booking cannot be changed retroactively. Any reminder or resend generated after a booking must re-check the current booking state and suppress the discovery-call CTA when appropriate.
+
+Gmail authentication is stored as a Make OAuth connection. Do not put a Gmail password, OAuth token, Make webhook URL, or webhook secret in browser code or `.env.local`. Production values such as `MAKE_ROADMAP_WEBHOOK_URL` and `MAKE_ROADMAP_WEBHOOK_SECRET` belong in Supabase Edge Function secrets. Local function-development values belong only in an ignored server-side environment file. No `NEXT_PUBLIC_` variable may contain these secrets.
+
+#### Approved decisions
+
+The owner approved the following direction for implementation planning:
+
+- The three public tier names: Basic, Advanced, and Complete.
+- The seven-key grouping and existing prices shown in the matrix.
+- Systeme.io and HighLevel using the same build price for equivalent scope.
+- `custom_complete` appearing as a $10,000+ escalation inside Complete rather than as a fourth card.
+- The platform-specific inclusion summaries and feasibility guardrails.
+- Optional PDF delivery through Make and a connected Gmail account.
+- The conditional discovery-call CTA behavior based on booking state.
 
 The qualifier uses two build routes. Systeme.io and GoHighLevel share the same project pricing when the requested setup and implementation effort are equivalent. Their recurring subscriptions are paid separately by the client. Custom App pricing is higher because it includes custom interface, database, authentication, and business logic.
 

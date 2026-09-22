@@ -7,7 +7,7 @@ const scripts = [
   "/site.js",
   "/assets/v3-project-viewer.js",
   "/assets/v3-content-guard.js",
-  "/assets/rhea-chat.mjs",
+  "/assets/rhea-chat.mjs?v=hero-20260921",
 ];
 
 function loadScript(source: string) {
@@ -33,7 +33,7 @@ function loadScript(source: string) {
     if (!existing) {
       script.src = source;
       script.dataset.liveRuntimeSrc = source;
-      if (source.endsWith(".mjs")) script.type = "module";
+      if (source.includes(".mjs")) script.type = "module";
       document.body.append(script);
     }
   });

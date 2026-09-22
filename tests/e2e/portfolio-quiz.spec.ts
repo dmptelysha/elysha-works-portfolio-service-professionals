@@ -9,7 +9,7 @@ const blockedBackendPatterns = [
   /google-analytics|analytics\.google/i,
 ];
 
-test("homepage keeps the hero clear and reveals contextual navigation at Projects", async ({ page }) => {
+test("homepage keeps the hero clear and reveals contextual navigation at Projects", async ({ page }, testInfo) => {
   await page.goto("/");
   const hero = page.getByRole("region", { name: /before investing/i });
   const nav = page.getByRole("navigation", { name: /portfolio navigation/i });
@@ -35,15 +35,66 @@ test("homepage keeps the hero clear and reveals contextual navigation at Project
   await expect(faq).toHaveAttribute("aria-expanded", "true");
 
   await page.locator("#projects").evaluate((section) => section.scrollIntoView({ block: "start" }));
-  const preview = page.getByRole("button", { name: /preview teacher elysha/i });
-  await preview.click();
-  await expect(page.getByRole("dialog", { name: /teacher elysha preview/i })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(preview).toBeFocused();
+  const serviceTab = page.getByRole("tab", { name: "Service Businesses" });
+  await serviceTab.click();
+  await expect(serviceTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "Elysha Works Client Portal" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Teacher Elysha" })).toBeHidden();
+
+  await page.getByRole("tab", { name: "All" }).click();
+  const scrollPreview = page.getByRole("link", { name: /view teacher elysha project/i }).first();
+  await expect(scrollPreview.getByText(/hover to scroll/i)).toBeVisible();
+  const canvas = scrollPreview.locator(".project-scroll-canvas");
+  if (testInfo.project.name === "desktop" || testInfo.project.name === "short-laptop") {
+    const beforeHover = await canvas.evaluate((element) => getComputedStyle(element).transform);
+    await scrollPreview.hover();
+    await expect.poll(async () => canvas.evaluate((element) => getComputedStyle(element).transform)).not.toBe(beforeHover);
+  }
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   await page.waitForTimeout(150);
   await expect(nav).toBeHidden();
+});
+
+test("hero centers the roadmap CTA and preserves spacious desktop rhythm", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Desktop geometry is asserted once.");
+  await page.setViewportSize({ width: 1815, height: 805 });
+  await page.goto("/");
+
+  const geometry = await page.evaluate(() => {
+    const rect = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (!element) throw new Error(`Missing hero element: ${selector}`);
+      const box = element.getBoundingClientRect();
+      return { x: box.x, top: box.top, bottom: box.bottom, width: box.width };
+    };
+    const selectors = [
+      ".hero-promise",
+      ".hero-roadmap-intro",
+      ".hero-trust",
+      ".hero-benefits",
+      ".hero-roadmap .button-row",
+      ".hero-assessment-link",
+    ];
+    return {
+      inner: rect(".hero-roadmap-inner"),
+      cta: rect(".hero-roadmap-cta"),
+      elements: selectors.map(rect),
+    };
+  });
+
+  const innerCenter = geometry.inner.x + geometry.inner.width / 2;
+  const ctaCenter = geometry.cta.x + geometry.cta.width / 2;
+  expect(Math.abs(innerCenter - ctaCenter)).toBeLessThanOrEqual(1);
+
+  const gaps = geometry.elements.slice(1).map((element, index) => element.top - geometry.elements[index].bottom);
+  expect(gaps).toEqual(expect.arrayContaining(gaps.map((gap) => expect.any(Number))));
+  expect(gaps[0]).toBeGreaterThanOrEqual(22);
+  expect(gaps[1]).toBeGreaterThanOrEqual(15);
+  expect(gaps[2]).toBeGreaterThanOrEqual(21);
+  expect(gaps[3]).toBeGreaterThanOrEqual(25);
+  expect(gaps[4]).toBeGreaterThanOrEqual(19);
 });
 
 test("quiz resumes after reload, completes locally, and creates no backend request", async ({ page }) => {
@@ -74,13 +125,27 @@ test("quiz resumes after reload, completes locally, and creates no backend reque
   }
 
   await expect(page.getByRole("heading", { name: /your personalized roadmap/i })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /estimated project investment/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /compare your roadmap options/i })).toBeVisible();
+  await page.getByRole("group", { name: /basic platform/i }).getByRole("button", { name: "Custom App" }).click();
+  const selectedRoadmap = page.locator(".roadmap-selection-summary");
+  await expect(selectedRoadmap.getByRole("heading", { name: /your selected roadmap/i })).toBeVisible();
+  await expect(selectedRoadmap.getByText("Custom Starter", { exact: true }).first()).toBeVisible();
+  await page.getByRole("group", { name: /complete platform/i }).getByRole("button", { name: "Custom App" }).click();
+  await expect(selectedRoadmap.getByText("Custom Growth", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("link", { name: /book a strategy call/i })).toHaveAttribute("href", "/booking/");
   expect(blockedRequests).toEqual([]);
 
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("elysha-works:quiz-attempt:v1") ?? "null"));
   expect(saved.status).toBe("completed");
   expect(saved.result.recommendedOfferKey).toBeTruthy();
+  expect(saved.roadmapSelection).toEqual({ tierKey: "complete", platform: "custom_app", offerKey: "custom_growth" });
+});
+
+test("hero secondary action opens the assessment instructions", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: /see how the assessment works/i }).click();
+  await expect(page).toHaveURL(/\/quiz\/?#assessment-instructions$/);
+  await expect(page.getByRole("complementary", { name: /clear roadmap in three steps/i })).toBeInViewport();
 });
 
 test("homepage and quiz have no horizontal overflow across the required viewport matrix", async ({ page }, testInfo) => {

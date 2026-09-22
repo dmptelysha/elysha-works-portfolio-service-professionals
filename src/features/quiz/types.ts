@@ -39,6 +39,16 @@ export type ReadinessLevel =
 
 export type PlatformKey = "systeme_io" | "gohighlevel" | "custom_app";
 export type BuildRoute = "platform" | "custom";
+export type PublicTierKey = "basic" | "advanced" | "complete";
+export type RoadmapFeasibility =
+  | { available: true }
+  | { available: false; reason: string };
+
+export interface RoadmapSelection {
+  tierKey: PublicTierKey;
+  platform: PlatformKey;
+  offerKey: string;
+}
 export type SelectionMode = "single" | "multiple";
 export type QuestionScope = "audience" | "universal";
 export type SolutionType = "website" | "funnel" | "automation" | "crm" | "custom_app";
@@ -168,6 +178,27 @@ export interface SelectedSupportItem {
   disposition: "included" | "priced" | "scope_review";
 }
 
+export interface RoadmapVariant {
+  platform: PlatformKey;
+  offer: PackageDefinition;
+  feasibility: RoadmapFeasibility;
+  includedCapabilities: readonly string[];
+  selectedSupportItems: readonly SelectedSupportItem[];
+  pricedAddons: readonly PricedAddon[];
+  scopeReviewItems: readonly ScopeReviewItem[];
+  addonTotalUsd: number;
+  estimatedProjectInvestmentUsd: number;
+  estimatedRecurringCosts: readonly string[];
+}
+
+export interface RoadmapTier {
+  tierKey: PublicTierKey;
+  label: string;
+  promise: string;
+  recommended: boolean;
+  variants: readonly RoadmapVariant[];
+}
+
 export interface CortexInput {
   audienceKey: AudienceKey;
   answers: QuizAnswers;
@@ -195,6 +226,8 @@ export interface CortexResult {
   recommendedSolutionTitle: string;
   diagnosisSummary: string;
   recommendationReason: string;
+  technicalConstraintSignals: readonly SignalTag[];
+  selectedSupportOptionKeys: readonly string[];
   includedCapabilities: readonly string[];
   selectedAddons: readonly string[];
   selectedSupportItems: readonly SelectedSupportItem[];
@@ -217,7 +250,7 @@ export interface CortexResult {
 export type QuizStatus = "in_progress" | "completed";
 
 export interface SavedQuizAttempt {
-  storageVersion: 1;
+  storageVersion: 2;
   cortexVersion: typeof CORTEX_VERSION;
   questionSetVersion: typeof QUESTION_SET_VERSION;
   catalogVersion: typeof CATALOG_VERSION;
@@ -226,6 +259,7 @@ export interface SavedQuizAttempt {
   answers: QuizAnswers;
   currentQuestionIndex: number;
   result: CortexResult | null;
+  roadmapSelection: RoadmapSelection | null;
   createdAt: string;
   updatedAt: string;
   expiresAt: string;

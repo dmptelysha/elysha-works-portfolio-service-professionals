@@ -1,8 +1,10 @@
 import { QUIZ_DEFINITIONS } from "./questions";
+import { defaultRoadmapSelection, resolveRoadmapSelection } from "./roadmap-options";
 import type {
   AudienceKey,
   CortexResult,
   QuizAnswers,
+  RoadmapSelection,
   SavedQuizAttempt,
 } from "./types";
 
@@ -20,6 +22,7 @@ export interface QuizState {
   answers: QuizAnswers;
   currentQuestionIndex: number;
   result: CortexResult | null;
+  roadmapSelection: RoadmapSelection | null;
   errorMessage: string | null;
   validationMessage: string | null;
   resumeCandidate: SavedQuizAttempt | null;
@@ -37,6 +40,7 @@ export type QuizAction =
   | { type: "NEXT" }
   | { type: "BACK" }
   | { type: "CALCULATION_SUCCESS"; result: CortexResult }
+  | { type: "SELECT_ROADMAP"; selection: RoadmapSelection }
   | { type: "CALCULATION_FAILURE"; message: string }
   | { type: "RETRY_CALCULATION" };
 
@@ -47,6 +51,7 @@ export function createInitialQuizState(): QuizState {
     answers: {},
     currentQuestionIndex: 0,
     result: null,
+    roadmapSelection: null,
     errorMessage: null,
     validationMessage: null,
     resumeCandidate: null,
@@ -69,6 +74,7 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         answers: attempt.answers,
         currentQuestionIndex: attempt.currentQuestionIndex,
         result: attempt.result,
+        roadmapSelection: attempt.roadmapSelection,
         errorMessage: null,
         validationMessage: null,
         resumeCandidate: null,
@@ -128,8 +134,17 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         ...state,
         screen: "result",
         result: action.result,
+        roadmapSelection: defaultRoadmapSelection(action.result),
         errorMessage: null,
       };
+    case "SELECT_ROADMAP":
+      if (!state.result) return state;
+      try {
+        resolveRoadmapSelection(state.result, action.selection);
+        return { ...state, roadmapSelection: action.selection };
+      } catch {
+        return state;
+      }
     case "CALCULATION_FAILURE":
       return {
         ...state,

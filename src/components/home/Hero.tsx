@@ -36,7 +36,7 @@ export function Hero() {
             <span aria-hidden="true">→</span>
           </Link>
         </div>
-        <Link className="hero-assessment-link" href="/quiz">
+        <Link className="hero-assessment-link" href="/quiz/#assessment-instructions">
           {hero.secondaryCta} <span aria-hidden="true">→</span>
         </Link>
       </div>

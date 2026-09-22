@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PROJECTS } from "@/data/projects";
 import { SITE_CONTENT } from "@/data/site-content";
 import { ADDON_CATALOG, PACKAGE_CATALOG } from "@/features/quiz/catalog";
+import { offerKeyForTierPlatform, PUBLIC_TIER_DEFINITIONS } from "@/features/quiz/roadmap-tiers";
 import {
   APPROVED_SIGNAL_TAGS,
   QUIZ_DEFINITIONS,
@@ -67,6 +68,31 @@ describe("local quiz configuration", () => {
     ]);
     expect(ADDON_CATALOG).toHaveLength(21);
     expect(new Set(ADDON_CATALOG.map((addon) => addon.addonKey)).size).toBe(21);
+  });
+
+  it("maps three public tiers to the seven approved catalog records", () => {
+    expect(PUBLIC_TIER_DEFINITIONS).toHaveLength(3);
+    expect(offerKeyForTierPlatform("basic", "systeme_io")).toBe("platform_launch");
+    expect(offerKeyForTierPlatform("basic", "gohighlevel")).toBe("platform_launch");
+    expect(offerKeyForTierPlatform("basic", "custom_app")).toBe("custom_starter");
+    expect(offerKeyForTierPlatform("advanced", "custom_app")).toBe("custom_foundation");
+    expect(offerKeyForTierPlatform("complete", "systeme_io")).toBe("platform_scale");
+    expect(offerKeyForTierPlatform("complete", "custom_app")).toBe("custom_growth");
+
+    const prices = new Map(PACKAGE_CATALOG.map((offer) => [offer.offerKey, offer.basePriceUsd]));
+    expect([
+      prices.get("platform_launch"), prices.get("custom_starter"),
+      prices.get("platform_growth"), prices.get("custom_foundation"),
+      prices.get("platform_scale"), prices.get("custom_growth"),
+    ]).toEqual([1500, 3000, 2500, 5000, 4000, 7500]);
+
+    for (const tier of PUBLIC_TIER_DEFINITIONS) {
+      for (const [platform, offerKey] of Object.entries(tier.offerKeys)) {
+        const offer = PACKAGE_CATALOG.find((item) => item.offerKey === offerKey);
+        expect(offer).toBeDefined();
+        expect(offer?.supportedPlatforms).toContain(platform);
+      }
+    }
   });
 
   it("contains only the four verified projects without numeric outcome claims", () => {

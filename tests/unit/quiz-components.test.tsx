@@ -25,6 +25,9 @@ describe("local portfolio quiz", () => {
 
     render(<QuizExperience />);
     expect(await screen.findByRole("heading", { name: /which best describes your business/i })).toBeInTheDocument();
+    const instructions = screen.getByRole("complementary", { name: /clear roadmap in three steps/i });
+    expect(instructions).toHaveAttribute("id", "assessment-instructions");
+    expect(within(instructions).getAllByRole("listitem")).toHaveLength(3);
     expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/elysha-works-privacy-policy/");
     expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/elysha-works-terms-of-service/");
     await user.click(screen.getByRole("button", { name: /service-based business/i }));
@@ -42,27 +45,28 @@ describe("local portfolio quiz", () => {
     }
 
     expect(await screen.findByRole("heading", { name: /your personalized roadmap/i })).toBeInTheDocument();
-    for (const block of [
-      "01 · Business snapshot",
-      "02 · Growth blocker",
-      "03 · Primary recommended solution",
-      "04 · Supporting components",
-      "05 · Build route and platform",
-      "06 · Recommended base offer",
-      "07 · Included capabilities",
-      "08 · Selected support",
-      "09 · Priced add-ons",
-      "10 · Scope-review items",
-      "11 · Itemized estimated project investment",
-      "12 · Recurring-cost notice",
-      "13 · Why this fits",
-      "14 · Suggested next phase",
-      "15 · Relevant projects",
-      "16 · Book a strategy call",
-    ]) {
-      expect(screen.getByText(block)).toBeInTheDocument();
-    }
-    expect(screen.getByRole("heading", { name: /estimated project investment/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /compare your roadmap options/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^basic$/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^advanced$/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^complete$/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^systeme\.io$/i })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /^highlevel$/i })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /^custom app$/i })).toHaveLength(3);
+    await user.click(screen.getAllByRole("button", { name: /^custom app$/i })[0]);
+    const selectedSummary = screen.getByRole("region", { name: /your selected roadmap/i });
+    expect(within(selectedSummary).getAllByText("Custom Starter").length).toBeGreaterThan(0);
+    expect(within(selectedSummary).getAllByText("$3,000").length).toBeGreaterThan(0);
+    await user.click(screen.getAllByRole("button", { name: /^custom app$/i })[2]);
+    expect(within(selectedSummary).getAllByText("Custom Growth").length).toBeGreaterThan(0);
+    expect(within(selectedSummary).getAllByText("$7,500").length).toBeGreaterThan(0);
+    for (const heading of [
+      /what your answers tell us/i,
+      /what may be holding growth back/i,
+      /a route shaped by your answers/i,
+      /what can come next/i,
+      /related work/i,
+      /turn the roadmap into a practical scope/i,
+    ]) expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /book a strategy call/i })).toHaveAttribute("href", "/booking/");
     expect(screen.getByRole("navigation", { name: /quiz footer/i })).toBeInTheDocument();
     expect(window.location.href).toBe(initialUrl);
@@ -71,6 +75,7 @@ describe("local portfolio quiz", () => {
     const saved = JSON.parse(localStorage.getItem(QUIZ_STORAGE_KEY) ?? "null") as SavedQuizAttempt;
     expect(saved.status).toBe("completed");
     expect(saved.result?.recommendedOfferKey).toBeTruthy();
+    expect(saved.roadmapSelection).toEqual({ tierKey: "complete", platform: "custom_app", offerKey: "custom_growth" });
   });
 
   it("supports the complete keyboard pattern for single-choice radio groups", async () => {
@@ -106,7 +111,7 @@ describe("local portfolio quiz", () => {
     const user = userEvent.setup();
     const now = Date.now();
     const attempt: SavedQuizAttempt = {
-      storageVersion: 1,
+      storageVersion: 2,
       cortexVersion: CORTEX_VERSION,
       questionSetVersion: QUESTION_SET_VERSION,
       catalogVersion: CATALOG_VERSION,
@@ -115,6 +120,7 @@ describe("local portfolio quiz", () => {
       answers: { q1_goal: ["coach_goal_book_calls"] },
       currentQuestionIndex: 1,
       result: null,
+      roadmapSelection: null,
       createdAt: new Date(now - 60_000).toISOString(),
       updatedAt: new Date(now - 30_000).toISOString(),
       expiresAt: new Date(now + QUIZ_TTL_MS).toISOString(),

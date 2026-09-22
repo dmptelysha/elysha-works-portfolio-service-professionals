@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import { ContextualNav } from "@/components/home/ContextualNav";
 import { Hero } from "@/components/home/Hero";
-import { isAllowedPreviewUrl } from "@/components/home/ProjectPreviewDialog";
 import { ProjectsSection } from "@/components/home/ProjectsSection";
 import { FaqSection } from "@/components/home/FaqSection";
 import { FinalCtaSection } from "@/components/home/FinalCtaSection";
@@ -28,7 +27,10 @@ describe("portfolio hero", () => {
       expect(within(hero).getByText(benefit)).toBeInTheDocument();
     }
     expect(within(hero).getByRole("link", { name: /get my personalized roadmap/i })).toHaveAttribute("href", "/quiz");
-    expect(within(hero).getByRole("link", { name: /see how the assessment works/i })).toHaveAttribute("href", "/quiz");
+    expect(within(hero).getByRole("link", { name: /see how the assessment works/i })).toHaveAttribute(
+      "href",
+      "/quiz#assessment-instructions",
+    );
     expect(within(hero).queryByRole("navigation")).not.toBeInTheDocument();
     expect(within(hero).queryByText("Elysha Works")).not.toBeInTheDocument();
   });
@@ -59,8 +61,13 @@ describe("contextual navigation", () => {
 });
 
 describe("verified projects", () => {
-  it("renders the four repository projects without fabricated metrics", () => {
+  it("renders audience tabs and two-column-ready project cards without the device preview dialog", async () => {
+    const user = userEvent.setup();
     render(<ProjectsSection />);
+    const tabs = screen.getByRole("tablist", { name: /filter projects by audience/i });
+    for (const label of ["All", "Coaches & Educators", "Service Businesses", "Custom-Order Brands"]) {
+      expect(within(tabs).getByRole("tab", { name: label })).toBeInTheDocument();
+    }
     for (const title of [
       "Teacher Elysha",
       "La Jaysiedel Cakes",
@@ -69,28 +76,17 @@ describe("verified projects", () => {
     ]) {
       expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
     }
-    expect(screen.getAllByRole("button", { name: /preview/i })).toHaveLength(4);
-    expect(screen.getByRole("region", { name: /thoughtful work/i })).not.toHaveTextContent(/\b\d+(?:\.\d+)?%\b/);
-  });
-
-  it("opens an allow-listed protected preview and returns focus on Escape", async () => {
-    const user = userEvent.setup();
-    render(<ProjectsSection />);
-    const trigger = screen.getByRole("button", { name: /preview teacher elysha/i });
-    await user.click(trigger);
-    const dialog = screen.getByRole("dialog", { name: /teacher elysha preview/i });
-    const frame = within(dialog).getByTitle("Teacher Elysha preview");
-    expect(frame).toHaveAttribute("src", "/assets/project-previews/esl-tutor/index.html");
-    expect(frame).toHaveAttribute("sandbox", "");
-    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getAllByText("Hover to scroll")).toHaveLength(4);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
-  });
-
-  it("rejects preview URLs outside the project allow-list", () => {
-    expect(isAllowedPreviewUrl("/assets/project-previews/esl-tutor/index.html")).toBe(true);
-    expect(isAllowedPreviewUrl("https://example.com/unsafe")).toBe(false);
-    expect(isAllowedPreviewUrl("/assets/project-previews/not-real/index.html")).toBe(false);
+    expect(screen.queryByRole("button", { name: /preview/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /desktop|tablet|mobile/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /thoughtful work/i })).not.toHaveTextContent(/\b\d+(?:\.\d+)?%\b/);
+    await user.click(within(tabs).getByRole("tab", { name: "Service Businesses" }));
+    expect(screen.queryByRole("heading", { name: "Teacher Elysha" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "La Jaysiedel Cakes" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Elysha Works Client Portal" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Elysha Works Growth CRM" })).toBeInTheDocument();
+    expect(within(tabs).getByRole("tab", { name: "Service Businesses" })).toHaveAttribute("aria-selected", "true");
   });
 });
 

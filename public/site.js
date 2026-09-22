@@ -41,6 +41,16 @@
     });
     matchMedia('(min-width:601px)').addEventListener('change', () => close());
     document.documentElement.classList.add('js-ready');
+    const hero = document.querySelector('.hero-roadmap');
+    if (hero) {
+      const updateHeroVisibility = () => {
+        const rect = hero.getBoundingClientRect();
+        document.body.classList.toggle('hero-in-view', rect.bottom > 0 && rect.top < innerHeight);
+      };
+      addEventListener('scroll', updateHeroVisibility, { passive: true });
+      addEventListener('resize', updateHeroVisibility, { passive: true });
+      updateHeroVisibility();
+    }
     // All content is readable before motion is progressively enhanced.
     document.documentElement.classList.add('js-ready');
     const calm = matchMedia('(max-width: 1100px), (max-height: 620px), (prefers-reduced-motion: reduce), (pointer: coarse)');

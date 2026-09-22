@@ -102,6 +102,7 @@ export function QuizExperience() {
       answers: state.answers,
       currentQuestionIndex: state.currentQuestionIndex,
       result: state.result,
+      roadmapSelection: state.roadmapSelection,
       createdAt: createdAtRef.current,
       updatedAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + QUIZ_TTL_MS).toISOString(),
@@ -212,7 +213,13 @@ export function QuizExperience() {
         ) : null}
 
         {hydrated && state.screen === "result" && state.result ? (
-          <QuizResult result={state.result} onStartOver={startOver} persistenceAvailable={persistenceAvailable} />
+          <QuizResult
+            result={state.result}
+            selection={state.roadmapSelection!}
+            onSelect={(selection) => dispatch({ type: "SELECT_ROADMAP", selection })}
+            onStartOver={startOver}
+            persistenceAvailable={persistenceAvailable}
+          />
         ) : null}
       </main>
 

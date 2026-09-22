@@ -371,6 +371,17 @@ export function mountRheaChat({ root = document, entries, prompts, bookingUrl = 
 async function autoMountRhea() {
   const { RHEA_KNOWLEDGE, RHEA_PROMPTS } = await import("./rhea-knowledge.mjs");
   mountRheaChat({ entries: RHEA_KNOWLEDGE, prompts: RHEA_PROMPTS });
+  const hero = document.querySelector('.hero-roadmap');
+  const launcher = document.querySelector('.portfolio-chat-launcher');
+  if (hero && launcher) {
+    const updateLauncherVisibility = () => {
+      const rect = hero.getBoundingClientRect();
+      launcher.classList.toggle('is-hero-hidden', rect.bottom > 0 && rect.top < innerHeight);
+    };
+    addEventListener('scroll', updateLauncherVisibility, { passive: true });
+    addEventListener('resize', updateLauncherVisibility, { passive: true });
+    updateLauncherVisibility();
+  }
 }
 
 if (typeof document !== "undefined") {

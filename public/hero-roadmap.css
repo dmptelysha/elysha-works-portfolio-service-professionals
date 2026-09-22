@@ -89,7 +89,7 @@
 
 .hero-roadmap-intro {
   max-width: none;
-  margin: clamp(1.15rem, 2.4svh, 2rem) 0 0;
+  margin: clamp(1.35rem, 3svh, 2.35rem) 0 0;
   color: var(--hero-muted);
   font: 400 clamp(1rem, min(1.55vw, 2.9svh), 1.85rem)/1.45 Inter, Arial, sans-serif;
   letter-spacing: -.02em;
@@ -105,7 +105,7 @@
   align-items: center;
   justify-content: center;
   gap: clamp(.85rem, 1.45vw, 1.5rem);
-  margin-top: clamp(.75rem, 1.55svh, 1.2rem);
+  margin-top: clamp(.95rem, 2svh, 1.5rem);
   color: var(--hero-ivory);
   font: 400 clamp(.78rem, min(1.02vw, 1.95svh), 1.3rem)/1.3 Inter, Arial, sans-serif;
 }
@@ -133,7 +133,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   width: min(100%, 48rem);
   gap: clamp(.65rem, 1.35svh, 1.05rem) clamp(5rem, 8vw, 8rem);
-  margin: clamp(1rem, 2.25svh, 1.75rem) 0 0;
+  margin: clamp(1.3rem, 2.8svh, 2.1rem) 0 0;
   padding: 0;
   color: var(--hero-ivory);
   font: 400 clamp(.9rem, min(1.12vw, 2.15svh), 1.4rem)/1.35 Inter, Arial, sans-serif;
@@ -175,9 +175,12 @@
 }
 
 .hero-roadmap .button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
   width: 100%;
-  margin-top: clamp(1.25rem, 2.7svh, 2.1rem);
+  margin: clamp(1.55rem, 3.3svh, 2.65rem) auto 0;
 }
 
 .hero-roadmap-cta {
@@ -218,7 +221,7 @@
   display: inline-flex;
   align-items: center;
   gap: clamp(.7rem, 1.2vw, 1.25rem);
-  margin-top: clamp(1rem, 2.25svh, 1.65rem);
+  margin-top: clamp(1.2rem, 2.5svh, 1.9rem);
   padding: 0 0 .3rem;
   border-bottom: 1px solid rgba(248, 247, 243, .58);
   color: var(--hero-muted);

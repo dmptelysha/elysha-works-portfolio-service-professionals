@@ -9,9 +9,16 @@ import {
   type SavedQuizAttempt,
 } from "@/features/quiz/types";
 
-const result = { recommendedSolutionTitle: "Enrollment Funnel" } as CortexResult;
+const result = {
+  recommendedSolutionTitle: "Enrollment Funnel",
+  recommendedOfferKey: "platform_growth",
+  recommendedPlatform: "systeme_io",
+  recommendedBuildRoute: "platform",
+  technicalConstraintSignals: [],
+  selectedSupportOptionKeys: [],
+} as unknown as CortexResult;
 const saved = {
-  storageVersion: 1,
+  storageVersion: 2,
   cortexVersion: CORTEX_VERSION,
   questionSetVersion: QUESTION_SET_VERSION,
   catalogVersion: CATALOG_VERSION,
@@ -20,6 +27,7 @@ const saved = {
   answers: { q1_goal: ["coach_goal_enroll_students"] },
   currentQuestionIndex: 1,
   result: null,
+  roadmapSelection: null,
   createdAt: "2026-09-22T00:00:00.000Z",
   updatedAt: "2026-09-22T00:00:00.000Z",
   expiresAt: "2026-10-22T00:00:00.000Z",
@@ -96,5 +104,13 @@ describe("quiz reducer", () => {
     state = quizReducer(state, { type: "CALCULATION_SUCCESS", result });
     expect(state.screen).toBe("result");
     expect(state.result).toBe(result);
+    expect(state.roadmapSelection).toEqual({ tierKey: "advanced", platform: "systeme_io", offerKey: "platform_growth" });
+    state = quizReducer(state, {
+      type: "SELECT_ROADMAP",
+      selection: { tierKey: "basic", platform: "custom_app", offerKey: "custom_starter" },
+    });
+    expect(state.roadmapSelection).toEqual({ tierKey: "basic", platform: "custom_app", offerKey: "custom_starter" });
+    state = quizReducer(state, { type: "START_OVER" });
+    expect(state.roadmapSelection).toBeNull();
   });
 });

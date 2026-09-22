@@ -1,4 +1,5 @@
-import { ADDON_BY_KEY, PACKAGE_BY_KEY } from "./catalog";
+import { PACKAGE_BY_KEY } from "./catalog";
+import { resolveOfferPricing } from "./pricing";
 import { QUIZ_DEFINITIONS } from "./questions";
 import {
   CATALOG_VERSION,
@@ -237,86 +238,6 @@ function chooseOffer(route: BuildRoute, complexity: number, flags: Set<SignalTag
   return "custom_starter";
 }
 
-function isIncluded(addonKey: string, offerKey: string) {
-  const offer = PACKAGE_BY_KEY.get(offerKey);
-  const addon = ADDON_BY_KEY.get(addonKey);
-  if (!offer || !addon) return false;
-  if (addon.includedInOfferKeys.includes(offerKey)) return true;
-  if (addonKey === "advanced_booking_setup") return offer.includedCapabilityKeys.some((key) => key.includes("booking"));
-  if (addonKey === "additional_email_automation") return offer.includedCapabilityKeys.some((key) => key.includes("email") || key.includes("nurture"));
-  if (addonKey === "additional_crm_pipeline") return offer.includedCapabilityKeys.some((key) => key.includes("pipeline"));
-  if (addonKey === "advanced_onboarding_workflow") return offer.includedCapabilityKeys.some((key) => key.includes("onboarding"));
-  if (addonKey === "custom_order_management_module") return offer.offerKey === "custom_complete";
-  if (addonKey === "inventory_production_module") return offer.offerKey === "custom_complete";
-  return false;
-}
-
-function resolvePricing(
-  route: BuildRoute,
-  offerKey: string,
-  q8Options: readonly QuizOption[],
-) {
-  const offer = PACKAGE_BY_KEY.get(offerKey);
-  if (!offer) throw new Error(`Unknown offer key ${offerKey}`);
-  const selectedAddons: string[] = [];
-  const includedCapabilities: string[] = [];
-  const pricedAddons: CortexResult["pricedAddons"][number][] = [];
-  const scopeReviewItems: CortexResult["scopeReviewItems"][number][] = [];
-  let integrationAllowance = offer.integrationAllowance;
-
-  for (const selected of q8Options) {
-    let addonKey = selected.addonKey;
-    if (selected.key === "support_portal") {
-      addonKey = route === "custom" ? "basic_custom_portal_module" : "platform_membership_course_area";
-    }
-    if (!addonKey) continue;
-    selectedAddons.push(addonKey);
-    const addon = ADDON_BY_KEY.get(addonKey);
-    if (!addon) throw new Error(`Unknown add-on key ${addonKey}`);
-
-    if (addonKey === "standard_third_party_integration" && integrationAllowance > 0) {
-      integrationAllowance -= 1;
-      includedCapabilities.push(addonKey);
-    } else if (isIncluded(addonKey, offerKey)) {
-      includedCapabilities.push(addonKey);
-    } else if (addon.requiresScopeReview) {
-      scopeReviewItems.push({
-        key: addonKey,
-        label: addon.name,
-        startingPriceUsd: addon.startingPriceUsd,
-        reason: addon.description,
-      });
-    } else {
-      pricedAddons.push({
-        addonKey,
-        name: addon.name,
-        priceUsd: addon.startingPriceUsd,
-        startingAt: addon.pricingUnit.toLowerCase().includes("starting"),
-      });
-    }
-
-    if (selected.key === "support_follow_up") {
-      scopeReviewItems.push({
-        key: "sms_automation_setup",
-        label: "SMS automation confirmation",
-        reason: "SMS workflow scope and provider usage must be confirmed separately.",
-      });
-    }
-  }
-
-  const addonTotalUsd = pricedAddons.reduce((total, addon) => total + addon.priceUsd, 0);
-  return {
-    selectedAddons,
-    includedCapabilities,
-    pricedAddons,
-    scopeReviewItems,
-    addonTotalUsd,
-    estimatedRecurringCosts: route === "platform"
-      ? ["The selected platform subscription and any email or SMS usage are paid separately by the client."]
-      : ["Third-party services, email delivery, SMS usage, and other recurring services are paid separately when required."],
-  };
-}
-
 function solutionTitle(primary: SolutionType, input: CortexInput, flags: Set<SignalTag>) {
   if (primary === "custom_app") {
     return input.audienceKey === "custom_order_businesses" ? "Custom Order Management App" : "Custom Operations System";
@@ -359,23 +280,8 @@ export function calculateRecommendation(input: CortexInput): CortexResult {
   const offerKey = chooseOffer(route, aggregated.diagnostic.systemComplexity, aggregated.flags);
   const offer = PACKAGE_BY_KEY.get(offerKey);
   if (!offer) throw new Error(`Unknown offer key ${offerKey}`);
-  const q8Options = aggregated.normalized.get("q8_support") ?? [];
-  const pricing = resolvePricing(route, offerKey, q8Options);
-  const includedKeys = new Set(pricing.includedCapabilities);
-  const pricedKeys = new Set(pricing.pricedAddons.map((item) => item.addonKey));
-  const selectedSupportItems = pricing.selectedAddons.map((key) => {
-    const addon = ADDON_BY_KEY.get(key);
-    if (!addon) throw new Error(`Unknown selected support key ${key}`);
-    return {
-      key,
-      label: addon.name,
-      disposition: includedKeys.has(key)
-        ? "included" as const
-        : pricedKeys.has(key)
-          ? "priced" as const
-          : "scope_review" as const,
-    };
-  });
+  const selectedSupportOptionKeys = aggregated.normalized.get("q8_support")?.map((option) => option.key) ?? [];
+  const pricing = resolveOfferPricing(offerKey, selectedSupportOptionKeys);
   const primaryScore = solutionValue(aggregated.solutions, primary);
   const supportingSolutionTypes = SOLUTIONS.filter(
     (solution) =>
@@ -437,9 +343,11 @@ export function calculateRecommendation(input: CortexInput): CortexResult {
     recommendedSolutionTitle: solutionTitle(primary, input, aggregated.flags),
     diagnosisSummary: `Your answers point to ${selectedSignalLabels.slice(0, 3).join(", ").replaceAll("_", " ") || "a focused first step"} as the clearest priorities.`,
     recommendationReason: `${offer.name} matches the required workflow and current system complexity without using readiness to reduce the scope.`,
+    technicalConstraintSignals: [...aggregated.flags].filter((signal) => GENUINE_CUSTOM_SIGNALS.has(signal)),
+    selectedSupportOptionKeys,
     includedCapabilities: pricing.includedCapabilities,
     selectedAddons: pricing.selectedAddons,
-    selectedSupportItems,
+    selectedSupportItems: pricing.selectedSupportItems,
     pricedAddons: pricing.pricedAddons,
     scopeReviewItems: pricing.scopeReviewItems,
     futurePhaseSuggestions: supportingSolutionTypes.map((solution) => `Consider ${solution.replace("_", " ")} support in a later approved phase.`),

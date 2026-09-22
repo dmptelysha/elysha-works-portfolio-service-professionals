@@ -1,15 +1,17 @@
 import { QUIZ_DEFINITIONS } from "./questions";
+import { defaultRoadmapSelection, resolveRoadmapSelection } from "./roadmap-options";
 import {
   CATALOG_VERSION,
   CORTEX_VERSION,
   QUESTION_SET_VERSION,
   type AudienceKey,
   type CortexResult,
+  type RoadmapSelection,
   type SavedQuizAttempt,
 } from "./types";
 
 export const QUIZ_STORAGE_KEY = "elysha-works:quiz-attempt:v1";
-export const QUIZ_STORAGE_VERSION = 1 as const;
+export const QUIZ_STORAGE_VERSION = 2 as const;
 export const QUIZ_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type LoadQuizAttemptResult =
@@ -53,6 +55,33 @@ function hasCompatibleVersions(value: Record<string, unknown>) {
     value.questionSetVersion === QUESTION_SET_VERSION &&
     value.catalogVersion === CATALOG_VERSION
   );
+}
+
+const TIERS = ["basic", "advanced", "complete"] as const;
+function isRoadmapSelection(value: unknown): value is RoadmapSelection {
+  return isRecord(value) && isOneOf(value.tierKey, TIERS) && isOneOf(value.platform, PLATFORMS) && isString(value.offerKey);
+}
+
+function normalizeStoredRecord(value: Record<string, unknown>) {
+  const normalized: Record<string, unknown> = { ...value };
+  if (value.storageVersion === 1) {
+    normalized.storageVersion = QUIZ_STORAGE_VERSION;
+    if (isRecord(value.result)) {
+      const answers = isRecord(value.answers) ? value.answers : {};
+      const selectedSupportOptionKeys = isStringArray(answers.q8_support) ? answers.q8_support : [];
+      const technicalConstraintSignals = Array.isArray(value.result.explanationTrace)
+        ? [...new Set(value.result.explanationTrace.flatMap((entry) => isRecord(entry) && isStringArray(entry.flags) ? entry.flags : []))]
+            .filter((signal) => ["portal", "dashboard", "custom_orders", "approvals", "inventory", "multiple_roles", "order_tracking"].includes(signal))
+        : [];
+      normalized.result = {
+        ...value.result,
+        selectedSupportOptionKeys: isStringArray(value.result.selectedSupportOptionKeys) ? value.result.selectedSupportOptionKeys : selectedSupportOptionKeys,
+        technicalConstraintSignals: isStringArray(value.result.technicalConstraintSignals) ? value.result.technicalConstraintSignals : technicalConstraintSignals,
+      };
+    }
+  }
+  normalized.roadmapSelection = isRoadmapSelection(value.roadmapSelection) ? value.roadmapSelection : null;
+  return normalized;
 }
 
 function hasVersionFields(value: Record<string, unknown>) {
@@ -163,6 +192,7 @@ function isSavedAttempt(value: unknown): value is SavedQuizAttempt {
     Number(value.currentQuestionIndex) >= 0 &&
     Number(value.currentQuestionIndex) <= (definition ? definition.questions.length - 1 : 0) &&
     resultValid &&
+    (value.roadmapSelection === null || isRoadmapSelection(value.roadmapSelection)) &&
     typeof value.createdAt === "string" &&
     Number.isFinite(Date.parse(value.createdAt)) &&
     typeof value.updatedAt === "string" &&
@@ -204,19 +234,35 @@ export function loadQuizAttempt(
     removeInvalidAttempt();
     return { status: "discarded", reason: "invalid_shape" };
   }
-  if (!hasCompatibleVersions(parsed)) {
+  if (![1, QUIZ_STORAGE_VERSION].includes(Number(parsed.storageVersion)) ||
+      parsed.cortexVersion !== CORTEX_VERSION ||
+      parsed.questionSetVersion !== QUESTION_SET_VERSION ||
+      parsed.catalogVersion !== CATALOG_VERSION) {
     removeInvalidAttempt();
     return { status: "discarded", reason: "version_mismatch" };
   }
-  if (!isSavedAttempt(parsed)) {
+  const normalized = normalizeStoredRecord(parsed);
+  if (!hasCompatibleVersions(normalized) || !isSavedAttempt(normalized)) {
     removeInvalidAttempt();
     return { status: "discarded", reason: "invalid_shape" };
   }
-  if (now > Date.parse(parsed.expiresAt)) {
+  if (now > Date.parse(normalized.expiresAt)) {
     removeInvalidAttempt();
     return { status: "discarded", reason: "expired" };
   }
-  return { status: "valid", attempt: parsed };
+  let roadmapSelection = normalized.roadmapSelection;
+  if (normalized.status === "completed" && normalized.result) {
+    const fallback = defaultRoadmapSelection(normalized.result);
+    try {
+      if (!roadmapSelection) roadmapSelection = fallback;
+      else resolveRoadmapSelection(normalized.result, roadmapSelection);
+    } catch {
+      roadmapSelection = fallback;
+    }
+  } else {
+    roadmapSelection = null;
+  }
+  return { status: "valid", attempt: { ...normalized, roadmapSelection } };
 }
 
 export function saveQuizAttempt(

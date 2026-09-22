@@ -14,6 +14,19 @@ const audienceNumbers: Record<AudienceKey, string> = {
 export function AudienceSelector({ onSelect }: AudienceSelectorProps) {
   return (
     <section className="quiz-stage quiz-audience" aria-labelledby="audience-title">
+      <aside
+        className="assessment-instructions"
+        id="assessment-instructions"
+        aria-labelledby="assessment-instructions-title"
+      >
+        <p className="quiz-kicker">How the assessment works</p>
+        <h2 id="assessment-instructions-title">A clear roadmap in three steps.</h2>
+        <ol>
+          <li><span>01</span><strong>Choose your business type</strong><small>We tailor the questions to how your audience buys and works with you.</small></li>
+          <li><span>02</span><strong>Answer eight focused questions</strong><small>Your goals, workflow, and must-have capabilities shape the recommendation.</small></li>
+          <li><span>03</span><strong>Compare your best-fit options</strong><small>See the recommended tier, feasible platforms, inclusions, and planning price.</small></li>
+        </ol>
+      </aside>
       <p className="quiz-kicker">Personalized system roadmap</p>
       <h1 id="audience-title">Which best describes your business?</h1>
       <p className="quiz-lede">
