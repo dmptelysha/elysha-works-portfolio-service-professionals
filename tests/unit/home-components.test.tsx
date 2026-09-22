@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 
 import { ContextualNav } from "@/components/home/ContextualNav";
 import { Hero } from "@/components/home/Hero";
+import { isAllowedPreviewUrl } from "@/components/home/ProjectPreviewDialog";
+import { ProjectsSection } from "@/components/home/ProjectsSection";
 
 describe("portfolio hero", () => {
   it("preserves the approved hero and routes both assessment actions to /quiz", () => {
@@ -48,5 +50,41 @@ describe("contextual navigation", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(button).toHaveAttribute("aria-expanded", "false");
     expect(button).toHaveFocus();
+  });
+});
+
+describe("verified projects", () => {
+  it("renders the four repository projects without fabricated metrics", () => {
+    render(<ProjectsSection />);
+    for (const title of [
+      "Teacher Elysha",
+      "La Jaysiedel Cakes",
+      "Elysha Works Client Portal",
+      "Elysha Works Growth CRM",
+    ]) {
+      expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
+    }
+    expect(screen.getAllByRole("button", { name: /preview/i })).toHaveLength(4);
+    expect(screen.getByRole("region", { name: /thoughtful work/i })).not.toHaveTextContent(/\b\d+(?:\.\d+)?%\b/);
+  });
+
+  it("opens an allow-listed protected preview and returns focus on Escape", async () => {
+    const user = userEvent.setup();
+    render(<ProjectsSection />);
+    const trigger = screen.getByRole("button", { name: /preview teacher elysha/i });
+    await user.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: /teacher elysha preview/i });
+    const frame = within(dialog).getByTitle("Teacher Elysha preview");
+    expect(frame).toHaveAttribute("src", "/assets/project-previews/esl-tutor/index.html");
+    expect(frame).toHaveAttribute("sandbox");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("rejects preview URLs outside the project allow-list", () => {
+    expect(isAllowedPreviewUrl("/assets/project-previews/esl-tutor/index.html")).toBe(true);
+    expect(isAllowedPreviewUrl("https://example.com/unsafe")).toBe(false);
+    expect(isAllowedPreviewUrl("/assets/project-previews/not-real/index.html")).toBe(false);
   });
 });
