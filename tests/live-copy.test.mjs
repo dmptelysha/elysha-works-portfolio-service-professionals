@@ -29,7 +29,16 @@ test("live snapshot assets and auxiliary routes are available under public", () 
 });
 
 test("the portfolio blueprint remains the documented source of truth", () => {
-  assert.ok(existsSync(fromRoot("docs/portfolio-blueprint.md")));
+  const blueprintPath = fromRoot("docs/portfolio-blueprint.md");
+  assert.ok(existsSync(blueprintPath));
+
+  const blueprint = readFileSync(blueprintPath, "utf8");
+  assert.match(blueprint, /first name.*business name.*email/is);
+  assert.match(blueprint, /Point A.*Point B/is);
+  assert.match(blueprint, /72 hours/is);
+  assert.match(blueprint, /\+24.*\+48.*\+72.*\+96/is);
+  assert.match(blueprint, /access key/is);
+  assert.doesNotMatch(blueprint, /Email My PDF Roadmap/i);
 });
 
 test("the Next homepage composes the approved seven-section React experience", () => {

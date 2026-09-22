@@ -105,4 +105,6 @@ test('database operations and deferred production decisions are documented', () 
     'supabase test db', 'app_metadata.role', 'Anonymous Auth', 'Turnstile',
     'retention', 'booking provider', 'supabase gen types typescript',
   ]) assert.match(doc, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), phrase);
+  assert.match(doc, /finalize-proposal/i);
+  assert.match(doc, /verify-proposal/i);
 });

@@ -2,16 +2,16 @@
 
 **Owner:** Elysha Dumpit  
 **Brand:** `< elysha works />`  
-**Current priority:** Launch the improved public portfolio and lead qualifier with Firebase Hosting for the frontend and Supabase for backend services.
+**Current priority:** Implement and verify the contact-qualified quiz, 72-hour protected proposal, Supabase backend, and Make follow-up workflow while Firebase Hosting remains the frontend host.
 **Future modules:** Client Portal, Admin Portal, Visual Annotator, and CRM.
 
 ---
 
 ## 1. Project Objective
 
-Build a conversion-focused Elysha Works portfolio that helps three specific audiences identify what their business needs, receive a personalized system recommendation with transparent fixed pricing, view relevant projects, and optionally book a strategy call.
+Build a conversion-focused Elysha Works portfolio that helps three specific audiences identify what their business needs, receive a client-specific Point A-to-Point B recommendation with transparent fixed pricing, compare feasible packages, access a protected three-day proposal, and optionally book a strategy call.
 
-The first live release includes only the public portfolio, qualifier, results, project filtering, and analytics. Firebase Hosting remains responsible for the existing deployment, custom domain, and SSL. A dedicated Elysha Works Supabase project will provide PostgreSQL, authentication, Row Level Security (RLS), database functions, and storage when required. Its relational model uses stable identifiers and reserved connection points so future modules can be attached without rebuilding the portfolio.
+The first live release includes the public portfolio, contact-qualified quiz, immediate result, protected proposal shell, project filtering, analytics, lead/booking attribution, and proposal follow-up orchestration. Firebase Hosting remains responsible for the existing deployment, custom domain, and SSL. A dedicated Elysha Works Supabase project provides PostgreSQL, Anonymous Auth, Row Level Security (RLS), database functions, Edge Functions, and storage when required. Its relational model uses stable identifiers and reserved connection points so future modules can be attached without rebuilding the portfolio.
 
 Existing Firebase projects, Firestore databases, applications, `firebase.json`, and hosting targets are outside this change and remain untouched. Client custom applications must use their own separate Supabase projects, credentials, storage, and data; they must never share the Elysha Works internal Supabase database.
 
@@ -27,11 +27,20 @@ Existing Firebase projects, Firestore databases, applications, `firebase.json`, 
 
 ### Primary conversion goal
 
-Convert relevant visitors into qualified strategy-call bookings after giving them a complete recommendation and package price.
+Convert relevant visitors into qualified leads and strategy-call bookings by turning an owned quiz session into a time-limited, personalized proposal with transparent package comparisons.
 
 ### Important experience rule
 
-The result is **not gated**. Visitors see their complete diagnosis, recommendation, inclusions, and exact package price before being asked to book or share contact details.
+The approved quiz is a **contact-qualified assessment**. After choosing an audience and before Question 1, the visitor supplies a first name, business name, email address, and explicit proposal-email consent. The contact step explains that Elysha Works will email the proposal and up to three proposal-related follow-ups unless booking or a stop request ends the sequence. The browser keeps the form values when submission fails and never silently bypasses lead creation.
+
+The authoritative journey is:
+
+```text
+Audience → Contact → Quiz → Point A → Point B → Recommended solution
+→ Basic vs Advanced vs Complete → 72-hour proposal → Discovery call
+```
+
+The protected proposal is available for exactly 72 hours from successful initial email delivery. This is a proposal-access and same-browser recovery limit, not a promise to delete business, consent, booking, or CRM records after three days.
 
 ---
 
@@ -41,17 +50,16 @@ The result is **not gated**. Visitors see their complete diagnosis, recommendati
 flowchart TD
     A[Portfolio Visitor] --> B[Homepage and Audience Promise]
     B --> C{Choose Business Type}
-    C --> D[Coaches and Educators Quiz]
-    C --> E[Service Business Quiz]
-    C --> F[Custom-Order Quiz]
-    D --> G[Score Needs and Complexity]
-    E --> G
-    F --> G
-    G --> H[Complete Recommendation and Fixed Price]
-    H --> I[Show Audience-Relevant Projects]
-    H --> J[Book a Strategy Call]
-    J --> K[Create or Link Lead Record]
-    K --> L[CRM-Ready Conversion Record]
+    C --> D[Required Contact and Consent]
+    D --> E[Audience-Specific Quiz]
+    E --> F[Score and Verify Needs]
+    F --> G[Point A and Point B]
+    G --> H[Recommended Solution]
+    H --> I[Compare Basic Advanced Complete]
+    I --> J[Choose Feasible Tier and Platform]
+    J --> K[Create 3-Day Proposal]
+    K --> L[Protected Proposal and Email]
+    L --> M[Optional Discovery Call]
 ```
 
 ### Portfolio page order
@@ -67,13 +75,14 @@ flowchart TD
 
 ### Quiz page
 
-Choose audience type Card
-Multi-step Quiz
-Personalized Result
-Audience-Filtered Projects
-Footer with Back to portfolio, Privacy, and Terms links
-
-The result appears in the same journey after quiz completion. The visitor can review the result without submitting personal information.
+1. Choose audience type card.
+2. Submit first name, business name, email address, and required proposal/follow-up consent.
+3. Complete the multi-step quiz without navigation or page reload.
+4. Review the personalized Point A, Point B, recommended solution, and Basic/Advanced/Complete comparison.
+5. Select a feasible tier/platform and choose **Create My 3-Day Proposal**.
+6. Open the protected proposal from the emailed reference link by entering the separate access key.
+7. Optionally book a discovery call.
+8. Use the footer links for Back to portfolio, Privacy, and Terms.
 
 ---
 
@@ -132,6 +141,10 @@ Selecting a card:
 
 ### 3.4 Quiz Interface
 
+- After audience selection and before Question 1, show three required fields in this order: **first name**, **business name**, and **email address**.
+- Require a consent checkbox using the approved `proposal_followup_v1` copy before continuing. The copy explains the initial proposal email and up to three proposal-related follow-ups unless the visitor books or stops them.
+- Trim all values, normalize email to lowercase, keep form values after a backend error, and show a retry action.
+- Do not store contact fields in local storage, URLs, analytics, or client logs.
 - One question per screen.
 - Six audience-specific questions followed by two universal platform/support questions.
 - Progress indicator, e.g. `Question 2 of 8`.
@@ -141,9 +154,8 @@ Selecting a card:
 - Detect an unfinished quiz when the visitor returns using the same browser and device.
 - Show a resume prompt with **Resume Quiz**, **Start Over**, and **Not Now** actions.
 - Display the saved progress in the prompt, such as `Question 3 of 8`.
-- Keep unfinished sessions available for 30 days from the last activity.
+- Keep unfinished sessions recoverable for 72 hours from the latest accepted activity.
 - Clear single-select and multi-select states.
-- No name or email field before the result.
 
 #### Returning Visitor Resume Prompt
 
@@ -161,44 +173,35 @@ The prompt should appear only when the saved session:
 - belongs to the anonymous visitor ID stored in the current browser;
 - has a status of `in_progress`;
 - has at least one completed answer;
-- has activity within the last 30 days; and
+- has activity within the last 72 hours; and
 - does not already have a completed result.
 
 Same-device recognition is not guaranteed after browser data is cleared, in private/incognito mode, when cookies or local storage are blocked, or when the visitor changes devices or browsers. Cross-device recovery can later be offered through an optional email resume link, but it is outside the first release.
 
-### 3.5 Result Interface
+### 3.5 Result and Protected Proposal Interface
 
-The complete result displays:
+The immediate result and protected proposal use this client-facing order:
 
-1. **Your Business Snapshot** — summary of selected answers.
-2. **What Is Holding Growth Back** — short diagnosis.
-3. **Recommended System** — solution type and reason.
-4. **Recommended Build Route and Platform** — Systeme.io, GoHighLevel, or Custom App.
-5. **Recommended Base Offer** — Platform Launch/Growth/Scale or Custom Starter/Foundation/Growth/Complete.
-6. **What Is Included** — exact base inclusions plus selected priced add-ons.
-7. **Estimated Project Investment** — itemized base price, add-ons, and adjustments.
-8. **Why This Fits** — answer-based explanation.
-9. **Suggested Next Phase** — optional future enhancement, not an automatic charge.
-10. **Relevant Projects** — projects tagged to the selected audience.
-11. **Book a Strategy Call** — optional conversion CTA.
+1. **Client and business** — the submitted first name and business name.
+2. **Point A — Where the business is now** — approved answer labels and a concise summary of the current setup and blockers.
+3. **Point B — What the business wants to achieve** — the primary goal and required capabilities.
+4. **Recommended path from Point A to Point B** — solution, platform, tier, and answer-based reason.
+5. **Recommended package** — stable offer key, approved price, inclusions, relevant add-ons, scope-review items, and recurring-cost disclosures.
+6. **Basic vs Advanced vs Complete** — three comparison cards with feasible platforms, starting investment, outcome, and the concrete advantage of moving up a level.
+7. **How Complete can exceed the requirement** — only relevant, supportable advantages; Basic remains a viable solution.
+8. **Relevant work** — audience-matched projects.
+9. **Discovery call** — an optional CTA to confirm scope and discuss the recommendation.
+10. **Expiration** — the exact proposal expiry timestamp.
 
 Pricing note:
 
 > Your result is a planning recommendation based on your answers. Final scope is confirmed during the strategy call before any proposal or payment.
 
-#### Approved package-choice and emailed-roadmap experience — implementation pending
+The visitor first receives a server-verified draft. Changing a feasible tier/platform updates the selected estimate and comparison without rewriting the original Cortex recommendation. Unsupported Systeme.io or HighLevel choices are disabled with a specific explanation when inventory, production stages, specialized permissions, or non-standard operational workflows require a Custom App.
 
-This proposed revision keeps the result ungated and adds a choice step after the Cortex recommendation:
+The visitor then chooses **Create My 3-Day Proposal**. Trusted finalization recalculates the answers and catalog prices, records the recommendation and selected feasible option separately, issues a proposal reference plus a separate 10-character access key, and requests the initial email through Make. There is no PDF attachment. The raw access key is never placed in the URL, database, analytics, browser storage, or source control.
 
-1. Show the full personalized diagnosis and roadmap immediately, without asking for contact information.
-2. Present three public tiers—**Basic**, **Advanced**, and **Complete**—with the Cortex-recommended tier highlighted.
-3. Let the visitor compare **Systeme.io**, **HighLevel**, and **Custom App** inside each tier. Changing the platform updates the base price and platform-specific inclusions without reloading the page.
-4. Disable a platform when the visitor's required workflow cannot be delivered reliably on it. The disabled option must explain the exact limiting requirement; it must not silently remove capabilities.
-5. Personalize the inclusions and relevant add-ons from the selected audience and quiz answers. Booking is shown only when the visitor needs it or the chosen package includes it; it is not a universal default add-on.
-6. Preserve the Cortex recommendation separately from the visitor's final feasible choice so future CRM records can show both `recommended_offer_key` and `selected_offer_key`.
-7. After the on-page roadmap is visible, offer an optional **Email My PDF Roadmap** action. Name and email are collected only after voluntary submission and are not required to view the result.
-
-The approved tier-to-catalog mapping, prices, inclusion boundaries, and Make delivery flow are documented in Section 5.0. Implementation must follow a reviewed plan and must not change production data or activate external automation without the applicable deployment checks.
+The static Firebase-hosted route is `/proposal/?ref=<uuid>`. It reveals no client or proposal data until the correct access key is verified through a Supabase Edge Function. Unknown, incorrect, expired, revoked, and temporarily locked proposals return the same generic unavailable response. Five consecutive failures lock verification for 15 minutes; successful access may be cached in `sessionStorage` for the current tab only and never beyond expiry.
 
 ### 3.6 Projects
 
@@ -446,9 +449,9 @@ Platform preference is considered, but it does not override technical fit. If th
 
 ## 5. Offer Model and Dynamic Pricing
 
-### 5.0 Approved Three-Tier Presentation and Email Delivery — Implementation Pending
+### 5.0 Approved Three-Tier Presentation and 72-Hour Proposal Delivery
 
-**Status:** Approved design direction on September 22, 2026; implementation and deployment remain pending. These rules replace the public seven-card presentation while preserving the seven existing stable catalog keys underneath. Approval of this design does not bypass database deployment checks, secret handling, test requirements, or the separate activation check for the external Make scenario.
+**Status:** Owner-approved for implementation on September 22, 2026. These rules replace the public seven-card presentation while preserving the seven existing stable catalog keys underneath. Implementation approval does not bypass the target-specific Supabase migration approval, security testing, secret handling, inactive Make verification, or Firebase deployment checks.
 
 #### Recommended approach
 
@@ -486,51 +489,46 @@ Every tier must deliver a functional core outcome. Higher tiers add breadth, aut
 4. Requirements such as inventory, production stages, specialized permissions, or non-standard operational workflows disable Systeme.io and HighLevel and explain why Custom App is required.
 5. Selecting a platform recalculates the tier's base offer key, base price, included capabilities, priced add-ons, and scope-review items from the catalog and Cortex rules.
 6. Only add-ons supported by the visitor's audience and answers are shown. Included capabilities are labeled **Included**, not displayed as zero-dollar add-ons, and never charged twice.
-7. The final on-page and emailed roadmap snapshot records both the recommendation and the visitor's choice, including audience, tier, platform, stable offer key, inclusions, add-ons, estimate, explanation, and Cortex/catalog versions.
+7. The final on-page and protected proposal snapshots record both the recommendation and the visitor's choice, including audience, tier, platform, stable offer key, inclusions, add-ons, estimate, explanation, and Cortex/catalog versions.
 
-#### Proposed no-reload journey
+#### Approved no-reload journey
 
 ```mermaid
 flowchart TD
-    A[Complete audience-specific quiz] --> B[Cortex creates recommendation]
-    B --> C[Show full ungated roadmap]
-    C --> D[Compare Basic, Advanced, Complete]
-    D --> E[Choose feasible platform]
-    E --> F[Recalculate inclusions and estimate locally]
-    F --> G{Visitor action}
-    G -->|Keep on page| H[No contact details required]
-    G -->|Email PDF| I[Voluntary name, email, and consent]
-    G -->|Discovery call| J[Booking request or confirmed booking]
-    I --> K[Create or link Supabase lead]
-    K --> L[Supabase Edge Function]
-    L --> M[Private Make webhook]
-    M --> N[Create PDF from approved template]
-    N --> O[Send through connected Gmail account]
+    A[Choose audience] --> B[First name, business name, email, consent]
+    B --> C[Create or reuse owned lead]
+    C --> D[Complete audience-specific quiz]
+    D --> E[Server verifies Cortex recommendation]
+    E --> F[Show Point A and Point B]
+    F --> G[Compare Basic, Advanced, Complete]
+    G --> H[Choose feasible tier and platform]
+    H --> I[Create My 3-Day Proposal]
+    I --> J[Issue reference and separate access key]
+    J --> K[Private Make immediate-delivery webhook]
+    K --> L[Email proposal link, key, summary, and discovery CTA]
+    L --> M[Protected proposal page for 72 hours]
 ```
 
-#### Make scenario and Gmail delivery proposal
+#### Make scenarios and Gmail delivery
 
-The browser must never call Make directly. After a valid owned quiz result and voluntary lead submission, a Supabase Edge Function sends the minimum required signed payload to a private Make custom webhook. The Make scenario then:
+The browser never calls Make directly. Supabase Edge Functions send signed minimum-data requests to Make and retain authority over ownership, proposal state, expiry, booking suppression, follow-up eligibility, and cold-lead transitions.
 
-1. Receives the signed, idempotent roadmap-delivery request.
-2. Rejects missing/duplicate request identifiers and payloads that do not match the server-created result snapshot.
-3. Creates a Google Docs document from an approved Elysha Works roadmap template.
-4. Exports that document as PDF.
-5. Routes on the server-supplied booking state.
-6. Sends the short summary and PDF through a Gmail connection authorized inside Make.
-7. Returns a delivery outcome to the Edge Function; the application records only the required delivery event/status and does not expose Make or Gmail credentials.
+**Scenario A — Immediate proposal delivery:** a private custom webhook receives an idempotent request from `finalize-proposal`, validates the shared secret and payload, sends the client first name/business name, Point A → Point B summary, proposal reference URL, separate access key, exact expiration, signed stop link, and discovery-call CTA through an authorized Gmail connection. The Make Data Store may track only processing/sent/failed idempotency state; it must never store the raw access key. A confirmed send is acknowledged to Supabase before the 72-hour clock begins.
 
-| Booking state at send time | Email behavior |
+**Scenario B — Scheduled follow-up:** every 15 minutes, Make calls the authenticated `make-proposal-followups` Edge Function to claim due work, revalidates immediately before Gmail send, and acknowledges the outcome with the claim UUID. Make never receives the Supabase `service_role` key.
+
+| Offset from successful initial email | Action |
 |---|---|
-| `none` | Include the discovery-call link as an optional next step |
-| `requested` | Omit the booking CTA and acknowledge that the request was received |
-| `scheduled` | Omit the booking CTA and acknowledge the scheduled call |
-| `completed` | Omit the booking CTA |
-| `cancelled` or `no_show` | Do not automatically re-add the booking CTA; follow-up policy requires separate approval |
+| +24 hours | Follow-up 1: restate Point A → Point B and invite proposal review |
+| +48 hours | Follow-up 2: explain the recommended tier/platform and value of the next tier |
+| +72 hours | Follow-up 3: final reminder and exact proposal-expiration notice |
+| +96 hours | No email; mark the lead cold if no booking activity or stop request exists |
 
-An email already delivered before a later booking cannot be changed retroactively. Any reminder or resend generated after a booking must re-check the current booking state and suppress the discovery-call CTA when appropriate.
+Any booking record for the lead stops the automated sequence. `scheduled` and `completed` are successful stops; `cancelled` and `no_show` also stop automation and require manual follow-up. A booking click without a booking record does not stop the sequence. The final +72 message is an expiration notice and must not promise continuing access because the 15-minute schedule window may deliver it shortly after exact expiry.
 
-Gmail authentication is stored as a Make OAuth connection. Do not put a Gmail password, OAuth token, Make webhook URL, or webhook secret in browser code or `.env.local`. Production values such as `MAKE_ROADMAP_WEBHOOK_URL` and `MAKE_ROADMAP_WEBHOOK_SECRET` belong in Supabase Edge Function secrets. Local function-development values belong only in an ignored server-side environment file. No `NEXT_PUBLIC_` variable may contain these secrets.
+Every automated message includes the signed stop link. A valid stop request clears future due work but does not delete the lead or required business/legal history. No PDF is generated or attached.
+
+Gmail authentication stays in the Make OAuth connection. Make webhook URLs/secrets, Gmail tokens, proposal hash pepper, stop-signing secret, and Supabase server credentials belong only in provider secret stores or ignored server-side development files. No `NEXT_PUBLIC_` variable may contain them.
 
 #### Approved decisions
 
@@ -541,8 +539,8 @@ The owner approved the following direction for implementation planning:
 - Systeme.io and HighLevel using the same build price for equivalent scope.
 - `custom_complete` appearing as a $10,000+ escalation inside Complete rather than as a fourth card.
 - The platform-specific inclusion summaries and feasibility guardrails.
-- Optional PDF delivery through Make and a connected Gmail account.
-- The conditional discovery-call CTA behavior based on booking state.
+- Initial and scheduled proposal emails through two Make scenarios and a connected Gmail account, with no PDF.
+- The +24/+48/+72 follow-up sequence, booking/stop suppression, and +96 cold transition.
 
 The qualifier uses two build routes. Systeme.io and GoHighLevel share the same project pricing when the requested setup and implementation effort are equivalent. Their recurring subscriptions are paid separately by the client. Custom App pricing is higher because it includes custom interface, database, authentication, and business logic.
 
@@ -885,7 +883,7 @@ estimated_recurring_costs[]
 
 ### 6.8 Approved local Cortex version and aggregation rules
 
-The first disconnected frontend implementation uses `cortex-local-v0.1`. This version is approved for the local portfolio quiz and must remain explicit in saved quiz state, calculation traces, and result snapshots. It is not yet a seeded production `quiz_definitions` version and must not be represented as remotely deployed database configuration.
+The approved engine version remains `cortex-local-v0.1` so existing deterministic scoring, tests, and historical snapshots keep a stable identifier. For the connected proposal release, the same reviewed questions, answer options, complete scoring metadata, feasibility rules, and version keys are seeded as three active version-1 `quiz_definitions` with `server_verified: true`. The browser and Edge Function use the same portable engine; the Edge Function is authoritative for proposal drafts, prices, and issuance.
 
 Each visible answer option has a stable key and one or more signal tags. The interface never derives business logic by parsing display copy. Signal tags add integer vectors to the diagnostic, solution, and platform-fit dimensions defined in Section 6.2.
 
@@ -1130,7 +1128,7 @@ Automated tests must lock these outcomes:
 
 ### Client-side state
 
-- Local quiz-attempt ID for the disconnected frontend phase.
+- Local quiz-attempt ID and non-sensitive recovery state.
 - Cortex, question-set, catalog, and storage-schema versions.
 - Selected audience.
 - Current quiz step.
@@ -1140,27 +1138,26 @@ Automated tests must lock these outcomes:
 - UTM/referral parameters.
 - Last active local quiz-attempt ID.
 - Resume-prompt dismissed timestamp.
+- Proposal reference may appear in the route query, but the access key and contact details are never persisted in browser local storage.
 
-After the separately approved Supabase connection phase, client state also carries the Supabase anonymous user ID, owned visitor ID, and owned quiz-session ID. These remote identifiers are not required by the initial disconnected quiz implementation.
+The connected client state carries the Supabase anonymous user ID, owned visitor ID, portfolio-session ID, quiz-session ID, and lead link returned by restricted interfaces. The browser uses only the publishable Supabase credential.
 
 ### Persistence behavior
 
-- In the initial disconnected frontend phase, store active answers and the completed result snapshot only in versioned browser local storage. Do not import a Supabase client or make quiz-related network requests.
-- Save after each completed answer and update the local `last_activity_at` value.
+- Store only non-sensitive active answers, audience, step, versions, and timestamps in versioned browser local storage as a temporary resilience copy. Never store first name, business name, email, consent, proposal access key, Make data, or server secrets there.
+- Save after each accepted answer and update local and owned Supabase `last_activity_at` values.
 - On return, restore only the current browser's latest eligible unfinished attempt.
-- Keep an unfinished attempt resumable for 30 days after its local `last_activity_at` value.
+- Keep an unfinished attempt resumable for 72 hours after its latest accepted activity.
 - When **Start Over** is selected, remove the current application's local active-attempt record and create a new local attempt ID.
-- When an unfinished attempt passes 30 days, treat it as expired and offer a clean new attempt.
+- When an unfinished attempt passes 72 hours, treat it as expired and offer a clean new attempt.
 - Mark the local attempt completed and preserve its versioned result snapshot when the result is generated.
-- Never require personally identifiable information to show the result.
 - Clearing browser data, using private/incognito mode, blocking local storage, or switching devices or browsers may make the local attempt unrecoverable.
-
-In the later separately approved Supabase connection phase:
 
 - Silently establish a Supabase Anonymous Auth session, then create owned visitor, portfolio-session, and quiz-session records when meaningful engagement begins.
 - Update remote progress after each completed step or in safe batches and refresh `last_activity_at`.
 - Mark previous remote attempts `restarted` or `expired` rather than overwriting analytics history.
-- Link a quiz session to a lead only after the visitor voluntarily books or submits contact details.
+- Create or reuse and link a lead after the required contact-and-consent step succeeds through `begin_qualified_quiz`.
+- Use server-side `finalize-proposal` preview and issue operations for protected scoring, prices, selections, proposal issuance, and Make delivery; never trust client-calculated totals.
 - Use only public/publishable Supabase credentials with tested RLS and narrowly scoped RPC functions; the `service_role` key never appears in browser code.
 
 ---
@@ -1261,7 +1258,7 @@ Purpose: durable quiz progress, scores, recommendation, pricing, resume state, a
 | `started_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Start time |
 | `completed_at` | `TIMESTAMPTZ` | No | `NULL` | Required when completed | Completion time |
 | `last_activity_at` | `TIMESTAMPTZ` | Yes | `now()` | `>= started_at` | Latest activity |
-| `resume_expires_at` | `TIMESTAMPTZ` | Yes | `now() + interval '30 days'` | Later than activity while resumable | Resume expiry |
+| `resume_expires_at` | `TIMESTAMPTZ` | Yes | `now() + interval '72 hours'` | Later than activity while resumable | Three-day resume expiry |
 | `resume_count` | `INTEGER` | Yes | `0` | `>= 0` | Resume count |
 | `last_resumed_at` | `TIMESTAMPTZ` | No | `NULL` | — | Latest resume |
 | `answers` | `JSONB` | Yes | `'{}'::jsonb` | JSON object; bounded size | Answers by question key |
@@ -1290,10 +1287,22 @@ Purpose: durable quiz progress, scores, recommendation, pricing, resume state, a
 | `estimated_project_investment_usd` | `NUMERIC(12,2)` | Yes | `0` | `>= 0` | Total shown |
 | `result_snapshot` | `JSONB` | No | `NULL` | Required on completion; immutable afterward | Exact result and price shown |
 | `result_viewed_at` | `TIMESTAMPTZ` | No | `NULL` | — | Result-view time |
+| `selected_tier_key` | `TEXT` | No | `NULL` | With platform/offer: `basic`, `advanced`, or `complete` | Client-selected tier |
+| `selected_platform` | `TEXT` | No | `NULL` | With tier/offer: `systeme_io`, `gohighlevel`, or `custom_app` | Client-selected feasible platform |
+| `selected_offer_key` | `TEXT` | No | `NULL` | FK to `package_catalog(offer_key)`; `ON DELETE RESTRICT` | Selected stable offer |
+| `selected_roadmap_snapshot` | `JSONB` | No | `NULL` | Server-produced; immutable after issue | Three-tier comparison and selection |
+| `proposal_reference` | `UUID` | No | `NULL` | Unique; server-issued | Public lookup reference, not a credential |
+| `proposal_access_key_hash` | `TEXT` | No | `NULL` | HMAC-SHA-256 digest only | Server verification; raw key is never stored |
+| `proposal_status` | `TEXT` | Yes | `'not_issued'` | `not_issued`, `active`, `expired`, or `revoked` | Proposal lifecycle |
+| `proposal_issued_at` | `TIMESTAMPTZ` | No | `NULL` | Required when active | Successful issue time |
+| `proposal_expires_at` | `TIMESTAMPTZ` | No | `NULL` | Exactly 72 hours after successful initial delivery | Access expiry |
+| `proposal_last_viewed_at` | `TIMESTAMPTZ` | No | `NULL` | Trusted update only | Latest verified view |
+| `proposal_failed_attempts` | `INTEGER` | Yes | `0` | `>= 0`; trusted update only | Consecutive failed verifications |
+| `proposal_locked_until` | `TIMESTAMPTZ` | No | `NULL` | Trusted update only | Fifteen-minute lock window |
 | `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Creation time |
 | `updated_at` | `TIMESTAMPTZ` | Yes | `now()` | Trigger maintained | Last mutation |
 
-Indexes: `visitor_id`; `owner_user_id`; `portfolio_session_id`; `question_set_id`; `lead_id`; `(status, resume_expires_at)`; `(owner_user_id, last_activity_at DESC)`. Access: owner can create/read and save permitted progress fields only. Policies verify the visitor and portfolio session belong to the same `auth.uid()`. Calculated scores, official prices, result snapshot, status transitions, and lead linkage use constrained functions or column-level privileges. `result_snapshot` remains historically accurate after catalog changes.
+Selection fields must be all null or all present. An active proposal requires a completed quiz, linked lead, result and selection snapshots, reference, key hash, issue timestamp, and expiry after issue. Indexes: `visitor_id`; `owner_user_id`; `portfolio_session_id`; `question_set_id`; `lead_id`; `(status, resume_expires_at)`; `(owner_user_id, last_activity_at DESC)`; unique partial `proposal_reference`; partial active `proposal_expires_at`. Access: owner can create/read and save permitted progress fields only. Policies verify the visitor and portfolio session belong to the same `auth.uid()`. Calculated scores, official prices, snapshots, status transitions, proposal fields, and lead linkage use trusted functions. `result_snapshot` and `selected_roadmap_snapshot` remain historically accurate after catalog changes.
 
 #### `leads`
 
@@ -1319,10 +1328,20 @@ Purpose: a person who voluntarily submits contact details or completes a booking
 | `last_contact_at` | `TIMESTAMPTZ` | No | `NULL` | — | Latest contact |
 | `lost_reason` | `TEXT` | No | `NULL` | Admin-controlled | Loss reason |
 | `notes_summary` | `TEXT` | No | `NULL` | Admin-controlled | Internal summary |
+| `proposal_delivery_status` | `TEXT` | Yes | `'pending'` | `pending`, `sent`, `failed`, `stopped`, or `cold`; trusted only | Email lifecycle |
+| `proposal_email_consent_at` | `TIMESTAMPTZ` | No | `NULL` | Set only after accepted required consent | Consent evidence |
+| `proposal_email_consent_version` | `TEXT` | No | `NULL` | Initially `proposal_followup_v1` | Exact consent copy version |
+| `proposal_sent_at` | `TIMESTAMPTZ` | No | `NULL` | Trusted acknowledgement only | Follow-up clock origin |
+| `proposal_follow_up_count` | `INTEGER` | Yes | `0` | Between `0` and `3` | Successful follow-ups |
+| `next_proposal_follow_up_at` | `TIMESTAMPTZ` | No | `NULL` | Trusted scheduling only | Indexed due time |
+| `proposal_follow_up_claim_id` | `UUID` | No | `NULL` | Trusted lease identifier | Idempotent claim |
+| `proposal_follow_up_claimed_at` | `TIMESTAMPTZ` | No | `NULL` | Trusted lease time | Claim recovery |
+| `proposal_follow_up_stopped_at` | `TIMESTAMPTZ` | No | `NULL` | Booking, signed stop, or admin control | Automation stop |
+| `cold_at` | `TIMESTAMPTZ` | No | `NULL` | +96 hours with no booking/stop | Cold transition time |
 | `created_at` | `TIMESTAMPTZ` | Yes | `now()` | — | Creation time |
 | `updated_at` | `TIMESTAMPTZ` | Yes | `now()` | Trigger maintained | Last mutation |
 
-Indexes: `visitor_id`; `source_portfolio_session_id`; unique partial `source_quiz_session_id` where non-null; `(crm_stage, lead_status)`; `created_at DESC`; `assigned_to_user_id`. Access: no public list/read/update/delete and no unrestricted direct insert. A restricted lead-submission RPC accepts only approved public identity/business fields, verifies ownership of supplied attribution IDs, normalizes input, and assigns CRM defaults internally.
+Indexes: `visitor_id`; `source_portfolio_session_id`; unique partial `source_quiz_session_id` where non-null; `(crm_stage, lead_status)`; `created_at DESC`; `assigned_to_user_id`; partial `next_proposal_follow_up_at` for sent, unstopped leads with fewer than three follow-ups. Access: no public list/read/update/delete and no unrestricted direct insert. `begin_qualified_quiz` accepts only approved contact/consent and owned attribution fields, normalizes input, links the quiz transactionally, and assigns CRM/orchestration defaults internally. At +96 hours with no booking/stop, trusted processing sets stage/status/delivery status to `cold` and records `cold_at` without sending a fourth email.
 
 #### `bookings`
 
@@ -1567,9 +1586,9 @@ Future modules use the original `lead_id`, later `client_id`, and project/worksp
 
 The browser silently calls Supabase Anonymous Auth before creating portfolio records. Supabase anonymous users operate under the PostgreSQL `authenticated` role, not `anon`; ownership uses `auth.uid() = owner_user_id` plus checks that referenced parent rows have the same owner. The JWT `is_anonymous` claim may distinguish anonymous visitors from permanent users where necessary. The unauthenticated `anon` role receives no table access by default; the normal flow signs in anonymously before reading configuration.
 
-Anonymous identity is durable only while local auth state remains available. Clearing browser data, signing out, private browsing, or changing device/browser may prevent recovery. Owned incomplete quiz sessions remain recoverable on the same device for 30 days. No personal information is required for a result, and a lead exists only after voluntary contact submission or a successful booking. Later conversion links existing stable IDs rather than replacing them.
+Anonymous identity is durable only while local auth state remains available. Clearing browser data, signing out, private browsing, or changing device/browser may prevent same-device recovery. Owned incomplete quiz sessions remain recoverable for 72 hours after latest accepted activity. The required contact-and-consent step creates or reuses a lead before Question 1; later booking/client conversion links the same stable IDs rather than replacing them.
 
-Abuse controls include CAPTCHA or Cloudflare Turnstile around anonymous-account creation, rate limits for sensitive submissions/RPCs, payload-size and allowlist validation, and scheduled cleanup of expired anonymous users and abandoned sessions. Mark eligible sessions `expired` after 30 days before later cleanup. Preserve completed result snapshots and conversion attribution under the approved retention policy. Portfolio tables never store raw IP addresses; legal/business retention periods must be approved before production rather than guessed here.
+Abuse controls include CAPTCHA or Cloudflare Turnstile around anonymous-account creation, rate limits for contact submission, finalization, proposal verification, and Make endpoints, payload-size and allowlist validation, and scheduled cleanup of eligible expired anonymous users and abandoned sessions. Mark eligible resumable sessions `expired` after 72 hours before later cleanup. Proposal access also expires after 72 hours, but leads, consent evidence, bookings, delivery history, and required CRM attribution remain subject to separately approved business/legal retention. Portfolio tables never store raw IP addresses.
 
 Foreign-key deletion conventions are explicit: required visitor/session/quiz lineage uses `ON DELETE RESTRICT`; optional attribution and convenience links use `ON DELETE SET NULL`; booking-to-lead uses `ON DELETE RESTRICT`; catalog/definition links used by historical results use `RESTRICT` or deactivation rather than deletion; admin/editor assignments use `ON DELETE SET NULL`. Required ownership links from `site_visitors`, `portfolio_sessions`, and `quiz_sessions` to `auth.users` use `ON DELETE RESTRICT` so removing an auth identity cannot silently erase business history. The trusted anonymous-user cleanup job deletes eligible unconverted dependent records in dependency order before deleting the auth user. `analytics_events.owner_user_id` uses `ON DELETE SET NULL` because event attribution can outlive an anonymous identity.
 
@@ -1601,6 +1620,15 @@ booking_completed
 lead_created
 lead_qualified
 proposal_sent
+proposal_created
+proposal_email_sent
+proposal_email_failed
+proposal_access_succeeded
+proposal_access_failed
+proposal_follow_up_sent
+proposal_follow_up_stopped
+lead_contact_submitted
+lead_marked_cold
 client_won
 client_lost
 ```
@@ -1634,7 +1662,7 @@ RLS is enabled on every Phase 1 table. Migrations explicitly revoke broad defaul
 | `site_visitors` | Owner create/read; safe owned updates only | Authorized management | Direct create/read; restricted activity/counter RPC or column-safe update |
 | `portfolio_sessions` | Owner create/read; safe owned updates only | Authorized management | Direct create/read; constrained update/RPC |
 | `quiz_sessions` | Owner create/read; safe owned progress updates only | Authorized management | Direct create/read; constrained autosave/result/link RPC |
-| `leads` | No list/read/update/delete or arbitrary insert | Authorized CRM access | Lead-submission/linking RPC only |
+| `leads` | No list/read/update/delete or arbitrary insert | Authorized CRM access | `begin_qualified_quiz`/trusted linking only |
 | `bookings` | No list or arbitrary mutation | Authorized booking access | Submission RPC or trusted webhook |
 | `analytics_events` | No listing/update/delete | Authorized reporting access | Restricted event RPC only |
 | `projects` | Select only `published = true` | Full authorized management | Direct read only |
@@ -1655,10 +1683,23 @@ Phase 1 admin authorization uses a server-controlled JWT `app_metadata` role cla
 | Booking submission or webhook processing | Owned user for submission; trusted server for webhook | Link a lead, preserve visitor/session/quiz attribution, validate provider data, set status/provider fields internally |
 | Business-critical analytics creation | Owned user or trusted server | Allowlist event names/properties, validate owned attribution IDs, assign owner/time internally, prevent arbitrary lead attachment |
 | Quiz-to-lead conversion/linking | Owned user or trusted server | Verify quiz ownership/canonical source, set both relationship directions transactionally, reject conflicts/reassignment |
+| Qualified quiz start | Owned anonymous/permanent user | Accept only audience, first name, business name, normalized email, owned source IDs, and required consent; create/reuse lead and link quiz transactionally |
+| Protected result/proposal persistence | Trusted server only | Recalculate answers/catalog, enforce feasible selections and immutable snapshots, assign proposal and orchestration fields internally |
 
 Every `SECURITY DEFINER` function sets a fixed minimal `search_path`, schema-qualifies objects, validates `auth.uid()`, accepts only minimum arguments, and assigns IDs, owners, statuses, prices, timestamps, and CRM fields internally. Revoke default `PUBLIC` execute privilege and grant `EXECUTE` only to roles that need each function. Edge Functions are reserved for external secrets, third-party APIs, advanced rate limiting, and webhooks—not every quiz autosave.
 
-### 10.2 Required security tests
+### 10.2 Supabase Edge Function boundaries
+
+| Edge Function | Caller | Responsibility |
+|---|---|---|
+| `finalize-proposal` | Owning anonymous/permanent browser with JWT | `preview` verifies owned stored answers and returns a sanitized draft; `issue` reruns Cortex/catalog logic, validates the selected feasible option, stores snapshots, generates the reference/key digest, calls Make, and activates the exact 72-hour proposal after successful delivery acknowledgement |
+| `verify-proposal` | Public proposal shell | Accept reference and access key only; apply generic failure, expiry/revocation/lock checks, constant-time HMAC comparison, and return only the sanitized proposal view model |
+| `make-proposal-followups` | Make with dedicated shared secret | `claim`, `revalidate`, and `acknowledge` due follow-ups/cold work without exposing service-role credentials to Make |
+| `stop-proposal-followups` | Signed email stop URL | Validate an opaque signed token, stop future automation, and return a generic confirmation without exposing lead/proposal data |
+
+`finalize-proposal` returns the raw 10-character access key only in the one-time signed request to the immediate Make scenario and never logs it. `verify-proposal` applies a 15-minute lock after five consecutive failures. The portfolio browser never contains `SUPABASE_SERVICE_ROLE_KEY`, `PROPOSAL_KEY_PEPPER`, `PROPOSAL_STOP_SIGNING_SECRET`, Make webhook credentials, Gmail credentials, or unrestricted database credentials.
+
+### 10.3 Required security tests
 
 - Owner can create/read/update only permitted fields on their own visitor/session/quiz rows.
 - Owner cannot read or mutate another owner's rows or attach another owner's parent IDs.
@@ -1667,8 +1708,11 @@ Every `SECURITY DEFINER` function sets a fixed minimal `search_path`, schema-qua
 - Unauthorized updates and deletes are rejected, including owner/FK reassignment and forged calculated fields.
 - Sensitive RPCs reject unexpected fields, foreign IDs, statuses, prices, owners, oversized payloads, and invalid transitions.
 - Admin access succeeds only for a server-authorized admin role; `user_metadata` alone never authorizes it.
+- Proposal reference alone, wrong/expired/revoked key, and locked access return the same generic response.
+- Raw access keys never appear in database rows, logs, analytics, URLs, local storage, or source control.
+- Make retries are idempotent and cannot create duplicate leads, quiz sessions, or proposals.
 
-### 10.3 Recommended index summary
+### 10.4 Recommended index summary
 
 Index every foreign key used in joins unless an existing unique index already covers it. Prioritize `owner_user_id`, visitor/session/quiz/lead attribution IDs, visitor/session activity time, `(quiz status, resume_expires_at)`, lead CRM stage/status and creation time, booking start/status, analytics event name/time, project slug and `(published, display_order)`, active catalog display order, and `(audience_key, active, version)` for quiz definitions. Avoid speculative indexes without a known filter, sort, uniqueness rule, or join.
 
@@ -1685,7 +1729,8 @@ Index every foreign key used in joins unless an existing unique index already co
 | Supabase RLS and grants | Row ownership, public visibility, admin boundaries, and least privilege |
 | Supabase database functions/RPC | Restricted lead, booking, analytics, result, and linking writes |
 | Supabase Storage | Portfolio or future-module files only when required and with bucket/object policies |
-| Supabase Edge Functions | External-secret workflows, third-party API calls, advanced rate limiting, or webhooks when genuinely needed |
+| Supabase Edge Functions | Trusted Cortex finalization, access-key issuance/verification, Make webhook calls, follow-up claims/acknowledgements, stop links, external secrets, and advanced rate limiting |
+| Make and connected Gmail | Immediate proposal delivery and scheduled +24/+48/+72 email orchestration only; no database authority and no PDF generation |
 
 Existing Firebase projects, Firestore databases, applications, `firebase.json`, and hosting targets remain untouched. No production infrastructure is deployed, deleted, disconnected, or mutated by this blueprint update.
 
@@ -1693,21 +1738,20 @@ Existing Firebase projects, Firestore databases, applications, `firebase.json`, 
 
 ## 12. Delivery Phases
 
-### Current interface milestone — disconnected portfolio and quiz
+### Current implementation milestone — contact-qualified quiz and expiring proposal
 
-Before the separately approved Supabase connection work:
-
-1. Preserve the existing approved hero and rebuild the remaining homepage sections as typed React components in the exact Section 2 order.
-2. Add the contextual sticky navbar beginning at the Projects section.
-3. Build `/quiz` with the audience selector, eight no-reload questions, local 30-day persistence, `cortex-local-v0.1`, complete results, audience-relevant projects, and booking CTA.
-4. Use local version-controlled quiz, package, and add-on configuration shaped for a later Supabase adapter.
-5. Run Cortex, state, accessibility, responsive, and no-network boundary tests.
-6. Do not connect the portfolio frontend to Supabase during this milestone.
+1. Preserve the approved homepage, hero, contextual Projects navbar, audience questions, package prices, and design system.
+2. Add the required first-name, business-name, email, and consent step after audience selection.
+3. Keep the eight-question experience no-reload and add a portable Cortex proposal view model with Point A, Point B, recommendation, and Basic/Advanced/Complete comparison.
+4. Change same-browser quiz recovery to 72 hours without storing PII or access keys locally.
+5. Connect the browser to Supabase Anonymous Auth, owned sessions, safe progress fields, and restricted contact RPC.
+6. Add the protected static `/proposal` shell and the four trusted Edge Function boundaries.
+7. Define and verify both Make scenarios while inactive. Activate them only after the backend and security tests pass.
 
 ### Phase 1 — Existing hosting verification and backend preparation
 
 1. Keep and verify existing Firebase Hosting, custom domain, SSL, `firebase.json`, hosting targets, projects, applications, and Firestore databases without changing them.
-2. Create or select a dedicated Elysha Works Supabase project only when implementation is separately approved.
+2. Verify and link only the owner-confirmed existing Elysha Works Supabase project; do not create a second project or guess a reference.
 3. Generate version-controlled Supabase SQL migrations.
 4. Create the 11 Phase 1 tables.
 5. Add constraints, relationships, indexes, shared `updated_at` triggers, grants, RLS policies, and restricted RPC functions.
@@ -1716,15 +1760,18 @@ Before the separately approved Supabase connection work:
 
 ### Phase 2 — Portfolio connection, quiz, and result
 
-8. Connect the existing portfolio frontend to Supabase without changing its UI or quiz behavior.
-9. Test visitor/session creation, quiz autosave, same-device 30-day resume, completion, results, voluntary lead submission, and booking attribution.
+8. Connect the existing portfolio frontend to Supabase while preserving the approved visual system and no-reload question interaction.
+9. Test visitor/session creation, contact qualification, quiz autosave, same-device 72-hour resume, server preview, proposal issue/verification, lead attribution, and booking suppression.
 10. Test every RLS allow-and-deny case, RPC input boundary, and admin-role check.
 
 ### Phase 3 — Production verification and later modules
 
-11. Verify production behavior before discontinuing any unused Firestore portfolio configuration.
-12. Do not delete existing Firestore databases or other Firebase resources without separate explicit approval.
-13. Add CRM, Client Portal, Admin Portal, and Visual Annotator tables/features only in later approved phases.
+11. Present the exact linked Supabase target and additive migration report, then wait for explicit target-specific approval.
+12. Apply and verify the approved Supabase migrations/functions/secrets without resetting or dropping remote data.
+13. Configure both Make scenarios inactive, test idempotency/booking suppression/stop/expiry/cold transitions, then activate only after verification.
+14. Build and deploy the tested branch output to the existing Firebase Hosting target without changing Firebase configuration or Firestore.
+15. Do not delete existing Firestore databases or other Firebase resources without separate explicit approval.
+16. Add CRM, Client Portal, Admin Portal, and Visual Annotator tables/features only in later approved phases.
 
 ### Existing-system audit
 
@@ -1737,9 +1784,9 @@ Before the separately approved Supabase connection work:
 
 ## 13. Portfolio-First Acceptance Criteria
 
-### Current disconnected frontend milestone
+### Connected proposal release
 
-The current interface milestone is ready when:
+The release is ready only when:
 
 - Visitors can clearly identify whether Elysha Works serves their business type.
 - Each audience receives six relevant questions followed by the universal platform and support questions.
@@ -1748,23 +1795,20 @@ The current interface milestone is ready when:
 - The quiz survives back navigation and normal refresh behavior.
 - Returning visitors on the same browser/device are offered the option to resume an eligible unfinished quiz.
 - Resuming restores the selected audience, saved answers, and correct next step.
-- Unfinished sessions expire after 30 days of inactivity.
-- Starting over replaces the active local attempt with a fresh local attempt ID; remote history behavior remains deferred until database connection.
-- The complete result appears without requiring contact information.
+- Unfinished same-browser and owned remote resume state expires after 72 hours of inactivity.
+- Starting over creates a fresh attempt and marks prior remote history safely instead of overwriting it.
+- The required contact step validates first name, business name, normalized email, and consent before Question 1 without storing PII locally.
+- The immediate result displays client/business name, Point A, Point B, recommendation, and a server-verified Basic/Advanced/Complete comparison.
 - Results recommend a technically justified platform/build route and base offer starting at $1,500.
 - Results itemize base inclusions, non-included add-ons, adjustments, and recurring costs paid separately by the client.
 - Projects automatically filter to the selected audience.
-- No personally identifiable information is collected before voluntary submission.
+- Proposal issuance requires an explicit **Create My 3-Day Proposal** action after the client selects a feasible tier/platform.
+- Proposal reference alone reveals no data; the separate access key works only before exact expiry and locks for 15 minutes after five failures.
 - Content, questions, package data, and projects are isolated from UI rendering, and display-copy edits do not rewrite core scoring logic.
 - Mobile, tablet, and desktop layouts are usable and visually consistent.
-- The quiz performs no Supabase/database/analytics network request and imports no Supabase client.
+- The browser uses only the publishable Supabase credential and cannot read or mutate another visitor's records or protected proposal/orchestration fields.
 - Existing Firebase Hosting configuration, custom domain, SSL, hosting targets, Firestore databases, booking flow, legal pages, and protected project previews remain unchanged.
 - `cortex-local-v0.1` passes the Section 6.13 acceptance personas and produces a versioned explanation trace and local result snapshot.
-
-### Later integrated release
-
-The database-connected release additionally requires:
-
 - Strategy-call clicks and completed bookings can be attributed to the originating session and quiz.
 - Firebase Hosting continues to serve the existing frontend, custom domain, SSL, and deployments without changing existing hosting configuration.
 - The frontend uses Supabase Anonymous Auth and cannot read or mutate another visitor's records.
@@ -1774,6 +1818,8 @@ The database-connected release additionally requires:
 - Result snapshots preserve the exact recommendation and price shown even after catalog changes.
 - Future CRM/portal records reuse stable lead, client, project, session, and quiz relationships rather than creating duplicate identities.
 - Existing Firestore databases and other Firebase resources remain untouched unless a later explicit migration/deletion approval is given.
+- Initial proposal email is idempotent; +24/+48/+72 follow-ups occur only when eligible; any booking row or signed stop suppresses later emails; +96 marks cold without a fourth email.
+- No PDF is generated, no raw access key is stored, and Make never receives a Supabase service-role key.
 
 ---
 
@@ -1783,24 +1829,24 @@ Build now:
 
 - Public portfolio.
 - Audience selection.
+- Required contact qualification and consent.
 - Quiz.
-- Complete result.
+- Server-verified result and protected proposal.
 - Fixed package recommendation.
 - Audience-filtered projects.
-- Local 30-day resume state.
+- Local and owned 72-hour resume state.
 - `cortex-local-v0.1` scoring and transparent estimate.
 - Local version-controlled package and add-on configuration.
+- Four Supabase Edge Functions and two Make scenarios.
 
 Do not build yet:
 
-- Portfolio-to-Supabase frontend connection.
-- Supabase-backed quiz persistence, analytics, lead submission, or booking attribution.
 - Full client portal rewrite.
 - Full admin portal rewrite.
 - Visual annotator integration.
 - Full CRM interface.
 - Reserved future CRM/portal tables.
-- Any production deployment, Supabase-project creation, or destructive Firestore/Firebase migration.
+- Any new Supabase project, destructive database operation, or Firestore/Firebase migration.
 
 Those modules remain represented in the future-ready data relationships, but they do not block the portfolio launch.
 
@@ -1808,9 +1854,9 @@ Those modules remain represented in the future-ready data relationships, but the
 
 ## 15. Migration and Implementation Notes
 
-- This document finalizes the relational design; it does not contain executable production SQL and does not authorize deployment.
+- This document is the authoritative relational and workflow design. Version-controlled SQL and Edge Function implementation remain subject to local/security verification and the explicit target-specific remote approval gate before deployment.
 - Migrations must be reviewed and applied in the Section 12 order. Create base referenced tables first, then dependent tables, then the deferred back-links that resolve circular relationships.
 - Seed data must preserve the pricing, package names, quiz questions, scoring decisions, copy, and project information already approved in this blueprint.
 - Supabase Storage buckets are introduced only when a portfolio or future-module workflow actually requires files; bucket policies follow the same ownership/admin boundaries as database records.
-- Edge Functions are optional integration boundaries, not a replacement for RLS or routine quiz persistence.
+- Edge Functions are required for trusted proposal finalization, access-key verification, Make integration, and follow-up orchestration; they are not a replacement for RLS or routine owned quiz persistence.
 - Any discontinuation of old portfolio-specific Firestore configuration follows successful production verification and separate approval. Existing Firestore databases themselves are never deleted under this plan.

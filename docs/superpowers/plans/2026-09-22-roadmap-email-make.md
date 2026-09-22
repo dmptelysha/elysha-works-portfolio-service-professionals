@@ -1,5 +1,7 @@
 # Roadmap Email and Make Scenario Implementation Plan
 
+> **SUPERSEDED — DO NOT IMPLEMENT.** This historical PDF/optional-email plan was replaced on September 22, 2026 by [`2026-09-22-expiring-client-proposal.md`](2026-09-22-expiring-client-proposal.md) and its owner-approved design spec. The current flow requires contact qualification before Question 1, a no-PDF access-key-protected proposal, 72-hour access, +24/+48/+72 follow-ups, and a +96 cold transition. This file is retained only for planning history.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let a visitor voluntarily submit their name and email after viewing/selecting a roadmap, persist the owned result and lead safely in Supabase, and send a personalized PDF through a private Make scenario using the existing Google and Gmail connections.
