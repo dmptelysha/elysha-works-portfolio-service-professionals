@@ -104,9 +104,9 @@ export interface AddonDefinition {
 }
 
 export interface DiagnosticScores {
-  acquisition: number;
-  automation: number;
-  complexity: number;
+  acquisitionNeed: number;
+  automationNeed: number;
+  systemComplexity: number;
 }
 
 export interface SolutionScores {
@@ -190,7 +190,6 @@ export interface CortexResult {
   estimatedProjectInvestmentUsd: number;
   estimatedRecurringCosts: readonly string[];
   explanationTrace: readonly ExplanationTraceEntry[];
-  createdAt: string;
 }
 
 export type QuizStatus = "in_progress" | "completed";
