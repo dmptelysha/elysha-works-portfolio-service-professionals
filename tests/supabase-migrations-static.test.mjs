@@ -15,6 +15,7 @@ const expectedMigrations = [
   '202609210005_create_portfolio_rpc_functions.sql',
   '202609210006_add_retention_helpers.sql',
   '202609220001_add_expiring_proposal_flow.sql',
+  '202609220002_qualify_proposal_reference_update.sql',
 ];
 
 const phaseOneTables = [
@@ -70,6 +71,18 @@ test('proposal migration is additive, keeps eleven tables, and locks trusted fun
   assert.match(sql, /revoke\s+execute\s+on\s+function\s+public\.persist_quiz_result\s*\([^;]+from\s+authenticated/is);
   assert.match(sql, /revoke\s+execute\s+on\s+function\s+public\.submit_lead\s*\([^;]+from\s+authenticated/is);
   assert.match(sql, /resume_expires_at\s*=\s*now\(\)\s*\+\s*interval\s*'72 hours'/i);
+});
+
+test('proposal finalization qualifies the existing proposal reference column', () => {
+  const sql = read('supabase/migrations/202609220002_qualify_proposal_reference_update.sql');
+  assert.match(
+    sql,
+    /proposal_reference\s*=\s*coalesce\(qs\.proposal_reference,\s*p_proposal_reference\)/i,
+  );
+  assert.doesNotMatch(
+    sql,
+    /proposal_reference\s*=\s*coalesce\(proposal_reference,\s*p_proposal_reference\)/i,
+  );
 });
 
 test('migrations create exactly the Phase 1 public tables', () => {
@@ -133,4 +146,10 @@ test('database operations and deferred production decisions are documented', () 
   ]) assert.match(doc, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), phrase);
   assert.match(doc, /finalize-proposal/i);
   assert.match(doc, /verify-proposal/i);
+});
+
+test('Edge Functions use an explicit Deno-compatible Supabase client import', () => {
+  const client = read('supabase/functions/_shared/supabase.ts');
+  assert.match(client, /from\s+["']npm:@supabase\/supabase-js@2\.116\.0["']/);
+  assert.doesNotMatch(client, /from\s+["']@supabase\/supabase-js["']/);
 });

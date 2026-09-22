@@ -47,6 +47,7 @@ export async function deliverInitialProposal(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "x-make-apikey": environment.webhookSecret,
       "X-Elysha-Signature": `sha256=${signature}`,
       "X-Elysha-Operation-Id": payload.operationId,
     },

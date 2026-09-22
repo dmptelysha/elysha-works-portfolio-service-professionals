@@ -1,6 +1,6 @@
 # Make proposal automation operator guide
 
-Status: reviewed contract only. Both scenarios must remain inactive until the verified Supabase backend is deployed, its target project has been explicitly approved, and the controlled email tests pass.
+Status: both Make scenarios are created and intentionally inactive. The shared automation secret has been rotated, stored as a Supabase Edge Function secret, and configured in Scenario B through the `X-Make-Automation-Secret` request header. No scenario has been run and no email has been sent. Both scenarios must remain inactive until controlled email and suppression tests pass.
 
 This automation sends a link and a separate access key to a private three-day proposal page. It does not generate or attach a PDF. Supabase remains authoritative for proposal expiry, booking suppression, follow-up eligibility, and cold-lead transitions. Make never receives a Supabase service-role credential.
 
@@ -10,26 +10,26 @@ Store values only in the services that consume them:
 
 | Name | Storage location | Purpose |
 |---|---|---|
-| `MAKE_PROPOSAL_WEBHOOK_SECRET` | Supabase Edge secret plus Make Scenario A secret/shape filter | HMAC-verifies the exact webhook body |
-| `MAKE_AUTOMATION_SECRET` | Supabase Edge secret plus Make Scenario B HTTP connection/header | Authenticates claim, revalidate, and acknowledge calls |
+| `MAKE_PROPOSAL_WEBHOOK_SECRET` | Supabase Edge secret plus Make Custom Webhook API-key vault | Sent only as `x-make-apikey`; Make rejects unauthenticated requests. The Edge Function also derives the optional `X-Elysha-Signature` defense-in-depth header from this value. |
+| `MAKE_AUTOMATION_SECRET` | Supabase Edge Function secret plus Scenario B's private HTTP-module headers | Authenticates claim, revalidate, and acknowledge calls through `X-Make-Automation-Secret`; never store it in browser code, a public table, or a client-side environment variable |
 | Gmail connection | Make connection vault | Sends from the owner-approved Gmail account |
 
 Never place values in this repository, Make notes, Data Store fields, browser code, scenario names, or execution screenshots. Enable **confidential scenario data** in Make when the account supports it. Scenario exports and execution history must be treated as sensitive because an initial run temporarily contains the raw access key.
 
 ## Scenario A — Elysha Works — Proposal Delivery
 
-Scenario ID: pending creation after backend deployment. Connection name: owner-approved Gmail connection; record the display name here after creation, never its token.
+Scenario ID: `6362134`. Connection name: `Elysha's Gmail connection (dmpt.elysha@gmail.com)`; only the display name is documented, never its token.
 
 Keep the scenario inactive while building it. Its modules, in exact order, are:
 
 ```text
-Custom Webhook → Secret/shape filter → Data Store lookup
+Authenticated Custom Webhook → Shape validation → Data Store lookup
 → Router (sent/active/new) → Data Store create `processing`
 → Gmail Send Email → Data Store update `sent` → Webhook Response
 ```
 
-1. **Custom Webhook** receives the flat contract in `make-payload-examples/redacted-initial-proposal.json`. The production webhook URL exists only in the `MAKE_PROPOSAL_WEBHOOK_URL` Supabase secret.
-2. **Secret/shape filter** verifies `X-Elysha-Signature` as HMAC-SHA-256 over the exact raw request body and requires `X-Elysha-Operation-Id` to equal `delivery_id`. Reject missing, extra, malformed, unsigned, stale, or oversized requests.
+1. **Authenticated Custom Webhook** receives the flat contract in `make-payload-examples/redacted-initial-proposal.json`. Make API-key authentication is enabled and requires the `x-make-apikey` header. The production webhook URL exists only in the `MAKE_PROPOSAL_WEBHOOK_URL` Supabase secret; the key exists only in Make's keychain and the `MAKE_PROPOSAL_WEBHOOK_SECRET` Supabase secret.
+2. **Shape validation** requires all 15 approved fields and requires `X-Elysha-Operation-Id` to equal `delivery_id` when the request-header value is available for mapping. The Edge Function continues to emit `X-Elysha-Signature` for defense in depth, but Make's native API-key authentication is the enforced request-authentication boundary.
 3. **Data Store lookup** uses `delivery_id` as the idempotency key. The store may contain only `delivery_id`, status, lease timestamps, attempt count, and redacted error code. It must not store the raw access key, email body, recipient email, stop token, or proposal content.
 4. **Router** returns success without another send when status is `sent`; rejects a still-active `processing` lease; and permits `new`, `failed`, or a stale `processing` record to proceed. A processing lease is stale after 20 minutes.
 5. **Data Store create `processing`** claims delivery before Gmail. A concurrent duplicate must not pass this step.
@@ -39,7 +39,7 @@ Custom Webhook → Secret/shape filter → Data Store lookup
 
 ## Scenario B — Elysha Works — Proposal Follow-up
 
-Scenario ID: pending creation after backend deployment. Schedule: every 15 minutes. Keep scheduling off until Scenario A, the backend, and all suppression tests are verified.
+Scenario ID: `6362311`. Schedule: every 15 minutes. The schedule is configured but the scenario is inactive. All ten HTTP modules use the rotated `X-Make-Automation-Secret` header. Make validation reports no setup errors or warnings; live response mappings and email delivery remain unverified until the controlled test is approved and run.
 
 Its modules, in exact order, are:
 
@@ -74,11 +74,10 @@ At +96 hours, Supabase—not Make—marks an unbooked, unstopped lead cold after
 - Anonymous Auth is enabled and CAPTCHA/Turnstile is production-ready.
 - Scenario IDs and non-secret connection display names are recorded in the deployment report.
 - Confidential scenario data is enabled when available.
-- HMAC rejection, idempotency, failure recovery, booking suppression, stop suppression, and three templates passed controlled tests.
+- API-key rejection, idempotency, failure recovery, booking suppression, stop suppression, and three templates passed controlled tests.
 - Scenario A is activated first; Scenario B scheduling is activated only after Scenario A succeeds.
 - Firebase Hosting is deployed separately only after its own branch, key-rotation, and target checks pass.
 
 ## Rollback
 
 Deactivate both scenarios, revoke the Make webhook and automation secret values, then disable Edge delivery while retaining database records and audit history. Do not delete leads, proposal state, bookings, or analytics attribution during automation rollback.
-

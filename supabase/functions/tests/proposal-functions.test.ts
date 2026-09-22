@@ -415,6 +415,10 @@ Deno.test("Make delivery signs the exact minimum-data body without putting the s
   }
   const headers = new Headers(captured?.headers);
   const body = JSON.parse(String(captured?.body)) as Record<string, unknown>;
+  assertEquals(
+    headers.get("x-make-apikey"),
+    "webhook-secret-for-tests-1234567890",
+  );
   assert(headers.get("x-elysha-signature")?.startsWith("sha256="));
   assert(!String(captured?.body).includes("webhook-secret-for-tests"));
   assertEquals(body.delivery_id, "70000000-0000-4000-8000-000000000001");
