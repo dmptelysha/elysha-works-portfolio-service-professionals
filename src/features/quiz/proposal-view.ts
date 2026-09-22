@@ -1,0 +1,1 @@
+export * from "../../../supabase/functions/_shared/quiz-engine/proposal-view.ts";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateRecommendation, validateAnswers } from "@/features/quiz/cortex";
+import { calculateRecommendation, SCORING_RULES, validateAnswers } from "@/features/quiz/cortex";
 import type { AudienceKey, CortexInput, QuizAnswers } from "@/features/quiz/types";
 
 const complete = (
@@ -44,6 +44,30 @@ const serviceBooking = complete("service_businesses", {
 });
 
 describe("cortex-local-v0.1 validation and aggregation", () => {
+  it("publishes complete server-portable scoring metadata", () => {
+    expect(SCORING_RULES).toMatchObject({
+      engineVersion: "cortex-local-v0.1",
+      questionSetVersion: "portfolio-qualifier-v0.1",
+      catalogVersion: "portfolio-catalog-v0.1",
+      perQuestionDimensionCap: 3,
+      qualifyingSolutionScore: 4,
+      feasibilityConstraints: {
+        hardCustomSignals: ["inventory", "multiple_roles"],
+        pairedCustomSignals: ["portal", "dashboard"],
+      },
+      offerThresholds: {
+        platformGrowthComplexity: 5,
+        platformScaleComplexity: 10,
+        customFoundationComplexity: 5,
+        customGrowthComplexity: 9,
+        customCompleteComplexity: 13,
+      },
+    });
+    expect(Object.keys(SCORING_RULES.signalWeights)).toHaveLength(22);
+    expect(Object.keys(SCORING_RULES.tieBreaks)).toEqual(["websiteVsFunnel", "automationVsCrm", "platform"]);
+    expect(Object.keys(SCORING_RULES.addonDisposition)).toEqual(["included", "priced", "scopeReview"]);
+  });
+
   it("validates complete answers and reports missing required questions", () => {
     expect(validateAnswers(coachProgram)).toEqual({ valid: true, missingQuestionKeys: [] });
     expect(validateAnswers({ ...coachProgram, answers: { q1_goal: coachProgram.answers.q1_goal } })).toEqual({

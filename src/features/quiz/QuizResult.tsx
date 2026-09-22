@@ -2,10 +2,18 @@ import { PROJECTS } from "@/data/projects";
 
 import { RoadmapComparison } from "./RoadmapComparison";
 import { RoadmapSelectionSummary } from "./RoadmapSelectionSummary";
-import type { CortexResult, ReadinessLevel, RoadmapSelection, SolutionType } from "./types";
+import type {
+  CortexResult,
+  ProposalDraftViewModel,
+  ProposalViewModel,
+  ReadinessLevel,
+  RoadmapSelection,
+  SolutionType,
+} from "./types";
 
 interface QuizResultProps {
   result: CortexResult;
+  proposal?: ProposalDraftViewModel | ProposalViewModel;
   selection: RoadmapSelection;
   onSelect: (selection: RoadmapSelection) => void;
   onStartOver: () => void;
@@ -27,8 +35,99 @@ const readinessNames: Record<ReadinessLevel, string> = {
   researching: "Researching for later",
 };
 
-export function QuizResult({ result, selection, onSelect, onStartOver, persistenceAvailable }: QuizResultProps) {
+export function QuizResult({ result, proposal, selection, onSelect, onStartOver, persistenceAvailable }: QuizResultProps) {
   const relevantProjects = PROJECTS.filter((project) => project.audienceKeys.includes(result.audienceKey)).slice(0, 2);
+
+  if (proposal) {
+    const completeTier = proposal.tiers.find((tier) => tier.tierKey === "complete");
+    const completeVariant = completeTier?.variants.find(
+      (variant) => variant.platform === selection.platform && variant.feasibility.available,
+    ) ?? completeTier?.variants.find((variant) => variant.feasibility.available);
+
+    return (
+      <article className="quiz-result" aria-labelledby="result-title">
+        <header className="result-hero">
+          <p className="quiz-kicker">Your personalized roadmap</p>
+          <h1 id="result-title">{proposal.client.firstName}’s roadmap for {proposal.client.businessName}</h1>
+          <p>{proposal.recommendation.title}</p>
+          <strong className="result-confidence result-confidence--standard">Server-ready recommendation</strong>
+          <span>Review your path, compare the three working options, then create your protected 3-day proposal.</span>
+        </header>
+
+        <div className="result-grid">
+          <section className="result-card result-card--wide" aria-labelledby="point-a-title">
+            <p className="result-number">01 · Point A</p>
+            <h2 id="point-a-title">{proposal.pointA.heading}</h2>
+            <p>{proposal.pointA.summary}</p>
+            <ul className="result-simple-list">{proposal.pointA.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+          </section>
+
+          <section className="result-card result-card--wide result-card--gold" aria-labelledby="point-b-title">
+            <p className="result-number">02 · Point B</p>
+            <h2 id="point-b-title">{proposal.pointB.heading}</h2>
+            <p>{proposal.pointB.summary}</p>
+            <ul className="result-simple-list">{proposal.pointB.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+          </section>
+
+          <section className="result-card result-card--wide" aria-labelledby="recommended-path-title">
+            <p className="result-number">03 · Recommended path</p>
+            <h2 id="recommended-path-title">{proposal.recommendation.title}</h2>
+            <p>{proposal.recommendation.reason}</p>
+            <strong className="result-price">
+              {proposal.recommendation.offerName}: ${proposal.recommendation.basePriceUsd.toLocaleString("en-US")}
+            </strong>
+          </section>
+
+          <div className="result-card result-card--wide result-card--comparison">
+            <RoadmapComparison result={result} selection={selection} onSelect={onSelect} />
+          </div>
+
+          <div className="result-card result-card--wide result-card--selection">
+            <RoadmapSelectionSummary result={result} selection={selection} />
+          </div>
+
+          <section className="result-card result-card--wide" aria-labelledby="complete-advantage-title">
+            <p className="result-number">06 · Relevant expansion</p>
+            <h2 id="complete-advantage-title">How Complete can exceed the requirement</h2>
+            <p>{completeTier?.promise}</p>
+            {completeVariant ? (
+              <ul className="result-simple-list">
+                {completeVariant.offer.includedFeatures.slice(0, 4).map((feature) => <li key={feature}>{feature}</li>)}
+              </ul>
+            ) : null}
+          </section>
+
+          <section className="result-card result-card--wide" aria-labelledby="work-title">
+            <p className="result-number">07 · Relevant work</p>
+            <h2 id="work-title">Related work</h2>
+            <div className="result-projects">
+              {relevantProjects.map((project) => (
+                <article key={project.slug}><span>{project.kind}</span><h3>{project.title}</h3><p>{project.summary}</p></article>
+              ))}
+            </div>
+          </section>
+
+          <section className="result-card result-card--next result-card--wide" aria-labelledby="next-title">
+            <p className="result-number">08 · Discovery call</p>
+            <h2 id="next-title">Turn the roadmap into a practical scope</h2>
+            <p>Discuss the recommendation, confirm the final scope, and decide whether the next step is a fit.</p>
+            <a className="quiz-primary" href="/booking/">Book a Discovery Call <span aria-hidden="true">→</span></a>
+          </section>
+        </div>
+
+        <footer className="result-control">
+          <div>
+            <p className="result-number">Proposal access</p>
+            <h2>{proposal.expiresAt ? "Your protected proposal is active" : "Create your protected 3-day proposal"}</h2>
+            <p>{proposal.expiresAt
+              ? `Access expires at ${new Date(proposal.expiresAt).toLocaleString("en-US")}.`
+              : "Your exact 72-hour expiration begins only after the initial proposal email is delivered."}</p>
+          </div>
+          <button className="quiz-back" onClick={onStartOver} type="button">Start a new assessment</button>
+        </footer>
+      </article>
+    );
+  }
 
   return (
     <article className="quiz-result" aria-labelledby="result-title">
