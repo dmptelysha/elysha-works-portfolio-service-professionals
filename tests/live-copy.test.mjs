@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -84,6 +84,16 @@ test("the root layout no longer injects the legacy runtime", () => {
   }
 });
 
+test("the local quiz feature has no Supabase or database client boundary", () => {
+  const quizRoot = fromRoot("src/features/quiz");
+  const source = readdirSync(quizRoot, { recursive: true })
+    .filter((file) => /\.(?:ts|tsx)$/.test(String(file)))
+    .map((file) => readFileSync(join(quizRoot, String(file)), "utf8"))
+    .join("\n");
+
+  assert.doesNotMatch(source, /@supabase|supabase-js|\.from\s*\(|\/rest\/v1|service_role/i);
+});
+
 test("Firebase Hosting serves the Next static export from out", () => {
   const firebase = JSON.parse(readFileSync(fromRoot("firebase.json"), "utf8"));
   assert.equal(firebase.hosting.public, "out");
@@ -104,6 +114,7 @@ test("Firebase Hosting serves the Next static export from out", () => {
 test("the static export contains the homepage and live auxiliary routes", () => {
   const expected = [
     "out/index.html",
+    "out/quiz/index.html",
     "out/booking/index.html",
     "out/thank-you/index.html",
     "out/ai-usage-policy/index.html",
