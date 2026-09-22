@@ -115,6 +115,9 @@ describe("cortex-local-v0.1 locked outcomes", () => {
     expect(result.recommendedSolutionTitle).toBe("Enrollment Funnel");
     expect(result.recommendedPlatform).toBe("systeme_io");
     expect(result.recommendedOfferKey).toBe("platform_growth");
+    expect(result.recommendedOfferName).toBe("Growth System");
+    expect(result.recommendedOfferIncludedFeatures.length).toBeGreaterThan(0);
+    expect(result.audienceLabel).toBe("Book and Enroll");
     expect(result.readinessLevel).toBe("within_30_days");
     expect(result.basePriceUsd).toBe(2500);
   });

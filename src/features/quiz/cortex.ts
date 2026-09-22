@@ -350,6 +350,21 @@ export function calculateRecommendation(input: CortexInput): CortexResult {
   if (!offer) throw new Error(`Unknown offer key ${offerKey}`);
   const q8Options = aggregated.normalized.get("q8_support") ?? [];
   const pricing = resolvePricing(route, offerKey, q8Options);
+  const includedKeys = new Set(pricing.includedCapabilities);
+  const pricedKeys = new Set(pricing.pricedAddons.map((item) => item.addonKey));
+  const selectedSupportItems = pricing.selectedAddons.map((key) => {
+    const addon = ADDON_BY_KEY.get(key);
+    if (!addon) throw new Error(`Unknown selected support key ${key}`);
+    return {
+      key,
+      label: addon.name,
+      disposition: includedKeys.has(key)
+        ? "included" as const
+        : pricedKeys.has(key)
+          ? "priced" as const
+          : "scope_review" as const,
+    };
+  });
   const primaryScore = solutionValue(aggregated.solutions, primary);
   const supportingSolutionTypes = SOLUTIONS.filter(
     (solution) => solution !== primary && solutionValue(aggregated.solutions, solution) >= 4 && primaryScore - solutionValue(aggregated.solutions, solution) <= 2,
@@ -361,9 +376,13 @@ export function calculateRecommendation(input: CortexInput): CortexResult {
     questionSetVersion: QUESTION_SET_VERSION,
     catalogVersion: CATALOG_VERSION,
     audienceKey: input.audienceKey,
+    audienceLabel: aggregated.definition.resultLabel,
     recommendedBuildRoute: route,
     recommendedPlatform: platform,
     recommendedOfferKey: offerKey,
+    recommendedOfferName: offer.name,
+    recommendedOfferDescription: offer.description,
+    recommendedOfferIncludedFeatures: [...offer.includedFeatures],
     primarySolutionType: primary,
     supportingSolutionTypes,
     recommendedSolutionTitle: solutionTitle(primary, input, aggregated.flags),
@@ -371,6 +390,7 @@ export function calculateRecommendation(input: CortexInput): CortexResult {
     recommendationReason: `${offer.name} matches the required workflow and current system complexity without using readiness to reduce the scope.`,
     includedCapabilities: pricing.includedCapabilities,
     selectedAddons: pricing.selectedAddons,
+    selectedSupportItems,
     pricedAddons: pricing.pricedAddons,
     scopeReviewItems: pricing.scopeReviewItems,
     futurePhaseSuggestions: supportingSolutionTypes.map((solution) => `Consider ${solution.replace("_", " ")} support in a later approved phase.`),

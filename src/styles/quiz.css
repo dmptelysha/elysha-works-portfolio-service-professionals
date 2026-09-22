@@ -190,6 +190,7 @@
 .result-card > p:not(.result-number), .result-card li, .result-card dd { color: var(--portfolio-muted); line-height: 1.65; }
 .result-card--gold > p:not(.result-number) { color: rgba(5,6,6,.76); }
 .result-card--gold > strong { display: block; margin-top: 2rem; }
+.result-price { display: block; margin-top: 2rem; color: var(--portfolio-gold); font-size: clamp(1.2rem, 2vw, 1.8rem); }
 .snapshot-list { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1px; margin: 3rem 0 0; background: rgba(255,255,255,.14); }
 .snapshot-list div { padding: 1.4rem; background: #0b0c0b; }
 .snapshot-list dt { color: var(--portfolio-gold); font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; }
@@ -197,6 +198,12 @@
 .result-check-list { columns: 2; column-gap: 3rem; margin: 2.5rem 0 0; padding: 0; list-style: none; }
 .result-check-list li { break-inside: avoid; position: relative; padding: .55rem 0 .55rem 1.6rem; }
 .result-check-list li::before { content: "✓"; position: absolute; left: 0; color: var(--portfolio-gold); }
+.result-simple-list { display: grid; gap: .75rem; margin: 2rem 0 0; padding-left: 1.2rem; }
+.result-support-list { display: grid; gap: 0; margin: 2rem 0 0; padding: 0; list-style: none; }
+.result-support-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; padding: 1rem 0; border-top: 1px solid rgba(255,255,255,.13); }
+.result-support-list span { display: grid; gap: .35rem; }
+.result-support-list small { color: var(--portfolio-muted); line-height: 1.5; }
+.result-support-list li > small { color: var(--portfolio-gold); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .investment-lines { margin-top: 2.5rem; }
 .investment-lines div { display: flex; justify-content: space-between; gap: 2rem; padding: 1rem 0; border-top: 1px solid rgba(255,255,255,.13); }
 .investment-total { font-size: clamp(1.2rem, 2.2vw, 2rem); color: var(--portfolio-gold); }
@@ -206,7 +213,9 @@
 .result-projects span { color: var(--portfolio-gold); font-size: .68rem; text-transform: uppercase; letter-spacing: .12em; }
 .result-card--next { background: #11120f; }
 .result-card--next .quiz-primary { margin-top: 1.5rem; }
-.result-card--quiet { background: #080908; }
+.result-control { display: flex; align-items: center; justify-content: space-between; gap: 2rem; padding: clamp(2rem, 4vw, 3.5rem); border: 1px solid rgba(255,255,255,.14); border-top: 0; background: #080908; }
+.result-control h2 { margin: 0; font-size: clamp(1.6rem, 3vw, 2.8rem); letter-spacing: -.04em; }
+.result-control p:not(.result-number) { max-width: 44rem; color: var(--portfolio-muted); line-height: 1.6; }
 
 .quiz-loading { color: var(--portfolio-muted); }
 
@@ -221,6 +230,7 @@
   .result-check-list { columns: 1; }
   .snapshot-list { grid-template-columns: 1fr; }
   .result-card { min-height: 0; }
+  .result-control { align-items: flex-start; flex-direction: column; }
 }
 
 @media (max-width: 520px) {

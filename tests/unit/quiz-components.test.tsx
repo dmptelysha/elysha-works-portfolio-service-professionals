@@ -38,7 +38,26 @@ describe("local portfolio quiz", () => {
     }
 
     expect(await screen.findByRole("heading", { name: /your personalized roadmap/i })).toBeInTheDocument();
-    expect(screen.getByText(/recommended system/i)).toBeInTheDocument();
+    for (const block of [
+      "01 · Business snapshot",
+      "02 · Growth blocker",
+      "03 · Primary recommended solution",
+      "04 · Supporting components",
+      "05 · Build route and platform",
+      "06 · Recommended base offer",
+      "07 · Included capabilities",
+      "08 · Selected support",
+      "09 · Priced add-ons",
+      "10 · Scope-review items",
+      "11 · Itemized estimated project investment",
+      "12 · Recurring-cost notice",
+      "13 · Why this fits",
+      "14 · Suggested next phase",
+      "15 · Relevant projects",
+      "16 · Book a strategy call",
+    ]) {
+      expect(screen.getByText(block)).toBeInTheDocument();
+    }
     expect(screen.getByRole("heading", { name: /estimated project investment/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /book a strategy call/i })).toHaveAttribute("href", "/booking/");
     expect(window.location.href).toBe(initialUrl);

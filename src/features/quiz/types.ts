@@ -154,6 +154,12 @@ export interface ScopeReviewItem {
   reason: string;
 }
 
+export interface SelectedSupportItem {
+  key: string;
+  label: string;
+  disposition: "included" | "priced" | "scope_review";
+}
+
 export interface CortexInput {
   audienceKey: AudienceKey;
   answers: QuizAnswers;
@@ -169,9 +175,13 @@ export interface CortexResult {
   questionSetVersion: typeof QUESTION_SET_VERSION;
   catalogVersion: typeof CATALOG_VERSION;
   audienceKey: AudienceKey;
+  audienceLabel: string;
   recommendedBuildRoute: BuildRoute;
   recommendedPlatform: PlatformKey;
   recommendedOfferKey: string;
+  recommendedOfferName: string;
+  recommendedOfferDescription: string;
+  recommendedOfferIncludedFeatures: readonly string[];
   primarySolutionType: SolutionType;
   supportingSolutionTypes: readonly SolutionType[];
   recommendedSolutionTitle: string;
@@ -179,6 +189,7 @@ export interface CortexResult {
   recommendationReason: string;
   includedCapabilities: readonly string[];
   selectedAddons: readonly string[];
+  selectedSupportItems: readonly SelectedSupportItem[];
   pricedAddons: readonly PricedAddon[];
   scopeReviewItems: readonly ScopeReviewItem[];
   futurePhaseSuggestions: readonly string[];
