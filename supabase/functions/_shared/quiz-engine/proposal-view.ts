@@ -2,7 +2,7 @@ import { buildPointABSummary } from "./point-a-point-b.ts";
 import { buildRoadmapTiers, resolveRoadmapSelection } from "./roadmap-options.ts";
 import type {
   CortexResult,
-  LeadContactInput,
+  ClientIdentity,
   ProposalContentViewModel,
   ProposalDraftViewModel,
   ProposalViewModel,
@@ -11,15 +11,15 @@ import type {
 } from "./types.ts";
 
 function buildContent(
-  contact: LeadContactInput,
+  contact: ClientIdentity,
   answers: QuizAnswers,
   result: CortexResult,
   selection: RoadmapSelection,
 ): ProposalContentViewModel {
   const firstName = contact.firstName.trim();
   const businessName = contact.businessName.trim();
-  if (!firstName || !businessName || !contact.consent) {
-    throw new Error("Valid contact identity and consent are required");
+  if (!firstName || !businessName) {
+    throw new Error("Valid client identity is required");
   }
 
   resolveRoadmapSelection(result, selection);
@@ -44,7 +44,7 @@ function buildContent(
 }
 
 export function buildProposalDraft(
-  contact: LeadContactInput,
+  contact: ClientIdentity,
   answers: QuizAnswers,
   result: CortexResult,
   selection: RoadmapSelection,
@@ -53,7 +53,7 @@ export function buildProposalDraft(
 }
 
 export function buildProposalViewModel(
-  contact: LeadContactInput,
+  contact: ClientIdentity,
   answers: QuizAnswers,
   result: CortexResult,
   selection: RoadmapSelection,

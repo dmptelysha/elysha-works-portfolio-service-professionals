@@ -7,6 +7,7 @@ import { SITE_CONTENT } from "@/data/site-content";
 
 import { AudienceSelector } from "./AudienceSelector";
 import { calculateRecommendation } from "./cortex";
+import { LeadContactStep } from "./LeadContactStep";
 import {
   QUIZ_STORAGE_VERSION,
   QUIZ_TTL_MS,
@@ -15,6 +16,7 @@ import {
   saveQuizAttempt,
 } from "./persistence";
 import { QUIZ_DEFINITIONS } from "./questions";
+import { buildProposalDraft } from "./proposal-view";
 import { createInitialQuizState, quizReducer } from "./reducer";
 import { QuizQuestion } from "./QuizQuestion";
 import { QuizResult } from "./QuizResult";
@@ -23,6 +25,7 @@ import {
   CORTEX_VERSION,
   QUESTION_SET_VERSION,
   type AudienceKey,
+  type LeadContactInput,
   type SavedQuizAttempt,
 } from "./types";
 
@@ -34,7 +37,13 @@ function getBrowserStorage() {
   }
 }
 
-export function QuizExperience() {
+interface QuizExperienceProps {
+  onSubmitContact?: (contact: LeadContactInput) => Promise<void>;
+}
+
+const acceptContactLocally = async () => {};
+
+export function QuizExperience({ onSubmitContact = acceptContactLocally }: QuizExperienceProps = {}) {
   const [state, dispatch] = useReducer(quizReducer, undefined, createInitialQuizState);
   const [hydrated, setHydrated] = useState(false);
   const [persistenceAvailable, setPersistenceAvailable] = useState(true);
@@ -90,7 +99,7 @@ export function QuizExperience() {
   }, [state.resumeCandidate]);
 
   useEffect(() => {
-    if (!hydrated || !state.audienceKey || state.resumeCandidate) return;
+    if (!hydrated || !state.audienceKey || !state.clientIdentity || state.resumeCandidate) return;
     const now = new Date();
     const attempt: SavedQuizAttempt = {
       storageVersion: QUIZ_STORAGE_VERSION,
@@ -141,6 +150,9 @@ export function QuizExperience() {
 
   const definition = state.audienceKey ? QUIZ_DEFINITIONS[state.audienceKey] : null;
   const question = definition?.questions[state.currentQuestionIndex];
+  const proposal = state.result && state.roadmapSelection && state.clientIdentity
+    ? buildProposalDraft(state.clientIdentity, state.answers, state.result, state.roadmapSelection)
+    : undefined;
 
   return (
     <div className="quiz-page-shell">
@@ -156,6 +168,13 @@ export function QuizExperience() {
 
         {hydrated && state.screen === "audience" ? <AudienceSelector onSelect={chooseAudience} /> : null}
 
+        {hydrated && state.screen === "contact" ? (
+          <LeadContactStep onSubmit={async (contact) => {
+            await onSubmitContact(contact);
+            dispatch({ type: "CONTACT_ACCEPTED", contact });
+          }} />
+        ) : null}
+
         {hydrated && state.screen === "intro" && definition ? (
           <section className="quiz-stage quiz-intro" aria-labelledby="quiz-intro-title">
             <p className="quiz-kicker">{definition.label}</p>
@@ -165,8 +184,8 @@ export function QuizExperience() {
             </p>
             <div className="quiz-intro-notes">
               <span>About 2 minutes</span>
-              <span>No contact details required</span>
-              <span>{persistenceAvailable ? "Saved on this device for 30 days" : "Recovery is unavailable in this browser"}</span>
+              <span>Personalized to your business</span>
+              <span>{persistenceAvailable ? "Saved on this device for 3 days" : "Recovery is unavailable in this browser"}</span>
             </div>
             <button className="quiz-primary" onClick={() => dispatch({ type: "CONTINUE_INTRO" })} type="button">
               Start My Assessment <span aria-hidden="true">→</span>
@@ -215,6 +234,7 @@ export function QuizExperience() {
         {hydrated && state.screen === "result" && state.result ? (
           <QuizResult
             result={state.result}
+            proposal={proposal}
             selection={state.roadmapSelection!}
             onSelect={(selection) => dispatch({ type: "SELECT_ROADMAP", selection })}
             onStartOver={startOver}
@@ -231,7 +251,7 @@ export function QuizExperience() {
 
       <footer className="quiz-footer">
         <Link href="/" prefetch={false}>Back to portfolio</Link>
-        <span>Local assessment · No contact details required</span>
+        <span>Contact-qualified assessment · 3-day recovery</span>
         <nav aria-label="Quiz footer">
           {SITE_CONTENT.footer.legal.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}
         </nav>
@@ -242,7 +262,7 @@ export function QuizExperience() {
           <section ref={resumeDialogRef} className="resume-dialog" role="dialog" aria-modal="true" aria-labelledby="resume-title">
             <p className="quiz-kicker">Saved on this device</p>
             <h2 id="resume-title">Continue your roadmap?</h2>
-            <p>We found an unfinished assessment from the last 30 days.</p>
+            <p>We found an unfinished assessment from the last 3 days.</p>
             <div className="resume-actions">
               <button ref={resumeButtonRef} className="quiz-primary" onClick={() => dispatch({ type: "RESUME" })} type="button">Resume</button>
               <button className="quiz-secondary" onClick={startOver} type="button">Start over</button>

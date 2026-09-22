@@ -2,7 +2,9 @@ import { QUIZ_DEFINITIONS } from "./questions";
 import { defaultRoadmapSelection, resolveRoadmapSelection } from "./roadmap-options";
 import type {
   AudienceKey,
+  ClientIdentity,
   CortexResult,
+  LeadContactInput,
   QuizAnswers,
   RoadmapSelection,
   SavedQuizAttempt,
@@ -10,6 +12,7 @@ import type {
 
 export type QuizScreen =
   | "audience"
+  | "contact"
   | "intro"
   | "question"
   | "calculating"
@@ -23,6 +26,8 @@ export interface QuizState {
   currentQuestionIndex: number;
   result: CortexResult | null;
   roadmapSelection: RoadmapSelection | null;
+  contact: LeadContactInput | null;
+  clientIdentity: ClientIdentity | null;
   errorMessage: string | null;
   validationMessage: string | null;
   resumeCandidate: SavedQuizAttempt | null;
@@ -34,6 +39,7 @@ export type QuizAction =
   | { type: "DISMISS_RESUME" }
   | { type: "START_OVER" }
   | { type: "SELECT_AUDIENCE"; audienceKey: AudienceKey }
+  | { type: "CONTACT_ACCEPTED"; contact: LeadContactInput }
   | { type: "CONTINUE_INTRO" }
   | { type: "ANSWER_SINGLE"; questionKey: string; optionKey: string }
   | { type: "TOGGLE_MULTIPLE"; questionKey: string; optionKey: string }
@@ -52,6 +58,8 @@ export function createInitialQuizState(): QuizState {
     currentQuestionIndex: 0,
     result: null,
     roadmapSelection: null,
+    contact: null,
+    clientIdentity: null,
     errorMessage: null,
     validationMessage: null,
     resumeCandidate: null,
@@ -75,6 +83,8 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         currentQuestionIndex: attempt.currentQuestionIndex,
         result: attempt.result,
         roadmapSelection: attempt.roadmapSelection,
+        contact: null,
+        clientIdentity: null,
         errorMessage: null,
         validationMessage: null,
         resumeCandidate: null,
@@ -85,11 +95,24 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
     case "SELECT_AUDIENCE":
       return {
         ...createInitialQuizState(),
-        screen: "intro",
+        screen: "contact",
         audienceKey: action.audienceKey,
       };
+    case "CONTACT_ACCEPTED": {
+      if (!state.audienceKey || state.screen !== "contact") return state;
+      const firstName = action.contact.firstName.trim();
+      const businessName = action.contact.businessName.trim();
+      const email = action.contact.email.trim().toLowerCase();
+      if (!firstName || !businessName || !email || !action.contact.consent) return state;
+      return {
+        ...state,
+        screen: "intro",
+        contact: { firstName, businessName, email, consent: true },
+        clientIdentity: { firstName, businessName },
+      };
+    }
     case "CONTINUE_INTRO":
-      if (!state.audienceKey) return state;
+      if (!state.audienceKey || !state.clientIdentity) return state;
       return { ...state, screen: "question", currentQuestionIndex: 0 };
     case "ANSWER_SINGLE":
       return {

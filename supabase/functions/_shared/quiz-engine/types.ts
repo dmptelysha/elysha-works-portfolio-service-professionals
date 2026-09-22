@@ -57,6 +57,11 @@ export interface LeadContactInput {
   consent: true;
 }
 
+export interface ClientIdentity {
+  firstName: string;
+  businessName: string;
+}
+
 export interface PointABSummary {
   pointA: { heading: string; summary: string; evidence: readonly string[] };
   pointB: { heading: string; summary: string; evidence: readonly string[] };
@@ -291,7 +296,7 @@ export interface ProposalViewModel extends ProposalContentViewModel {
 export type QuizStatus = "in_progress" | "completed";
 
 export interface SavedQuizAttempt {
-  storageVersion: 2;
+  storageVersion: 3;
   cortexVersion: typeof CORTEX_VERSION;
   questionSetVersion: typeof QUESTION_SET_VERSION;
   catalogVersion: typeof CATALOG_VERSION;

@@ -11,8 +11,8 @@ import {
 } from "./types";
 
 export const QUIZ_STORAGE_KEY = "elysha-works:quiz-attempt:v1";
-export const QUIZ_STORAGE_VERSION = 2 as const;
-export const QUIZ_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export const QUIZ_STORAGE_VERSION = 3 as const;
+export const QUIZ_TTL_MS = 72 * 60 * 60 * 1000;
 
 export type LoadQuizAttemptResult =
   | { status: "valid"; attempt: SavedQuizAttempt }
@@ -62,22 +62,13 @@ function isRoadmapSelection(value: unknown): value is RoadmapSelection {
   return isRecord(value) && isOneOf(value.tierKey, TIERS) && isOneOf(value.platform, PLATFORMS) && isString(value.offerKey);
 }
 
-function normalizeStoredRecord(value: Record<string, unknown>) {
+function normalizeStoredRecord(value: Record<string, unknown>, now: number) {
   const normalized: Record<string, unknown> = { ...value };
-  if (value.storageVersion === 1) {
+  if (value.storageVersion === 2) {
     normalized.storageVersion = QUIZ_STORAGE_VERSION;
-    if (isRecord(value.result)) {
-      const answers = isRecord(value.answers) ? value.answers : {};
-      const selectedSupportOptionKeys = isStringArray(answers.q8_support) ? answers.q8_support : [];
-      const technicalConstraintSignals = Array.isArray(value.result.explanationTrace)
-        ? [...new Set(value.result.explanationTrace.flatMap((entry) => isRecord(entry) && isStringArray(entry.flags) ? entry.flags : []))]
-            .filter((signal) => ["portal", "dashboard", "custom_orders", "approvals", "inventory", "multiple_roles", "order_tracking"].includes(signal))
-        : [];
-      normalized.result = {
-        ...value.result,
-        selectedSupportOptionKeys: isStringArray(value.result.selectedSupportOptionKeys) ? value.result.selectedSupportOptionKeys : selectedSupportOptionKeys,
-        technicalConstraintSignals: isStringArray(value.result.technicalConstraintSignals) ? value.result.technicalConstraintSignals : technicalConstraintSignals,
-      };
+    const existingExpiry = isString(value.expiresAt) ? Date.parse(value.expiresAt) : Number.NaN;
+    if (Number.isFinite(existingExpiry)) {
+      normalized.expiresAt = new Date(Math.min(existingExpiry, now + QUIZ_TTL_MS)).toISOString();
     }
   }
   normalized.roadmapSelection = isRoadmapSelection(value.roadmapSelection) ? value.roadmapSelection : null;
@@ -234,14 +225,18 @@ export function loadQuizAttempt(
     removeInvalidAttempt();
     return { status: "discarded", reason: "invalid_shape" };
   }
-  if (![1, QUIZ_STORAGE_VERSION].includes(Number(parsed.storageVersion)) ||
+  if (![2, QUIZ_STORAGE_VERSION].includes(Number(parsed.storageVersion)) ||
       parsed.cortexVersion !== CORTEX_VERSION ||
       parsed.questionSetVersion !== QUESTION_SET_VERSION ||
       parsed.catalogVersion !== CATALOG_VERSION) {
     removeInvalidAttempt();
     return { status: "discarded", reason: "version_mismatch" };
   }
-  const normalized = normalizeStoredRecord(parsed);
+  if (parsed.storageVersion === 2 && parsed.status !== "completed") {
+    removeInvalidAttempt();
+    return { status: "discarded", reason: "invalid_shape" };
+  }
+  const normalized = normalizeStoredRecord(parsed, now);
   if (!hasCompatibleVersions(normalized) || !isSavedAttempt(normalized)) {
     removeInvalidAttempt();
     return { status: "discarded", reason: "invalid_shape" };
@@ -270,7 +265,22 @@ export function saveQuizAttempt(
   attempt: SavedQuizAttempt,
 ) {
   try {
-    storage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(attempt));
+    const safeAttempt: SavedQuizAttempt = {
+      storageVersion: attempt.storageVersion,
+      cortexVersion: attempt.cortexVersion,
+      questionSetVersion: attempt.questionSetVersion,
+      catalogVersion: attempt.catalogVersion,
+      status: attempt.status,
+      audienceKey: attempt.audienceKey,
+      answers: attempt.answers,
+      currentQuestionIndex: attempt.currentQuestionIndex,
+      result: attempt.result,
+      roadmapSelection: attempt.roadmapSelection,
+      createdAt: attempt.createdAt,
+      updatedAt: attempt.updatedAt,
+      expiresAt: attempt.expiresAt,
+    };
+    storage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(safeAttempt));
     return true;
   } catch {
     return false;

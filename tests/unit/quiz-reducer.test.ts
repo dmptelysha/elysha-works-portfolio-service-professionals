@@ -18,7 +18,7 @@ const result = {
   selectedSupportOptionKeys: [],
 } as unknown as CortexResult;
 const saved = {
-  storageVersion: 2,
+  storageVersion: 3,
   cortexVersion: CORTEX_VERSION,
   questionSetVersion: QUESTION_SET_VERSION,
   catalogVersion: CATALOG_VERSION,
@@ -34,10 +34,16 @@ const saved = {
 } satisfies SavedQuizAttempt;
 
 describe("quiz reducer", () => {
-  it("selects an audience and enters the first question from the intro", () => {
+  it("requires accepted contact details between audience and intro", () => {
     let state = createInitialQuizState();
     state = quizReducer(state, { type: "SELECT_AUDIENCE", audienceKey: "coaches_educators" });
+    expect(state.screen).toBe("contact");
+    state = quizReducer(state, {
+      type: "CONTACT_ACCEPTED",
+      contact: { firstName: "Mara", businessName: "Mara Consulting", email: "mara@example.com", consent: true },
+    });
     expect(state.screen).toBe("intro");
+    expect(state.clientIdentity).toEqual({ firstName: "Mara", businessName: "Mara Consulting" });
     state = quizReducer(state, { type: "CONTINUE_INTRO" });
     expect(state.screen).toBe("question");
     expect(state.currentQuestionIndex).toBe(0);
@@ -45,6 +51,7 @@ describe("quiz reducer", () => {
 
   it("supports single and multi-select answers, Next, Back, and editing", () => {
     let state = quizReducer(createInitialQuizState(), { type: "SELECT_AUDIENCE", audienceKey: "coaches_educators" });
+    state = quizReducer(state, { type: "CONTACT_ACCEPTED", contact: { firstName: "Ely", businessName: "Ely Works", email: "ely@example.com", consent: true } });
     state = quizReducer(state, { type: "CONTINUE_INTRO" });
     state = quizReducer(state, { type: "ANSWER_SINGLE", questionKey: "q1_goal", optionKey: "coach_goal_book_calls" });
     state = quizReducer(state, { type: "NEXT" });
@@ -61,6 +68,7 @@ describe("quiz reducer", () => {
 
   it("does not advance without a valid current answer", () => {
     let state = quizReducer(createInitialQuizState(), { type: "SELECT_AUDIENCE", audienceKey: "service_businesses" });
+    state = quizReducer(state, { type: "CONTACT_ACCEPTED", contact: { firstName: "Mara", businessName: "Mara Consulting", email: "mara@example.com", consent: true } });
     state = quizReducer(state, { type: "CONTINUE_INTRO" });
     state = quizReducer(state, { type: "NEXT" });
     expect(state.currentQuestionIndex).toBe(0);

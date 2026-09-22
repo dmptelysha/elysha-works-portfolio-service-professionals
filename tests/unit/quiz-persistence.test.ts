@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   QUIZ_STORAGE_KEY,
+  QUIZ_STORAGE_VERSION,
   QUIZ_TTL_MS,
   clearQuizAttempt,
   loadQuizAttempt,
   saveQuizAttempt,
 } from "@/features/quiz/persistence";
+import { calculateRecommendation } from "@/features/quiz/cortex";
+import { defaultRoadmapSelection } from "@/features/quiz/roadmap-options";
 import {
   CATALOG_VERSION,
   CORTEX_VERSION,
@@ -32,7 +35,7 @@ class ThrowingStorage extends MemoryStorage {
 
 const NOW = Date.UTC(2026, 8, 22, 0, 0, 0);
 const attempt = (overrides: Partial<SavedQuizAttempt> = {}): SavedQuizAttempt => ({
-  storageVersion: 2,
+  storageVersion: 3,
   cortexVersion: CORTEX_VERSION,
   questionSetVersion: QUESTION_SET_VERSION,
   catalogVersion: CATALOG_VERSION,
@@ -48,6 +51,29 @@ const attempt = (overrides: Partial<SavedQuizAttempt> = {}): SavedQuizAttempt =>
   ...overrides,
 });
 
+const completeAnswers = {
+  q1_goal: ["coach_goal_enroll_students"],
+  q2_setup: ["coach_setup_unclear_website"],
+  q3_blocker: ["coach_blocker_questions_no_booking"],
+  q4_capabilities: ["coach_capability_booking"],
+  q5_complexity: ["coach_complexity_one_offer"],
+  q6_readiness: ["readiness_ready_now"],
+  q7_platform: ["platform_recommend"],
+  q8_support: ["support_client_assets"],
+} as const;
+
+const completedAttempt = (overrides: Partial<SavedQuizAttempt> = {}): SavedQuizAttempt => {
+  const result = calculateRecommendation({ audienceKey: "coaches_educators", answers: completeAnswers });
+  return attempt({
+    status: "completed",
+    currentQuestionIndex: 7,
+    answers: completeAnswers,
+    result,
+    roadmapSelection: defaultRoadmapSelection(result),
+    ...overrides,
+  });
+};
+
 describe("quiz local persistence", () => {
   it("round-trips a valid versioned attempt", () => {
     const storage = new MemoryStorage();
@@ -55,7 +81,21 @@ describe("quiz local persistence", () => {
     expect(loadQuizAttempt(storage, NOW)).toEqual({ status: "valid", attempt: attempt() });
   });
 
-  it("keeps an attempt valid exactly at the 30-day boundary", () => {
+  it("never serializes contact identity or email into browser storage", () => {
+    const storage = new MemoryStorage();
+    saveQuizAttempt(storage, {
+      ...attempt(),
+      clientIdentity: { firstName: "Mara", businessName: "Mara Coaching" },
+      contact: { email: "mara@example.com" },
+    } as SavedQuizAttempt);
+    const raw = storage.getItem(QUIZ_STORAGE_KEY) ?? "";
+    expect(raw).not.toContain("Mara");
+    expect(raw).not.toContain("Mara Coaching");
+    expect(raw).not.toContain("mara@example.com");
+  });
+
+  it("uses a 72-hour recovery window and keeps an attempt valid at the exact boundary", () => {
+    expect(QUIZ_TTL_MS).toBe(72 * 60 * 60 * 1000);
     const storage = new MemoryStorage();
     saveQuizAttempt(storage, attempt({ expiresAt: new Date(NOW).toISOString() }));
     expect(loadQuizAttempt(storage, NOW).status).toBe("valid");
@@ -65,9 +105,9 @@ describe("quiz local persistence", () => {
     const cases: Array<[string, string, string]> = [
       ["expired", JSON.stringify(attempt({ expiresAt: new Date(NOW - 1).toISOString() })), "expired"],
       ["corrupt", "{not-json", "corrupt_json"],
-      ["missing", JSON.stringify({ storageVersion: 2 }), "invalid_shape"],
+      ["missing", JSON.stringify({ storageVersion: 3 }), "invalid_shape"],
       ["audience", JSON.stringify({ ...attempt(), audienceKey: "unknown" }), "invalid_shape"],
-      ["storage version", JSON.stringify({ ...attempt(), storageVersion: 3 }), "version_mismatch"],
+      ["storage version", JSON.stringify({ ...attempt(), storageVersion: 4 }), "version_mismatch"],
       ["cortex version", JSON.stringify({ ...attempt(), cortexVersion: "future" }), "version_mismatch"],
       ["question version", JSON.stringify({ ...attempt(), questionSetVersion: "future" }), "version_mismatch"],
       ["catalog version", JSON.stringify({ ...attempt(), catalogVersion: "future" }), "version_mismatch"],
@@ -112,94 +152,29 @@ describe("quiz local persistence", () => {
 
   it("preserves a completed immutable result snapshot", () => {
     const storage = new MemoryStorage();
-    const completed = attempt({
-      status: "completed",
-      currentQuestionIndex: 7,
-      answers: {
-        q1_goal: ["coach_goal_enroll_students"],
-        q2_setup: ["coach_setup_unclear_website"],
-        q3_blocker: ["coach_blocker_questions_no_booking"],
-        q4_capabilities: ["coach_capability_booking"],
-        q5_complexity: ["coach_complexity_one_offer"],
-        q6_readiness: ["readiness_ready_now"],
-        q7_platform: ["platform_recommend"],
-        q8_support: ["support_client_assets"],
-      },
-      result: {
-        cortexVersion: CORTEX_VERSION,
-        questionSetVersion: QUESTION_SET_VERSION,
-        catalogVersion: CATALOG_VERSION,
-        audienceKey: "coaches_educators",
-        audienceLabel: "Book and Enroll",
-        recommendedBuildRoute: "platform",
-        recommendedPlatform: "systeme_io",
-        recommendedOfferKey: "platform_growth",
-        recommendedOfferName: "Growth System",
-        recommendedOfferDescription: "Snapshot description",
-        recommendedOfferIncludedFeatures: ["Snapshot feature"],
-        primarySolutionType: "funnel",
-        supportingSolutionTypes: [],
-        recommendedSolutionTitle: "Enrollment Funnel",
-        diagnosisSummary: "Snapshot",
-        recommendationReason: "Reason",
-        technicalConstraintSignals: [],
-        selectedSupportOptionKeys: ["support_client_assets"],
-        includedCapabilities: [],
-        selectedAddons: [],
-        selectedSupportItems: [],
-        pricedAddons: [],
-        scopeReviewItems: [],
-        futurePhaseSuggestions: [],
-        scores: { acquisitionNeed: 1, automationNeed: 1, systemComplexity: 1, website: 1, funnel: 5, automation: 1, crm: 1, customApp: 0, systeme: 5, ghl: 1, customBuild: 0 },
-        readinessLevel: "ready_now",
-        basePriceUsd: 2500,
-        addonTotalUsd: 0,
-        adjustmentTotalUsd: 0,
-        estimatedProjectInvestmentUsd: 2500,
-        estimatedRecurringCosts: [],
-        explanationTrace: [],
-        decisionTrace: [
-          { ruleKey: "primary_solution", outcome: "funnel", reason: "Qualified score." },
-          { ruleKey: "build_route", outcome: "platform", reason: "No custom requirement." },
-          { ruleKey: "platform", outcome: "systeme_io", reason: "Best fit." },
-          { ruleKey: "base_offer", outcome: "platform_growth", reason: "Complexity match." },
-          { ruleKey: "pricing", outcome: "2500", reason: "Approved base price." },
-        ],
-        confidenceLevel: "standard",
-        confidenceMessage: "Qualified recommendation.",
-      },
-      roadmapSelection: { tierKey: "advanced", platform: "systeme_io", offerKey: "platform_growth" },
-    });
+    const completed = completedAttempt();
     saveQuizAttempt(storage, completed);
     expect(loadQuizAttempt(storage, NOW)).toEqual({ status: "valid", attempt: completed });
   });
 
-  it("normalizes version-one attempts and ignores tampered selections", () => {
-    const storage = new MemoryStorage();
-    const completed = attempt({
-      status: "completed",
-      currentQuestionIndex: 7,
-      answers: {
-        q1_goal: ["coach_goal_enroll_students"], q2_setup: ["coach_setup_unclear_website"],
-        q3_blocker: ["coach_blocker_questions_no_booking"], q4_capabilities: ["coach_capability_booking"],
-        q5_complexity: ["coach_complexity_one_offer"], q6_readiness: ["readiness_ready_now"],
-        q7_platform: ["platform_recommend"], q8_support: ["support_client_assets"],
-      },
-      result: null,
-    });
-    const result = {
-      ...(attempt({ status: "completed", currentQuestionIndex: 7, answers: completed.answers }) as SavedQuizAttempt),
-    };
-    const source = JSON.parse(JSON.stringify(attempt())) as Record<string, unknown>;
-    source.storageVersion = 1;
-    source.roadmapSelection = { tierKey: "basic", platform: "custom_app", offerKey: "platform_scale" };
-    storage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(source));
-    const loaded = loadQuizAttempt(storage, NOW);
+  it("discards legacy pre-contact progress but preserves completed v2 results without extending expiry", () => {
+    const inProgressStorage = new MemoryStorage();
+    inProgressStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify({ ...attempt(), storageVersion: 2 }));
+    expect(loadQuizAttempt(inProgressStorage, NOW)).toEqual({ status: "discarded", reason: "invalid_shape" });
+
+    const completedStorage = new MemoryStorage();
+    const legacyExpiry = new Date(NOW + (10 * QUIZ_TTL_MS)).toISOString();
+    completedStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify({
+      ...completedAttempt({ expiresAt: legacyExpiry }),
+      storageVersion: 2,
+      clientIdentity: undefined,
+    }));
+    const loaded = loadQuizAttempt(completedStorage, NOW);
     expect(loaded.status).toBe("valid");
     if (loaded.status === "valid") {
-      expect(loaded.attempt.storageVersion).toBe(2);
-      expect(loaded.attempt.roadmapSelection).toBeNull();
+      expect(loaded.attempt.storageVersion).toBe(QUIZ_STORAGE_VERSION);
+      expect("clientIdentity" in loaded.attempt).toBe(false);
+      expect(loaded.attempt.expiresAt).toBe(new Date(NOW + QUIZ_TTL_MS).toISOString());
     }
-    expect(result).toBeDefined();
   });
 });

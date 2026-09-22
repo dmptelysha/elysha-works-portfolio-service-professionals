@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QuizExperience } from "@/features/quiz/QuizExperience";
+import { LeadContactStep } from "@/features/quiz/LeadContactStep";
 import { QUIZ_DEFINITIONS } from "@/features/quiz/questions";
 import { QUIZ_STORAGE_KEY, QUIZ_TTL_MS } from "@/features/quiz/persistence";
 import {
@@ -12,10 +13,56 @@ import {
   type SavedQuizAttempt,
 } from "@/features/quiz/types";
 
+async function completeContactStep(
+  user: ReturnType<typeof userEvent.setup>,
+  values = { firstName: "Mara", businessName: "Mara Consulting", email: "Mara@Example.com" },
+) {
+  await user.type(screen.getByLabelText(/first name/i), values.firstName);
+  await user.type(screen.getByLabelText(/business name/i), values.businessName);
+  await user.type(screen.getByLabelText(/^email/i), values.email);
+  await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
+  await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
+}
+
 describe("local portfolio quiz", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
+  });
+
+  it("validates and normalizes required lead contact details without navigating", async () => {
+    const user = userEvent.setup();
+    const initialUrl = window.location.href;
+    let submitted: unknown = null;
+    render(<LeadContactStep onSubmit={async (contact) => { submitted = contact; }} />);
+
+    const submit = screen.getByRole("button", { name: /continue to assessment/i });
+    expect(submit).toBeDisabled();
+    await user.type(screen.getByLabelText(/first name/i), "  Mara  ");
+    await user.type(screen.getByLabelText(/business name/i), "  Mara Consulting  ");
+    await user.type(screen.getByLabelText(/^email/i), "  MARA@EXAMPLE.COM  ");
+    expect(submit).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
+    await user.click(submit);
+
+    await waitFor(() => expect(submitted).toEqual({
+      firstName: "Mara",
+      businessName: "Mara Consulting",
+      email: "mara@example.com",
+      consent: true,
+    }));
+    expect(window.location.href).toBe(initialUrl);
+  });
+
+  it("retains contact fields and announces a submission failure", async () => {
+    const user = userEvent.setup();
+    render(<LeadContactStep onSubmit={async () => { throw new Error("Backend unavailable"); }} />);
+    await completeContactStep(user);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not save your details/i);
+    expect(screen.getByLabelText(/first name/i)).toHaveValue("Mara");
+    expect(screen.getByLabelText(/business name/i)).toHaveValue("Mara Consulting");
+    expect(screen.getByLabelText(/^email/i)).toHaveValue("Mara@Example.com");
   });
 
   it("completes all eight questions without navigation or network calls", async () => {
@@ -31,6 +78,8 @@ describe("local portfolio quiz", () => {
     expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/elysha-works-privacy-policy/");
     expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/elysha-works-terms-of-service/");
     await user.click(screen.getByRole("button", { name: /service-based business/i }));
+    expect(screen.getByRole("heading", { name: /where should we send your 3-day proposal/i })).toBeInTheDocument();
+    await completeContactStep(user);
     expect(screen.getByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /start my assessment/i }));
 
@@ -44,7 +93,7 @@ describe("local portfolio quiz", () => {
       await user.click(screen.getByRole("button", { name: index === 7 ? /see my roadmap/i : /continue/i }));
     }
 
-    expect(await screen.findByRole("heading", { name: /your personalized roadmap/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Mara.*Mara Consulting/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /compare your roadmap options/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^basic$/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^advanced$/i })).toBeInTheDocument();
@@ -60,20 +109,21 @@ describe("local portfolio quiz", () => {
     expect(within(selectedSummary).getAllByText("Custom Growth").length).toBeGreaterThan(0);
     expect(within(selectedSummary).getAllByText("$7,500").length).toBeGreaterThan(0);
     for (const heading of [
-      /what your answers tell us/i,
-      /what may be holding growth back/i,
-      /a route shaped by your answers/i,
-      /what can come next/i,
+      /where Mara Consulting is now/i,
+      /where the business wants to go/i,
+      /how Complete can exceed the requirement/i,
       /related work/i,
       /turn the roadmap into a practical scope/i,
     ]) expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /book a strategy call/i })).toHaveAttribute("href", "/booking/");
+    expect(screen.getByRole("link", { name: /book a discovery call/i })).toHaveAttribute("href", "/booking/");
     expect(screen.getByRole("navigation", { name: /quiz footer/i })).toBeInTheDocument();
     expect(window.location.href).toBe(initialUrl);
     expect(fetchSpy).not.toHaveBeenCalled();
 
     const saved = JSON.parse(localStorage.getItem(QUIZ_STORAGE_KEY) ?? "null") as SavedQuizAttempt;
     expect(saved.status).toBe("completed");
+    expect(localStorage.getItem(QUIZ_STORAGE_KEY)).not.toContain("Mara Consulting");
+    expect(localStorage.getItem(QUIZ_STORAGE_KEY)).not.toContain("mara@example.com");
     expect(saved.result?.recommendedOfferKey).toBeTruthy();
     expect(saved.roadmapSelection).toEqual({ tierKey: "complete", platform: "custom_app", offerKey: "custom_growth" });
   });
@@ -82,6 +132,7 @@ describe("local portfolio quiz", () => {
     const user = userEvent.setup();
     render(<QuizExperience />);
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await completeContactStep(user);
     await user.click(screen.getByRole("button", { name: /start my assessment/i }));
 
     const radios = screen.getAllByRole("radio");
@@ -103,6 +154,7 @@ describe("local portfolio quiz", () => {
     });
     render(<QuizExperience />);
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await completeContactStep(user);
     expect(await screen.findByRole("status")).toHaveTextContent(/recovery is unavailable/i);
     expect(screen.getByText(/recovery is unavailable in this browser/i)).toBeInTheDocument();
   });
@@ -111,7 +163,7 @@ describe("local portfolio quiz", () => {
     const user = userEvent.setup();
     const now = Date.now();
     const attempt: SavedQuizAttempt = {
-      storageVersion: 2,
+      storageVersion: 3,
       cortexVersion: CORTEX_VERSION,
       questionSetVersion: QUESTION_SET_VERSION,
       catalogVersion: CATALOG_VERSION,
@@ -147,10 +199,11 @@ describe("local portfolio quiz", () => {
     expect(localStorage.getItem(QUIZ_STORAGE_KEY)).toBeNull();
   });
 
-  it("restores a completed result directly and keeps personal details optional", async () => {
+  it("renders a contact-qualified personalized proposal without persisting contact identity", async () => {
     const user = userEvent.setup();
     render(<QuizExperience />);
     await user.click(await screen.findByRole("button", { name: /custom-order business/i }));
+    await completeContactStep(user, { firstName: "Mara", businessName: "La Jaysiedel Cakes", email: "mara@example.com" });
     await user.click(screen.getByRole("button", { name: /start my assessment/i }));
 
     const definition = QUIZ_DEFINITIONS.custom_order_businesses;
@@ -158,15 +211,18 @@ describe("local portfolio quiz", () => {
       await user.click(screen.getByRole(question.selection === "single" ? "radio" : "button", { name: question.options[0].label }));
       await user.click(screen.getByRole("button", { name: index === 7 ? /see my roadmap/i : /continue/i }));
     }
-    await screen.findByRole("heading", { name: /your personalized roadmap/i });
-    expect(screen.queryByRole("textbox", { name: /name|email|phone/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Mara.*La Jaysiedel Cakes/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /where La Jaysiedel Cakes is now/i })).toBeInTheDocument();
 
     const saved = localStorage.getItem(QUIZ_STORAGE_KEY);
     expect(saved).not.toBeNull();
+    expect(saved).not.toContain("Mara");
+    expect(saved).not.toContain("La Jaysiedel Cakes");
+    expect(saved).not.toContain("mara@example.com");
     localStorage.setItem(QUIZ_STORAGE_KEY, saved!);
     render(<QuizExperience />);
     await waitFor(() => {
-      expect(screen.getAllByRole("heading", { name: /your personalized roadmap/i })).toHaveLength(2);
+      expect(screen.getAllByRole("heading", { name: /your personalized roadmap/i })).toHaveLength(1);
     });
   });
 });
