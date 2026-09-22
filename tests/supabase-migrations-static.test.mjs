@@ -14,6 +14,7 @@ const expectedMigrations = [
   '202609210004_add_rls_grants_policies.sql',
   '202609210005_create_portfolio_rpc_functions.sql',
   '202609210006_add_retention_helpers.sql',
+  '202609220001_add_expiring_proposal_flow.sql',
 ];
 
 const phaseOneTables = [
@@ -32,6 +33,10 @@ const reservedTables = [
 const requiredFunctions = [
   'is_portfolio_admin', 'submit_lead', 'submit_booking', 'record_analytics_event',
   'link_quiz_session_to_lead', 'persist_quiz_result', 'mark_expired_quiz_sessions',
+  'begin_qualified_quiz', 'finalize_quiz_proposal', 'mark_proposal_delivered',
+  'verify_proposal_access_state', 'claim_due_proposal_work',
+  'acknowledge_proposal_work', 'stop_proposal_followups',
+  'record_trusted_proposal_event',
 ];
 
 function read(path) {
@@ -50,6 +55,21 @@ test('Supabase scaffold has the ordered reproducible assets', () => {
   assert.ok(read('supabase/tests/01_schema_and_security.test.sql').length > 0);
   assert.ok(read('supabase/tests/02_rls_ownership.test.sql').length > 0);
   assert.ok(read('supabase/tests/03_rpc_and_integrity.test.sql').length > 0);
+  assert.ok(read('supabase/tests/04_proposal_flow.test.sql').length > 0);
+});
+
+test('proposal migration is additive, keeps eleven tables, and locks trusted functions down', () => {
+  const sql = read('supabase/migrations/202609220001_add_expiring_proposal_flow.sql');
+  assert.doesNotMatch(sql, /drop\s+(?:table|schema)\b|truncate\b/i);
+  assert.doesNotMatch(sql, /create\s+table\s+public\./i);
+  for (const fn of [
+    'begin_qualified_quiz', 'finalize_quiz_proposal', 'mark_proposal_delivered',
+    'verify_proposal_access_state', 'claim_due_proposal_work',
+    'acknowledge_proposal_work', 'stop_proposal_followups',
+  ]) assert.match(sql, new RegExp(`function\\s+public\\.${fn}\\s*\\(`, 'i'), fn);
+  assert.match(sql, /revoke\s+execute\s+on\s+function\s+public\.persist_quiz_result\s*\([^;]+from\s+authenticated/is);
+  assert.match(sql, /revoke\s+execute\s+on\s+function\s+public\.submit_lead\s*\([^;]+from\s+authenticated/is);
+  assert.match(sql, /resume_expires_at\s*=\s*now\(\)\s*\+\s*interval\s*'72 hours'/i);
 });
 
 test('migrations create exactly the Phase 1 public tables', () => {
@@ -93,6 +113,12 @@ test('seed is configuration-only, idempotent, and has the seven approved package
     'custom_foundation', 'custom_growth', 'custom_complete',
   ]) assert.match(seed, new RegExp(`'${key}'`), key);
   assert.match(seed, /on\s+conflict/is);
+  for (const audience of ['coaches_educators', 'service_businesses', 'custom_order_businesses']) {
+    assert.match(seed, new RegExp(`'${audience}'`), audience);
+  }
+  for (const metadata of ['cortex-local-v0.1', 'portfolio-catalog-v0.1', 'server_verified']) {
+    assert.match(seed, new RegExp(metadata), metadata);
+  }
   for (const transactional of ['site_visitors', 'portfolio_sessions', 'quiz_sessions', 'leads', 'bookings', 'analytics_events']) {
     assert.doesNotMatch(seed, new RegExp(`insert\\s+into\\s+public\\.${transactional}\\b`, 'i'), transactional);
   }

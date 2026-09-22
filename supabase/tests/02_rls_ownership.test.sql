@@ -57,6 +57,14 @@ select throws_ok(
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001","role":"authenticated","is_anonymous":true}', true);
 select lives_ok($$update public.quiz_sessions set answers='{"q1":"answer"}' where id='50000000-0000-0000-0000-000000000001'$$, 'owner updates allowed progress');
 select throws_ok(
+  $$select proposal_access_key_hash from public.quiz_sessions where id='50000000-0000-0000-0000-000000000001'$$,
+  '42501', null, 'owner cannot read the proposal access-key hash'
+);
+select throws_ok(
+  $$update public.quiz_sessions set selected_tier_key='basic', selected_platform='systeme_io', selected_offer_key='platform_launch' where id='50000000-0000-0000-0000-000000000001'$$,
+  '42501', null, 'owner cannot directly write protected proposal selection fields'
+);
+select throws_ok(
   $$insert into public.quiz_sessions (visitor_id,owner_user_id,portfolio_session_id,question_set_id,audience_key,question_set_version) values ('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','wrong_audience',1)$$,
   '42501', null, 'quiz definition audience must match the new quiz'
 );

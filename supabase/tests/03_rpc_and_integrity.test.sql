@@ -50,20 +50,24 @@ select throws_ok($$select public.mark_expired_quiz_sessions(now())$$, '42501', n
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"11000000-0000-0000-0000-000000000001","role":"authenticated","is_anonymous":true}', true);
 select lives_ok(
-  $$select * from public.submit_lead('31000000-0000-0000-0000-000000000001','41000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','RPC',null,'rpc@example.test',null,null,null,'rpc_audience','quiz')$$,
-  'owned quiz can create and link a lead'
+  $$select * from public.begin_qualified_quiz('31000000-0000-0000-0000-000000000001','41000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','rpc_audience','RPC','RPC Business','rpc@example.test',true,'proposal_followup_v1')$$,
+  'owned quiz can create and link a consented lead'
 );
 select lives_ok(
-  $$select * from public.submit_lead('31000000-0000-0000-0000-000000000001',null,'51000000-0000-0000-0000-000000000001','RPC',null,'rpc@example.test',null,null,null,'rpc_audience','quiz')$$,
-  'lead submission replay returns canonical lead and derives portfolio attribution'
+  $$select * from public.begin_qualified_quiz('31000000-0000-0000-0000-000000000001','41000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','rpc_audience','RPC','RPC Business','rpc@example.test',true,'proposal_followup_v1')$$,
+  'qualified quiz replay returns the canonical lead'
 );
-select lives_ok(
+select throws_ok(
   $$select * from public.persist_quiz_result('51000000-0000-0000-0000-000000000001',1,1,1,1,1,1,1,1,1,1,1,'ready','platform','systeme_io','platform_launch','website','{}','{}')$$,
-  'owned quiz result persists with compatible package and platform'
+  '42501', null, 'browser cannot persist protected result fields directly'
+);
+select throws_ok(
+  $$select * from public.submit_lead('31000000-0000-0000-0000-000000000001','41000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','RPC',null,'rpc@example.test',null,null,null,'rpc_audience','quiz')$$,
+  '42501', null, 'legacy lead submission is revoked from browser callers'
 );
 select set_config('request.jwt.claims', '{"sub":"11000000-0000-0000-0000-000000000002","role":"authenticated","is_anonymous":true}', true);
 select throws_ok(
-  $$select * from public.submit_lead('31000000-0000-0000-0000-000000000001',null,'51000000-0000-0000-0000-000000000001','Other',null,'other@example.test',null,null,null,null,null)$$,
+  $$select * from public.begin_qualified_quiz('31000000-0000-0000-0000-000000000001','41000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','rpc_audience','Other','Other Business','other@example.test',true,'proposal_followup_v1')$$,
   '42501', null, 'RPC rejects another owner identifiers'
 );
 
