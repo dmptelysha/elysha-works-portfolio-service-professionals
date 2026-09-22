@@ -10,6 +10,7 @@
     "preview": "next dev",
     "prebuild": "npm run generate:booking-config",
     "build": "next build",
+    "postbuild": "node scripts/prepare-static-export.mjs",
     "start": "next start",
     "firebase:serve": "firebase emulators:start --only hosting",
     "firebase:test-rules": "firebase emulators:exec --only firestore \"node --test tests/firestore-rules.test.mjs\"",

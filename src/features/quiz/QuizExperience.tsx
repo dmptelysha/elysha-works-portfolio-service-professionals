@@ -90,10 +90,10 @@ export function QuizExperience() {
   return (
     <div className="quiz-page-shell">
       <header className="quiz-header">
-        <Link className="quiz-brand" href="/" aria-label="Elysha Works home">
+        <Link className="quiz-brand" href="/" aria-label="Elysha Works home" prefetch={false}>
           <span aria-hidden="true">&lt;</span><b>Elysha Works</b><span aria-hidden="true">/&gt;</span>
         </Link>
-        <Link className="quiz-exit" href="/">Exit assessment</Link>
+        <Link className="quiz-exit" href="/" prefetch={false}>Exit assessment</Link>
       </header>
 
       <main className="quiz-main">

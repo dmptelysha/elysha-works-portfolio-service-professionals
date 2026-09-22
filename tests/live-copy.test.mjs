@@ -115,6 +115,7 @@ test("the static export contains the homepage and live auxiliary routes", () => 
   const expected = [
     "out/index.html",
     "out/quiz/index.html",
+    "out/quiz/__next.quiz.__PAGE__.txt",
     "out/booking/index.html",
     "out/thank-you/index.html",
     "out/ai-usage-policy/index.html",
