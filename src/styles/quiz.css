@@ -231,6 +231,8 @@
 .resume-dialog h2 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); line-height: 1; letter-spacing: -.05em; }
 .resume-dialog > p:not(.quiz-kicker) { color: var(--portfolio-muted); line-height: 1.6; }
 .resume-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+.proposal-delivery-dialog { width: min(100%, 44rem); }
+.proposal-delivery-dialog .quiz-primary { min-width: min(100%, 14rem); }
 
 .quiz-result { width: min(100%, 86rem); }
 .result-hero { padding: clamp(1rem, 4vw, 4rem) 0 clamp(4rem, 8vw, 7rem); text-align: center; }

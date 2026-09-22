@@ -52,12 +52,16 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [issueError, setIssueError] = useState<string | null>(null);
+  const [proposalDialog, setProposalDialog] = useState<"success" | "error" | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaError, setCaptchaError] = useState(false);
   const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const createdAtRef = useRef(new Date().toISOString());
   const ownedContextRef = useRef<OwnedQuizContext | null>(null);
   const contextPromiseRef = useRef<Promise<OwnedQuizContext> | null>(null);
+  const autoIssueAttemptedRef = useRef(false);
+  const proposalDialogRef = useRef<HTMLElement>(null);
+  const proposalDialogButtonRef = useRef<HTMLButtonElement>(null);
   const resumeDialogRef = useRef<HTMLElement>(null);
   const resumeButtonRef = useRef<HTMLButtonElement>(null);
   const resumeReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -208,6 +212,8 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     contextPromiseRef.current = null;
     setSyncMessage(null);
     setIssueError(null);
+    setProposalDialog(null);
+    autoIssueAttemptedRef.current = false;
     dispatch({ type: "START_OVER" });
   };
 
@@ -216,6 +222,9 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     ownedContextRef.current = null;
     contextPromiseRef.current = null;
     setSyncMessage(null);
+    setIssueError(null);
+    setProposalDialog(null);
+    autoIssueAttemptedRef.current = false;
     dispatch({ type: "SELECT_AUDIENCE", audienceKey });
   };
 
@@ -246,7 +255,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     }
   };
 
-  const issueSelectedProposal = async () => {
+  const issueSelectedProposal = useCallback(async () => {
     if (!state.audienceKey || !state.roadmapSelection || issuing) return;
     setIssuing(true);
     setIssueError(null);
@@ -254,12 +263,55 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
       const context = await ensureOwnedContext(state.audienceKey);
       const issued = await service.issueProposal(context, state.roadmapSelection);
       dispatch({ type: "PROPOSAL_ISSUED", proposal: issued.proposal });
+      setProposalDialog("success");
     } catch {
-      setIssueError("We could not create your proposal email. Please try again.");
+      setIssueError("Your roadmap is ready, but we could not send the proposal email. Please try again.");
+      setProposalDialog("error");
     } finally {
       setIssuing(false);
     }
-  };
+  }, [ensureOwnedContext, issuing, service, state.audienceKey, state.roadmapSelection]);
+
+  useEffect(() => {
+    if (
+      state.screen !== "result"
+      || !state.result
+      || !state.proposal
+      || state.proposal.expiresAt
+      || !state.roadmapSelection
+      || autoIssueAttemptedRef.current
+    ) return;
+
+    autoIssueAttemptedRef.current = true;
+    void issueSelectedProposal();
+  }, [issueSelectedProposal, state.proposal, state.result, state.roadmapSelection, state.screen]);
+
+  useEffect(() => {
+    if (!proposalDialog) return;
+    proposalDialogButtonRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setProposalDialog(null);
+        return;
+      }
+      if (event.key !== "Tab" || !proposalDialogRef.current) return;
+      const focusable = [...proposalDialogRef.current.querySelectorAll<HTMLElement>("button, a[href]")]
+        .filter((element) => !element.hasAttribute("disabled"));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [proposalDialog]);
 
   return (
     <div className="quiz-page-shell">
@@ -349,7 +401,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
             selection={state.roadmapSelection!}
             onSelect={(selection) => dispatch({ type: "SELECT_ROADMAP", selection })}
             onStartOver={startOver}
-            onIssue={issueSelectedProposal}
+            onRetryProposal={issueSelectedProposal}
             issuing={issuing}
             issueError={issueError}
             persistenceAvailable={persistenceAvailable}
@@ -421,6 +473,57 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
               <button ref={resumeButtonRef} className="quiz-primary" onClick={() => dispatch({ type: "RESUME" })} type="button">Resume</button>
               <button className="quiz-secondary" onClick={startOver} type="button">Start over</button>
               <button className="quiz-back" onClick={() => dispatch({ type: "DISMISS_RESUME" })} type="button">Not now</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {proposalDialog ? (
+        <div className="resume-backdrop">
+          <section
+            ref={proposalDialogRef}
+            className="resume-dialog proposal-delivery-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="proposal-delivery-title"
+          >
+            <p className="quiz-kicker">{proposalDialog === "success" ? "Proposal delivered" : "Email delivery"}</p>
+            <h2 id="proposal-delivery-title">
+              {proposalDialog === "success"
+                ? "Success! Your proposal is ready."
+                : "Your roadmap is ready, but the email was not sent."}
+            </h2>
+            <p>
+              {proposalDialog === "success"
+                ? "We’ve also sent the protected proposal and access details to the email you provided. It will remain available for 72 hours."
+                : "Your roadmap remains available here. Retry sending the protected proposal and access details."}
+            </p>
+            <div className="resume-actions">
+              {proposalDialog === "error" ? (
+                <button
+                  ref={proposalDialogButtonRef}
+                  className="quiz-primary"
+                  disabled={issuing}
+                  onClick={() => void issueSelectedProposal()}
+                  type="button"
+                >
+                  {issuing ? "Sending email…" : "Retry sending email"}
+                </button>
+              ) : (
+                <button
+                  ref={proposalDialogButtonRef}
+                  className="quiz-primary"
+                  onClick={() => setProposalDialog(null)}
+                  type="button"
+                >
+                  View My Roadmap
+                </button>
+              )}
+              {proposalDialog === "error" ? (
+                <button className="quiz-secondary" onClick={() => setProposalDialog(null)} type="button">
+                  Continue viewing roadmap
+                </button>
+              ) : null}
             </div>
           </section>
         </div>

@@ -81,6 +81,18 @@ async function completeContactStep(
   await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
 }
 
+async function completeServiceBusinessAssessment(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+  await completeContactStep(user);
+  await user.click(await screen.findByRole("button", { name: /start my assessment/i }));
+
+  const definition = QUIZ_DEFINITIONS.service_businesses;
+  for (const [index, question] of definition.questions.entries()) {
+    await user.click(screen.getByRole(question.selection === "single" ? "radio" : "button", { name: question.options[0].label }));
+    await user.click(screen.getByRole("button", { name: index === 7 ? /see my roadmap/i : /continue/i }));
+  }
+}
+
 describe("local portfolio quiz", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -230,7 +242,7 @@ describe("local portfolio quiz", () => {
     expect(screen.getByLabelText(/^email/i)).toHaveValue("Mara@Example.com");
   });
 
-  it("creates owned records, submits contact once, saves progress, previews, and issues through the service", async () => {
+  it("automatically issues and confirms the emailed proposal after calculation", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
     render(<QuizExperience service={service} />);
@@ -249,15 +261,39 @@ describe("local portfolio quiz", () => {
 
     await waitFor(() => expect(service.previewProposal).toHaveBeenCalledWith(expect.objectContaining({ quizSessionId: ownedContext.quizSessionId })));
     expect(service.saveOwnedQuizProgress).toHaveBeenCalled();
-    const createProposal = await screen.findByRole("button", { name: /create my 3-day proposal/i });
-    expect(createProposal).toHaveTextContent("Create My 3-Day Proposal →");
-    await user.click(createProposal);
     await waitFor(() => expect(service.issueProposal).toHaveBeenCalledWith(
       expect.objectContaining({ quizSessionId: ownedContext.quizSessionId }),
       expect.objectContaining({ tierKey: expect.any(String), platform: expect.any(String) }),
     ));
     const issuePayload = service.issueProposal.mock.calls[0][1];
     expect(Object.keys(issuePayload).sort()).toEqual(["offerKey", "platform", "tierKey"]);
+    expect(screen.queryByRole("button", { name: /create my 3-day proposal/i })).not.toBeInTheDocument();
+
+    const successDialog = await screen.findByRole("dialog", { name: /your proposal is ready/i });
+    expect(within(successDialog).getByText(/sent.*email you provided/i)).toBeInTheDocument();
+    expect(within(successDialog).getByText(/available for 72 hours/i)).toBeInTheDocument();
+    await user.click(within(successDialog).getByRole("button", { name: /view my roadmap/i }));
+    expect(screen.queryByRole("dialog", { name: /your proposal is ready/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps the roadmap visible and allows a failed automatic email to be retried", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    const successfulIssue = service.issueProposal.getMockImplementation()!;
+    service.issueProposal.mockRejectedValueOnce(new Error("Email delivery unavailable"));
+    render(<QuizExperience service={service} />);
+
+    await completeServiceBusinessAssessment(user);
+
+    const errorDialog = await screen.findByRole("dialog", { name: /roadmap is ready, but the email was not sent/i });
+    expect(screen.getByRole("heading", { name: /mara.*roadmap/i })).toBeInTheDocument();
+    expect(within(errorDialog).getByText(/roadmap remains available here/i)).toBeInTheDocument();
+
+    service.issueProposal.mockImplementation(successfulIssue);
+    await user.click(within(errorDialog).getByRole("button", { name: /retry sending email/i }));
+
+    expect(await screen.findByRole("dialog", { name: /your proposal is ready/i })).toBeInTheDocument();
+    expect(service.issueProposal).toHaveBeenCalledTimes(2);
   });
 
   it("disables duplicate contact submissions while the owned RPC is pending", async () => {

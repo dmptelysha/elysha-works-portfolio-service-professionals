@@ -17,7 +17,7 @@ interface QuizResultProps {
   selection: RoadmapSelection;
   onSelect: (selection: RoadmapSelection) => void;
   onStartOver: () => void;
-  onIssue: () => Promise<void>;
+  onRetryProposal: () => Promise<void>;
   issuing: boolean;
   issueError: string | null;
   persistenceAvailable: boolean;
@@ -44,7 +44,7 @@ export function QuizResult({
   selection,
   onSelect,
   onStartOver,
-  onIssue,
+  onRetryProposal,
   issuing,
   issueError,
   persistenceAvailable,
@@ -64,7 +64,7 @@ export function QuizResult({
           <h1 id="result-title">{proposal.client.firstName}’s roadmap for {proposal.client.businessName}</h1>
           <p>{proposal.recommendation.title}</p>
           <strong className="result-confidence result-confidence--standard">Server-ready recommendation</strong>
-          <span>Review your path, compare the three working options, then create your protected 3-day proposal.</span>
+          <span>Review your path and compare the three working options. Your protected proposal is prepared and emailed automatically.</span>
         </header>
 
         <div className="result-grid">
@@ -131,15 +131,21 @@ export function QuizResult({
         <footer className="result-control">
           <div>
             <p className="result-number">Proposal access</p>
-            <h2>{proposal.expiresAt ? "Your protected proposal is active" : "Create your protected 3-day proposal"}</h2>
+            <h2>{proposal.expiresAt
+              ? "Proposal sent · Available for 72 hours"
+              : issueError
+                ? "Your roadmap is ready; email delivery needs attention"
+                : "Preparing and emailing your proposal…"}</h2>
             <p>{proposal.expiresAt
               ? `Access expires at ${new Date(proposal.expiresAt).toLocaleString("en-US")}.`
-              : "Your exact 72-hour expiration begins only after the initial proposal email is delivered."}</p>
+              : issueError
+                ? "The roadmap remains available here. Retry sending its protected access details."
+                : "This happens automatically. Your exact 72-hour access period begins after the email is delivered."}</p>
             {issueError ? <p className="quiz-validation" role="alert">{issueError}</p> : null}
           </div>
-          {!proposal.expiresAt ? (
-            <button className="quiz-primary" disabled={issuing} onClick={() => void onIssue()} type="button">
-              {issuing ? "Creating your proposal…" : "Create My 3-Day Proposal"} <span aria-hidden="true">→</span>
+          {!proposal.expiresAt && issueError ? (
+            <button className="quiz-primary" disabled={issuing} onClick={() => void onRetryProposal()} type="button">
+              {issuing ? "Sending email…" : "Retry sending email"} <span aria-hidden="true">→</span>
             </button>
           ) : null}
           <button className="quiz-back" onClick={onStartOver} type="button">Start a new assessment</button>

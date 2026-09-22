@@ -81,10 +81,11 @@ flowchart TD
 2. Submit first name, business name, email address, and required proposal/follow-up consent.
 3. Complete the multi-step quiz without navigation or page reload.
 4. Review the personalized Point A, Point B, recommended solution, and Basic/Advanced/Complete comparison.
-5. Select a feasible tier/platform and choose **Create My 3-Day Proposal**.
-6. Open the protected proposal from the emailed reference link by entering the separate access key.
-7. Optionally book a discovery call.
-8. Use the footer links for Back to portfolio, Privacy, and Terms.
+5. Receive the server-verified roadmap while the recommended feasible tier/platform is automatically finalized and emailed.
+6. Confirm the success message, or retry email delivery without losing the visible roadmap.
+7. Open the protected proposal from the emailed reference link by entering the separate access key.
+8. Optionally compare the three packages, review platform feasibility, and book a discovery call.
+9. Use the footer links for Back to portfolio, Privacy, and Terms.
 
 ---
 
@@ -203,7 +204,7 @@ Pricing note:
 
 The visitor first receives a server-verified draft. Changing a feasible tier/platform updates the selected estimate and comparison without rewriting the original Cortex recommendation. Unsupported Systeme.io or HighLevel choices are disabled with a specific explanation when inventory, production stages, specialized permissions, or non-standard operational workflows require a Custom App.
 
-The visitor then chooses **Create My 3-Day Proposal**. Trusted finalization recalculates the answers and catalog prices, records the recommendation and selected feasible option separately, issues a proposal reference plus a separate 10-character access key, and requests the initial email through Make. There is no PDF attachment. The raw access key is never placed in the URL, database, analytics, browser storage, or source control.
+After calculation, trusted finalization runs automatically with the server-recommended feasible tier/platform. It recalculates the answers and catalog prices, records the recommendation and selected option separately, issues a proposal reference plus a separate 10-character access key, and requests the initial email through Make. The result page remains visible during delivery. A success dialog confirms that the protected proposal and access details were emailed and that access lasts 72 hours; a delivery failure opens a retry dialog without discarding the roadmap. There is no separate **Create My 3-Day Proposal** action and no PDF attachment. The raw access key is never placed in the URL, database, analytics, browser storage, or source control.
 
 The static Firebase-hosted route is `/proposal/?ref=<uuid>`. It reveals no client or proposal data until the correct access key is verified through a Supabase Edge Function. Unknown, incorrect, expired, revoked, and temporarily locked proposals return the same generic unavailable response. Five consecutive failures lock verification for 15 minutes; successful access may be cached in `sessionStorage` for the current tab only and never beyond expiry.
 
@@ -505,8 +506,8 @@ flowchart TD
     D --> E[Server verifies Cortex recommendation]
     E --> F[Show Point A and Point B]
     F --> G[Compare Basic, Advanced, Complete]
-    G --> H[Choose feasible tier and platform]
-    H --> I[Create My 3-Day Proposal]
+    G --> H[Select server-recommended feasible tier and platform]
+    H --> I[Automatically finalize proposal]
     I --> J[Issue reference and separate access key]
     J --> K[Private Make immediate-delivery webhook]
     K --> L[Email proposal link, key, summary, and discovery CTA]
@@ -1809,7 +1810,7 @@ The release is ready only when:
 - Results recommend a technically justified platform/build route and base offer starting at $1,500.
 - Results itemize base inclusions, non-included add-ons, adjustments, and recurring costs paid separately by the client.
 - Projects automatically filter to the selected audience.
-- Proposal issuance requires an explicit **Create My 3-Day Proposal** action after the client selects a feasible tier/platform.
+- Proposal issuance starts automatically after the server-calculated roadmap selects its recommended feasible tier/platform; successful delivery shows an accessible confirmation dialog, and failed delivery keeps the roadmap visible with a narrowly scoped retry action.
 - Proposal reference alone reveals no data; the separate access key works only before exact expiry and locks for 15 minutes after five failures.
 - Content, questions, package data, and projects are isolated from UI rendering, and display-copy edits do not rewrite core scoring logic.
 - Mobile, tablet, and desktop layouts are usable and visually consistent.

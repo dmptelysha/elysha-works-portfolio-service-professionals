@@ -136,7 +136,7 @@ describe("proposal view model", () => {
       selection,
       onSelect: () => undefined,
       onStartOver: () => undefined,
-      onIssue: async () => undefined,
+      onRetryProposal: async () => undefined,
       issuing: false,
       issueError: null,
       persistenceAvailable: true,
