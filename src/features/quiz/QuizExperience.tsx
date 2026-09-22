@@ -153,10 +153,12 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
 
   useEffect(() => {
     if (!hydrated || !state.audienceKey || state.resumeCandidate) return;
+    const captchaSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
+    if (captchaSiteKey && !captchaToken) return;
     void ensureOwnedContext(state.audienceKey).catch(() => {
       setSyncMessage("We could not start the secure assessment. Check your connection and try again.");
     });
-  }, [ensureOwnedContext, hydrated, state.audienceKey, state.resumeCandidate]);
+  }, [captchaToken, ensureOwnedContext, hydrated, state.audienceKey, state.resumeCandidate]);
 
   useEffect(() => {
     if (!hydrated || state.screen !== "question" || !state.audienceKey || !ownedContextRef.current) return;
@@ -214,15 +216,12 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     contextPromiseRef.current = null;
     setSyncMessage(null);
     dispatch({ type: "SELECT_AUDIENCE", audienceKey });
-    void ensureOwnedContext(audienceKey).catch(() => {
-      setSyncMessage("We could not start the secure assessment. Check your connection and try again.");
-    });
   };
 
   const definition = state.audienceKey ? QUIZ_DEFINITIONS[state.audienceKey] : null;
   const captchaSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
   const productionCaptchaMissing = process.env.NODE_ENV === "production" && !captchaSiteKey;
-  const audienceSelectionDisabled = productionCaptchaMissing || Boolean(captchaSiteKey && !captchaToken);
+  const securityReady = productionCaptchaMissing ? false : !captchaSiteKey || Boolean(captchaToken);
   const question = definition?.questions[state.currentQuestionIndex];
   const flushProgress = async () => {
     if (!state.audienceKey) return;
@@ -274,39 +273,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
         {!hydrated ? <div className="quiz-loading" aria-live="polite">Preparing your roadmap…</div> : null}
 
         {hydrated && state.screen === "audience" ? (
-          <AudienceSelector
-            onSelect={chooseAudience}
-            selectionDisabled={audienceSelectionDisabled}
-            securityCheck={(
-              <div className="quiz-security-check" aria-live="polite">
-                {captchaSiteKey ? (
-                  <>
-                    <Turnstile
-                      siteKey={captchaSiteKey}
-                      onSuccess={(token) => {
-                        setCaptchaToken(token);
-                        setCaptchaError(false);
-                      }}
-                      onExpire={() => setCaptchaToken(null)}
-                      onError={() => {
-                        setCaptchaToken(null);
-                        setCaptchaError(true);
-                      }}
-                      options={{
-                        action: "anonymous_quiz_start",
-                        appearance: "interaction-only",
-                        refreshExpired: "auto",
-                        theme: "dark",
-                      }}
-                    />
-                    <span>{captchaError ? "Security check failed. Please retry it before choosing your path." : "Protected by Cloudflare Turnstile"}</span>
-                  </>
-                ) : productionCaptchaMissing ? (
-                  <span>Secure assessment setup is temporarily unavailable.</span>
-                ) : null}
-              </div>
-            )}
-          />
+          <AudienceSelector onSelect={chooseAudience} />
         ) : null}
 
         {hydrated && state.screen === "contact" ? (
@@ -314,7 +281,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
             const context = await ensureOwnedContext(state.audienceKey!);
             await service.submitLeadContact(context, contact);
             dispatch({ type: "CONTACT_ACCEPTED", contact });
-          }} />
+          }} securityReady={securityReady} />
         ) : null}
 
         {hydrated && state.screen === "intro" && definition ? (
@@ -387,6 +354,32 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
           />
         ) : null}
       </main>
+
+      {hydrated && captchaSiteKey ? (
+        <div className="quiz-security-runtime" aria-live="polite">
+          <Turnstile
+            siteKey={captchaSiteKey}
+            onSuccess={(token) => {
+              setCaptchaToken(token);
+              setCaptchaError(false);
+            }}
+            onExpire={() => setCaptchaToken(null)}
+            onError={() => {
+              setCaptchaToken(null);
+              setCaptchaError(true);
+            }}
+            options={{
+              action: "anonymous_quiz_start",
+              appearance: "interaction-only",
+              refreshExpired: "auto",
+              theme: "dark",
+            }}
+          />
+          {captchaError ? <span>Security check failed. Please retry before continuing.</span> : null}
+        </div>
+      ) : productionCaptchaMissing ? (
+        <p className="quiz-security-runtime" role="status">Secure assessment setup is temporarily unavailable.</p>
+      ) : null}
 
       {hydrated && !persistenceAvailable ? (
         <p className="quiz-storage-notice" role="status">

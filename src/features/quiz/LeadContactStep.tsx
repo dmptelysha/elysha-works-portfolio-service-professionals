@@ -6,11 +6,12 @@ import type { LeadContactInput } from "./types";
 
 interface LeadContactStepProps {
   onSubmit: (contact: LeadContactInput) => Promise<void>;
+  securityReady?: boolean;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function LeadContactStep({ onSubmit }: LeadContactStepProps) {
+export function LeadContactStep({ onSubmit, securityReady = true }: LeadContactStepProps) {
   const [firstName, setFirstName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
@@ -20,7 +21,7 @@ export function LeadContactStep({ onSubmit }: LeadContactStepProps) {
 
   const normalizedEmail = email.trim().toLowerCase();
   const canSubmit = Boolean(
-    firstName.trim() && businessName.trim() && EMAIL_PATTERN.test(normalizedEmail) && consent && !submitting,
+    firstName.trim() && businessName.trim() && EMAIL_PATTERN.test(normalizedEmail) && consent && securityReady && !submitting,
   );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -66,6 +67,7 @@ export function LeadContactStep({ onSubmit }: LeadContactStepProps) {
           <span>I agree to receive the initial proposal and up to three follow-ups unless I book a discovery call.</span>
         </label>
         {error ? <p className="quiz-validation" role="alert">{error}</p> : null}
+        {!securityReady ? <p className="quiz-contact-status" role="status">Preparing the secure assessment…</p> : null}
         {submitting ? <p className="quiz-contact-status" role="status">Saving your details…</p> : null}
         <button className="quiz-primary" disabled={!canSubmit} type="submit">
           Continue to Assessment <span aria-hidden="true">→</span>

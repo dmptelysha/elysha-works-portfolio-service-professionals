@@ -124,6 +124,8 @@ Both hero actions open the separate `/quiz` journey without reloading the homepa
 
 The audience selector belongs on `/quiz`, not on the homepage. It is the first decision in the separate quiz journey.
 
+Show the three audience cards immediately beneath a compact **Which best describes your business?** heading. Do not place a separate assessment-instructions panel before the cards. Turnstile initializes independently in the background and must not disable or delay audience selection; the contact submission can wait for the security token when required for a new anonymous sign-in.
+
 Show three selectable cards:
 
 | Audience | Short description | Result-focused label |

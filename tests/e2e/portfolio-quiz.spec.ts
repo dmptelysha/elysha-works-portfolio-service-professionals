@@ -57,6 +57,7 @@ async function mockSupabaseQuiz(page: import("@playwright/test").Page, observed:
     if (url.pathname.endsWith("/rest/v1/quiz_definitions")) {
       return json({ id: ids.definition, version: 1, audience_key: "service_businesses" });
     }
+    if (url.pathname.endsWith("/rest/v1/site_visitors") && request.method() === "GET") return json(null);
     if (url.pathname.endsWith("/rest/v1/site_visitors") && request.method() === "POST") return json({ id: ids.visitor });
     if (url.pathname.endsWith("/rest/v1/portfolio_sessions") && request.method() === "POST") return json({ id: ids.portfolioSession });
     if (url.pathname.endsWith("/rest/v1/quiz_sessions") && request.method() === "POST") return json({ id: ids.quiz });
@@ -225,11 +226,12 @@ test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or 
   expect(saved.roadmapSelection).toEqual({ tierKey: "complete", platform: "custom_app", offerKey: "custom_growth" });
 });
 
-test("hero secondary action opens the assessment instructions", async ({ page }) => {
+test("hero secondary action opens the audience selector", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: /see how the assessment works/i }).click();
-  await expect(page).toHaveURL(/\/quiz\/?#assessment-instructions$/);
-  await expect(page.getByRole("complementary", { name: /clear roadmap in three steps/i })).toBeInViewport();
+  await expect(page).toHaveURL(/\/quiz\/?$/);
+  await expect(page.getByRole("heading", { name: /which best describes your business/i })).toBeInViewport();
+  await expect(page.getByText(/a clear roadmap in three steps/i)).toHaveCount(0);
 });
 
 test("proposal access stays on-page and does not disclose why access failed", async ({ page }) => {

@@ -29,7 +29,7 @@ describe("portfolio hero", () => {
     expect(within(hero).getByRole("link", { name: /get my personalized roadmap/i })).toHaveAttribute("href", "/quiz");
     expect(within(hero).getByRole("link", { name: /see how the assessment works/i })).toHaveAttribute(
       "href",
-      "/quiz#assessment-instructions",
+      "/quiz",
     );
     expect(within(hero).queryByRole("navigation")).not.toBeInTheDocument();
     expect(within(hero).queryByText("Elysha Works")).not.toBeInTheDocument();

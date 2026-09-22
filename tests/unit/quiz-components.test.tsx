@@ -68,6 +68,23 @@ describe("local portfolio quiz", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it("shows the three audience choices immediately while the security check initializes", async () => {
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "test-site-key");
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} />);
+
+    const audienceChoices = await screen.findAllByRole("button", { name: /business|coaches|educators/i });
+    expect(audienceChoices).toHaveLength(3);
+    expect(audienceChoices.every((choice) => !choice.hasAttribute("disabled"))).toBe(true);
+    expect(screen.queryByText(/a clear roadmap in three steps/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /service-based business/i }));
+    expect(screen.getByRole("heading", { name: /where should we send your 3-day proposal/i })).toBeInTheDocument();
+    expect(service.createOwnedQuizContext).not.toHaveBeenCalled();
   });
 
   it("validates and normalizes required lead contact details without navigating", async () => {
@@ -170,9 +187,7 @@ describe("local portfolio quiz", () => {
 
     render(<QuizExperience service={createFakeQuizService()} />);
     expect(await screen.findByRole("heading", { name: /which best describes your business/i })).toBeInTheDocument();
-    const instructions = screen.getByRole("complementary", { name: /clear roadmap in three steps/i });
-    expect(instructions).toHaveAttribute("id", "assessment-instructions");
-    expect(within(instructions).getAllByRole("listitem")).toHaveLength(3);
+    expect(screen.queryByText(/a clear roadmap in three steps/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/elysha-works-privacy-policy/");
     expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/elysha-works-terms-of-service/");
     await user.click(screen.getByRole("button", { name: /service-based business/i }));

@@ -125,6 +125,9 @@ describe("Supabase quiz service", () => {
     expect(fake.tableCalls.map((entry) => entry.table)).toEqual([
       "quiz_definitions", "site_visitors", "site_visitors", "portfolio_sessions", "quiz_sessions",
     ]);
+    expect(fake.tableCalls[0].chain).toEqual(expect.arrayContaining([
+      { method: "maybeSingle", args: [] },
+    ]));
     const visitorInsert = fake.tableCalls[2].chain.find((call) => call.method === "insert");
     expect(visitorInsert?.args[0]).toMatchObject({ owner_user_id: USER_ID, landing_path: "/quiz/" });
     const quizInsert = fake.tableCalls[4].chain.find((call) => call.method === "insert");

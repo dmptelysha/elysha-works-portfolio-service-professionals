@@ -90,7 +90,7 @@ export async function createOwnedQuizContext(
     .eq("active", true)
     .order("version", { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
   if (definitionResult.error || !definitionResult.data) throw safeServiceError();
   const questionSetId = requireUuid(definitionResult.data.id);
   const questionSetVersion = definitionResult.data.version;

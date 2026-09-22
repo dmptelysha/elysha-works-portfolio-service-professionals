@@ -43,14 +43,6 @@
   animation: quiz-enter .45s cubic-bezier(.2, .8, .2, 1) both;
 }
 
-.assessment-instructions { margin: 0 0 clamp(3.5rem, 8vw, 6rem); padding: clamp(1.5rem, 3.5vw, 3rem); border: 1px solid rgba(255,211,105,.24); background: linear-gradient(135deg, rgba(255,211,105,.08), rgba(255,255,255,.018)); scroll-margin-top: 6rem; }
-.assessment-instructions h2 { max-width: 48rem; margin: 0; color: var(--portfolio-text); font-size: clamp(1.8rem, 3.8vw, 3.6rem); line-height: 1; letter-spacing: -.045em; }
-.assessment-instructions ol { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1px; margin: 2rem 0 0; padding: 0; background: rgba(255,255,255,.12); list-style: none; }
-.assessment-instructions li { display: grid; align-content: start; gap: .75rem; min-height: 12rem; padding: 1.25rem; background: #090a09; }
-.assessment-instructions li > span { color: var(--portfolio-gold); font-size: .68rem; font-weight: 750; letter-spacing: .14em; }
-.assessment-instructions li > strong { color: var(--portfolio-text); font-size: 1rem; line-height: 1.35; }
-.assessment-instructions li > small { color: var(--portfolio-muted); font-size: .82rem; line-height: 1.55; }
-
 .quiz-kicker,
 .result-number {
   margin: 0 0 1rem;
@@ -71,6 +63,12 @@
   text-wrap: balance;
 }
 
+.quiz-audience > h1 {
+  max-width: 52rem;
+  font-size: clamp(2.15rem, 4.4vw, 4.8rem);
+  line-height: .98;
+}
+
 .quiz-lede {
   max-width: 48rem;
   margin: 1.5rem 0 0;
@@ -79,23 +77,26 @@
   line-height: 1.65;
 }
 
-.quiz-security-check {
+.quiz-security-runtime {
+  position: fixed;
+  z-index: 30;
+  right: max(1rem, 2vw);
+  bottom: max(1rem, 2vw);
   display: grid;
-  justify-items: start;
-  gap: .55rem;
-  min-height: 1.25rem;
-  margin-top: 1.25rem;
+  justify-items: end;
+  gap: .45rem;
+  max-width: min(22rem, calc(100vw - 2rem));
   color: var(--portfolio-muted);
   font-size: .7rem;
 }
 
-.quiz-security-check > span { line-height: 1.45; }
+.quiz-security-runtime > span { line-height: 1.45; }
 
 .audience-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: clamp(.8rem, 1.7vw, 1.5rem);
-  margin-top: clamp(2.5rem, 6vh, 5rem);
+  margin-top: clamp(1.75rem, 4vh, 3.5rem);
 }
 
 .audience-card {
@@ -316,8 +317,6 @@
 
 @media (max-width: 780px) {
   .quiz-main { place-items: start center; }
-  .assessment-instructions ol { grid-template-columns: 1fr; }
-  .assessment-instructions li { min-height: 0; }
   .audience-grid, .quiz-options, .result-grid, .result-projects { grid-template-columns: 1fr; }
   .audience-card { min-height: 15rem; }
   .result-card--wide { grid-column: auto; }
