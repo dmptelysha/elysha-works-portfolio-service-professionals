@@ -51,7 +51,10 @@ function fakeClient(options: {
     data: { session: options.signInUserId ? { user: { id: options.signInUserId } } : null },
     error: null,
   }));
-  const rpc = vi.fn(async () => options.rpcResponse ?? { data: [{ lead_id: LEAD_ID, quiz_session_id: QUIZ_SESSION_ID }], error: null });
+  const rpc = vi.fn(async () => options.rpcResponse ?? {
+    data: [{ submission_status: "accepted", lead_id: LEAD_ID, quiz_session_id: QUIZ_SESSION_ID, existing_business_name: null }],
+    error: null,
+  });
   const invoke = vi.fn(async () => options.functionResponse ?? { data: { proposal: { expiresAt: null } }, error: null });
   return {
     client: {
@@ -199,9 +202,9 @@ describe("Supabase quiz service", () => {
     const fake = fakeClient();
     await expect(submitLeadContact(context, {
       firstName: " Mara ", businessName: " Mara Consulting ", email: "MARA@EXAMPLE.COM", consent: true,
-    }, fake.client as never)).resolves.toEqual({ leadId: LEAD_ID, quizSessionId: QUIZ_SESSION_ID });
+    }, fake.client as never)).resolves.toEqual({ status: "accepted", leadId: LEAD_ID, quizSessionId: QUIZ_SESSION_ID });
 
-    expect(fake.rpc).toHaveBeenCalledWith("begin_qualified_quiz", {
+    expect(fake.rpc).toHaveBeenCalledWith("begin_qualified_quiz_v2", {
       p_visitor_id: VISITOR_ID,
       p_portfolio_session_id: PORTFOLIO_SESSION_ID,
       p_quiz_session_id: QUIZ_SESSION_ID,
@@ -211,8 +214,36 @@ describe("Supabase quiz service", () => {
       p_email: "mara@example.com",
       p_consent: true,
       p_consent_version: "proposal_followup_v1",
+      p_business_scope: null,
     });
     expect(JSON.stringify(fake.rpc.mock.calls)).not.toContain("owner_user_id");
+  });
+
+  it("returns the privacy-safe business-scope challenge and resubmits the explicit choice", async () => {
+    const fake = fakeClient({
+      rpcResponse: {
+        data: [{
+          submission_status: "business_scope_required",
+          lead_id: null,
+          quiz_session_id: QUIZ_SESSION_ID,
+          existing_business_name: "Mara Consulting",
+        }],
+        error: null,
+      },
+    });
+    const contact = {
+      firstName: "Mara", businessName: "Mara Consulting", email: "mara@example.com", consent: true as const,
+    };
+    await expect(submitLeadContact(context, contact, fake.client as never)).resolves.toEqual({
+      status: "business_scope_required",
+      quizSessionId: QUIZ_SESSION_ID,
+      existingBusinessName: "Mara Consulting",
+    });
+
+    await submitLeadContact(context, { ...contact, businessScope: "same_business" }, fake.client as never);
+    expect(fake.rpc).toHaveBeenLastCalledWith("begin_qualified_quiz_v2", expect.objectContaining({
+      p_business_scope: "same_business",
+    }));
   });
 
   it("saves only progress fields against the owned quiz and owner IDs", async () => {

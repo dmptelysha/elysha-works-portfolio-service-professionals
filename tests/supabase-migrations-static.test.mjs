@@ -17,6 +17,7 @@ const expectedMigrations = [
   '202609220001_add_expiring_proposal_flow.sql',
   '202609220002_qualify_proposal_reference_update.sql',
   '202609220003_grant_edge_function_table_access.sql',
+  '202609220004_add_repeat_assessment_business_scope.sql',
 ];
 
 const phaseOneTables = [
@@ -94,6 +95,20 @@ test('trusted Edge Functions can read only the Phase 1 records required to build
   }
   assert.doesNotMatch(sql, /grant\s+(?:all|insert|update|delete)[^;]*to\s+service_role/i);
   assert.doesNotMatch(sql, /\b(?:anon|authenticated)\b/i);
+});
+
+test('repeat-assessment migration is additive and privacy-scopes email recognition', () => {
+  const sql = read('supabase/migrations/202609220004_add_repeat_assessment_business_scope.sql');
+  assert.doesNotMatch(sql, /drop\s+(?:table|schema|function)\b|truncate\b|delete\s+from\b/i);
+  assert.match(sql, /function\s+public\.begin_qualified_quiz_v2\s*\(/i);
+  assert.match(sql, /l\.visitor_id\s*=\s*p_visitor_id/i);
+  assert.match(sql, /submission_status/i);
+  assert.match(sql, /business_scope_required/i);
+  assert.match(sql, /same_business/i);
+  assert.match(sql, /another_business/i);
+  assert.match(sql, /leads_visitor_email_updated_idx/i);
+  assert.match(sql, /revoke\s+execute\s+on\s+function\s+public\.begin_qualified_quiz\s*\([^;]+from[^;]*authenticated/is);
+  assert.match(sql, /grant\s+execute\s+on\s+function\s+public\.begin_qualified_quiz_v2\s*\([^;]+to\s+authenticated/is);
 });
 
 test('migrations create exactly the Phase 1 public tables', () => {

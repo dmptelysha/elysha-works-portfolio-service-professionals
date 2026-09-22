@@ -280,8 +280,9 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
         {hydrated && state.screen === "contact" ? (
           <LeadContactStep onSubmit={async (contact) => {
             const context = await ensureOwnedContext(state.audienceKey!);
-            await service.submitLeadContact(context, contact);
-            dispatch({ type: "CONTACT_ACCEPTED", contact });
+            const result = await service.submitLeadContact(context, contact);
+            if (result.status === "accepted") dispatch({ type: "CONTACT_ACCEPTED", contact });
+            return result;
           }} securityError={captchaError} securityReady={securityReady} />
         ) : null}
 

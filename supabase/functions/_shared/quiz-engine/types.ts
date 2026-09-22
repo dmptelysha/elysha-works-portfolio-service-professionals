@@ -55,7 +55,20 @@ export interface LeadContactInput {
   businessName: string;
   email: string;
   consent: true;
+  businessScope?: "same_business" | "another_business";
 }
+
+export type LeadContactSubmissionResult =
+  | {
+    status: "accepted";
+    leadId: string;
+    quizSessionId: string;
+  }
+  | {
+    status: "business_scope_required";
+    quizSessionId: string;
+    existingBusinessName: string;
+  };
 
 export interface ClientIdentity {
   firstName: string;

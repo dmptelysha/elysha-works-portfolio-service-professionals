@@ -55,4 +55,17 @@ export async function deliverInitialProposal(
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error("proposal delivery failed");
+  const responseBody = await response.text();
+  if (responseBody.length > 4_096) throw new Error("proposal delivery acknowledgement invalid");
+  let acknowledgement: unknown;
+  try {
+    acknowledgement = JSON.parse(responseBody);
+  } catch {
+    throw new Error("proposal delivery acknowledgement invalid");
+  }
+  if (typeof acknowledgement !== "object" || acknowledgement === null
+    || (acknowledgement as Record<string, unknown>).accepted !== true
+    || (acknowledgement as Record<string, unknown>).delivery_id !== payload.operationId) {
+    throw new Error("proposal delivery acknowledgement invalid");
+  }
 }

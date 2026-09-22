@@ -404,7 +404,10 @@ Deno.test("Make delivery signs the exact minimum-data body without putting the s
       },
     }, async (_input, init) => {
       captured = init;
-      return new Response(null, { status: 200 });
+      return Response.json({
+        accepted: true,
+        delivery_id: "70000000-0000-4000-8000-000000000001",
+      });
     });
   } finally {
     if (oldUrl === undefined) Deno.env.delete("MAKE_PROPOSAL_WEBHOOK_URL");
@@ -426,4 +429,43 @@ Deno.test("Make delivery signs the exact minimum-data body without putting the s
   assertEquals(body.discovery_call_url, "https://elyshaworks.com/booking/");
   assert(!("recipient" in body));
   assert(!("proposal" in body));
+});
+
+Deno.test("Make delivery rejects generic or mismatched success responses", async () => {
+  const oldUrl = Deno.env.get("MAKE_PROPOSAL_WEBHOOK_URL");
+  const oldSecret = Deno.env.get("MAKE_PROPOSAL_WEBHOOK_SECRET");
+  Deno.env.set("MAKE_PROPOSAL_WEBHOOK_URL", "https://hook.example.test/proposal");
+  Deno.env.set("MAKE_PROPOSAL_WEBHOOK_SECRET", "webhook-secret-for-tests-1234567890");
+  const payload = {
+    operationId: "70000000-0000-4000-8000-000000000001",
+    recipient: { email: "mara@example.com", firstName: "Mara", businessName: "Mara Consulting" },
+    proposal: {
+      reference: "70000000-0000-4000-8000-000000000001",
+      url: "https://elyshaworks.com/proposal/?ref=70000000-0000-4000-8000-000000000001",
+      accessKey: "ABCD234567",
+      expiresAt: "2026-09-25T05:00:00.000Z",
+      discoveryCallUrl: "https://elyshaworks.com/booking/",
+      stopUrl: "https://project.supabase.co/functions/v1/stop-proposal-followups?token=signed",
+      pointA: "Current state",
+      pointB: "Desired state",
+      recommendation: "Growth System",
+      tierKey: "advanced",
+      platform: "gohighlevel",
+      offerKey: "platform_growth",
+    },
+  };
+  try {
+    for (const response of [
+      new Response("Accepted", { status: 200 }),
+      Response.json({ accepted: true, delivery_id: "80000000-0000-4000-8000-000000000001" }),
+      Response.json({ accepted: false, delivery_id: payload.operationId }),
+    ]) {
+      await assertRejects(() => deliverInitialProposal(payload, async () => response.clone()));
+    }
+  } finally {
+    if (oldUrl === undefined) Deno.env.delete("MAKE_PROPOSAL_WEBHOOK_URL");
+    else Deno.env.set("MAKE_PROPOSAL_WEBHOOK_URL", oldUrl);
+    if (oldSecret === undefined) Deno.env.delete("MAKE_PROPOSAL_WEBHOOK_SECRET");
+    else Deno.env.set("MAKE_PROPOSAL_WEBHOOK_SECRET", oldSecret);
+  }
 });

@@ -57,6 +57,31 @@ select lives_ok(
   $$select * from public.begin_qualified_quiz('31000000-0000-0000-0000-000000000001','41000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','rpc_audience','RPC','RPC Business','rpc@example.test',true,'proposal_followup_v1')$$,
   'qualified quiz replay returns the canonical lead'
 );
+
+insert into public.portfolio_sessions (id,visitor_id,owner_user_id,landing_path)
+values
+  ('41000000-0000-0000-0000-000000000002','31000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','/'),
+  ('41000000-0000-0000-0000-000000000003','31000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','/');
+insert into public.quiz_sessions (id,visitor_id,owner_user_id,portfolio_session_id,question_set_id,audience_key,question_set_version)
+values
+  ('51000000-0000-0000-0000-000000000002','31000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','41000000-0000-0000-0000-000000000002','21000000-0000-0000-0000-000000000001','rpc_audience',1),
+  ('51000000-0000-0000-0000-000000000003','31000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','41000000-0000-0000-0000-000000000003','21000000-0000-0000-0000-000000000001','rpc_audience',1);
+
+select results_eq(
+  $$select submission_status, lead_id is null, existing_business_name from public.begin_qualified_quiz_v2('31000000-0000-0000-0000-000000000001','41000000-0000-0000-0000-000000000002','51000000-0000-0000-0000-000000000002','rpc_audience','RPC','RPC Business','RPC@EXAMPLE.TEST',true,'proposal_followup_v1',null)$$,
+  $$values ('business_scope_required'::text, true, 'RPC Business'::text)$$,
+  'same-owner saved email requires an explicit business-scope decision'
+);
+select results_eq(
+  $$select submission_status, lead_id = (select lead_id from public.quiz_sessions where id = '51000000-0000-0000-0000-000000000001') from public.begin_qualified_quiz_v2('31000000-0000-0000-0000-000000000001','41000000-0000-0000-0000-000000000002','51000000-0000-0000-0000-000000000002','rpc_audience','RPC','RPC Business','rpc@example.test',true,'proposal_followup_v1','same_business')$$,
+  $$values ('accepted'::text, true)$$,
+  'same-business retake links the existing stable lead'
+);
+select results_eq(
+  $$select submission_status, lead_id is not null from public.begin_qualified_quiz_v2('31000000-0000-0000-0000-000000000001','41000000-0000-0000-0000-000000000003','51000000-0000-0000-0000-000000000003','rpc_audience','RPC','Another Business','rpc@example.test',true,'proposal_followup_v1','another_business')$$,
+  $$values ('accepted'::text, true)$$,
+  'another-business retake creates and links a separate lead'
+);
 select throws_ok(
   $$select * from public.persist_quiz_result('51000000-0000-0000-0000-000000000001',1,1,1,1,1,1,1,1,1,1,1,'ready','platform','systeme_io','platform_launch','website','{}','{}')$$,
   '42501', null, 'browser cannot persist protected result fields directly'

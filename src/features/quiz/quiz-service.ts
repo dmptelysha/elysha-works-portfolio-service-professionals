@@ -5,6 +5,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type {
   AudienceKey,
   LeadContactInput,
+  LeadContactSubmissionResult,
   ProposalDraftViewModel,
   ProposalViewModel,
   QuizAnswers,
@@ -174,9 +175,9 @@ export async function submitLeadContact(
   context: OwnedQuizContext,
   contact: LeadContactInput,
   client?: SupabaseClient,
-): Promise<{ leadId: string; quizSessionId: string }> {
+): Promise<LeadContactSubmissionResult> {
   const supabase = clientOrDefault(client);
-  const response = await supabase.rpc("begin_qualified_quiz", {
+  const response = await supabase.rpc("begin_qualified_quiz_v2", {
     p_visitor_id: requireUuid(context.visitorId),
     p_portfolio_session_id: requireUuid(context.portfolioSessionId),
     p_quiz_session_id: requireUuid(context.quizSessionId),
@@ -186,11 +187,24 @@ export async function submitLeadContact(
     p_email: contact.email.trim().toLowerCase(),
     p_consent: contact.consent === true,
     p_consent_version: "proposal_followup_v1",
+    p_business_scope: contact.businessScope ?? null,
   });
   const row = Array.isArray(response.data) ? response.data[0] : response.data;
   if (response.error || !row || typeof row !== "object") throw new Error(CONTACT_ERROR);
   const record = row as Record<string, unknown>;
-  return { leadId: requireUuid(record.lead_id), quizSessionId: requireUuid(record.quiz_session_id) };
+  const quizSessionId = requireUuid(record.quiz_session_id);
+  if (record.submission_status === "business_scope_required") {
+    if (typeof record.existing_business_name !== "string" || !record.existing_business_name.trim()) {
+      throw new Error(CONTACT_ERROR);
+    }
+    return {
+      status: "business_scope_required",
+      quizSessionId,
+      existingBusinessName: record.existing_business_name.trim(),
+    };
+  }
+  if (record.submission_status !== "accepted") throw new Error(CONTACT_ERROR);
+  return { status: "accepted", leadId: requireUuid(record.lead_id), quizSessionId };
 }
 
 export async function saveOwnedQuizProgress(

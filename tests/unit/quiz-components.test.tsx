@@ -50,7 +50,7 @@ function createFakeQuizService() {
   const createOwnedQuizContext = vi.fn(async (audienceKey: typeof ownedContext.audienceKey) => ({ ...ownedContext, audienceKey }));
   const submitLeadContact = vi.fn(async (_context: OwnedQuizContext, contact: { firstName: string; businessName: string }) => {
     identity = { firstName: contact.firstName, businessName: contact.businessName };
-    return { leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId };
+    return { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId };
   });
   const saveOwnedQuizProgress = vi.fn(async (_context: OwnedQuizContext, progress: { answers: Record<string, readonly string[]> }) => {
     answers = progress.answers;
@@ -104,7 +104,9 @@ describe("local portfolio quiz", () => {
     expect(screen.queryByText(/a clear roadmap in three steps/i)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /service-based business/i }));
-    expect(screen.getByRole("heading", { name: /where should we send your 3-day proposal/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /where should we send your proposal/i })).toBeInTheDocument();
+    expect(screen.getByText(/securely store your personalized proposal for 72 hours/i)).toBeInTheDocument();
+    expect(screen.getByText(/book a discovery call within that window/i)).toBeInTheDocument();
     expect(service.createOwnedQuizContext).not.toHaveBeenCalled();
   });
 
@@ -146,7 +148,10 @@ describe("local portfolio quiz", () => {
     const user = userEvent.setup();
     const initialUrl = window.location.href;
     let submitted: unknown = null;
-    render(<LeadContactStep onSubmit={async (contact) => { submitted = contact; }} />);
+    render(<LeadContactStep onSubmit={async (contact) => {
+      submitted = contact;
+      return { status: "accepted", leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId };
+    }} />);
 
     const submit = screen.getByRole("button", { name: /continue to assessment/i });
     expect(submit).toHaveTextContent("Continue to Assessment →");
@@ -165,6 +170,53 @@ describe("local portfolio quiz", () => {
       consent: true,
     }));
     expect(window.location.href).toBe(initialUrl);
+  });
+
+  it("asks whether a saved same-device email is for the same or another business", async () => {
+    const user = userEvent.setup();
+    const submissions: Array<{ businessName: string; businessScope?: string }> = [];
+    render(<LeadContactStep onSubmit={async (contact) => {
+      submissions.push(contact);
+      if (!contact.businessScope) {
+        return {
+          status: "business_scope_required",
+          quizSessionId: ownedContext.quizSessionId,
+          existingBusinessName: "Mara Consulting",
+        };
+      }
+      return {
+        status: "accepted",
+        leadId: "60000000-0000-4000-8000-000000000001",
+        quizSessionId: ownedContext.quizSessionId,
+      };
+    }} />);
+
+    await completeContactStep(user);
+    expect(await screen.findByRole("heading", { name: /is this assessment for mara consulting/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/^email/i)).toHaveValue("Mara@Example.com");
+    await user.click(screen.getByRole("button", { name: /same business/i }));
+    await waitFor(() => expect(submissions.at(-1)?.businessScope).toBe("same_business"));
+  });
+
+  it("requires a different name before confirming another business", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn(async (contact: { businessScope?: string }) => contact.businessScope
+      ? { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId }
+      : { status: "business_scope_required" as const, quizSessionId: ownedContext.quizSessionId, existingBusinessName: "Mara Consulting" });
+    render(<LeadContactStep onSubmit={onSubmit} />);
+    await completeContactStep(user);
+    await user.click(await screen.findByRole("button", { name: /another business/i }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/enter the other business name/i);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    const businessInput = screen.getByLabelText(/business name/i);
+    await user.clear(businessInput);
+    await user.type(businessInput, "Mara Academy");
+    await user.click(screen.getByRole("button", { name: /another business/i }));
+    await waitFor(() => expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({
+      businessName: "Mara Academy",
+      businessScope: "another_business",
+    })));
   });
 
   it("retains contact fields and announces a submission failure", async () => {
@@ -214,6 +266,7 @@ describe("local portfolio quiz", () => {
     let finishSubmission!: () => void;
     service.submitLeadContact.mockImplementation(() => new Promise((resolve) => {
       finishSubmission = () => resolve({
+        status: "accepted",
         leadId: "60000000-0000-4000-8000-000000000001",
         quizSessionId: ownedContext.quizSessionId,
       });
@@ -246,7 +299,7 @@ describe("local portfolio quiz", () => {
     expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/elysha-works-privacy-policy/");
     expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/elysha-works-terms-of-service/");
     await user.click(screen.getByRole("button", { name: /service-based business/i }));
-    expect(screen.getByRole("heading", { name: /where should we send your 3-day proposal/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /where should we send your proposal/i })).toBeInTheDocument();
     await completeContactStep(user);
     expect(screen.getByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /start my assessment/i }));
@@ -358,7 +411,7 @@ describe("local portfolio quiz", () => {
     await user.tab();
     expect(resumeButton).toHaveFocus();
     await user.click(resumeButton);
-    expect(screen.getByRole("heading", { name: /where should we send your 3-day proposal/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /where should we send your proposal/i })).toBeInTheDocument();
     await completeContactStep(user);
     await user.click(screen.getByRole("button", { name: /start my assessment/i }));
     expect(screen.getByText("Question 2 of 8")).toBeInTheDocument();

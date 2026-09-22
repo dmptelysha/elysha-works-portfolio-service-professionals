@@ -42,6 +42,8 @@ Audience → Contact → Quiz → Point A → Point B → Recommended solution
 
 The protected proposal is available for exactly 72 hours from successful initial email delivery. This is a proposal-access and same-browser recovery limit, not a promise to delete business, consent, booking, or CRM records after three days.
 
+The pre-assessment contact screen uses the heading **“Where should we send your proposal?”** and explains that the personalized proposal is securely available for 72 hours. It asks the visitor to book a discovery call inside that window so Elysha and the client can discuss the roadmap, answer questions, and agree on the best next step before access expires.
+
 ---
 
 ## 2. Portfolio System Map
@@ -1158,7 +1160,9 @@ The connected client state carries the Supabase anonymous user ID, owned visitor
 - Silently establish a Supabase Anonymous Auth session, then create owned visitor, portfolio-session, and quiz-session records when meaningful engagement begins.
 - Update remote progress after each completed step or in safe batches and refresh `last_activity_at`.
 - Mark previous remote attempts `restarted` or `expired` rather than overwriting analytics history.
-- Create or reuse and link a lead after the required contact-and-consent step succeeds through `begin_qualified_quiz`.
+- Create or reuse and link a lead after the required contact-and-consent step succeeds through `begin_qualified_quiz_v2`.
+- When the same anonymous owner reuses an email already linked to that owner's visitor record, pause before Question 1 and ask whether the assessment is for the same business or another business. Same-business retakes reuse the stable lead ID without replacing its original source IDs; another-business retakes create a separate lead even when the contact email is shared.
+- Never disclose that an email exists under another owner. Cross-device email recognition requires a future verified email OTP flow; an email address alone is not proof of identity.
 - Use server-side `finalize-proposal` preview and issue operations for protected scoring, prices, selections, proposal issuance, and Make delivery; never trust client-calculated totals.
 - Use only public/publishable Supabase credentials with tested RLS and narrowly scoped RPC functions; the `service_role` key never appears in browser code.
 
@@ -1586,7 +1590,7 @@ Future modules use the original `lead_id`, later `client_id`, and project/worksp
 
 ### 8.5 Anonymous Auth ownership and cleanup
 
-The browser silently calls Supabase Anonymous Auth before creating portfolio records. Supabase anonymous users operate under the PostgreSQL `authenticated` role, not `anon`; ownership uses `auth.uid() = owner_user_id` plus checks that referenced parent rows have the same owner. The JWT `is_anonymous` claim may distinguish anonymous visitors from permanent users where necessary. The unauthenticated `anon` role receives no table access by default; the normal flow signs in anonymously before reading configuration.
+The browser silently calls Supabase Anonymous Auth before creating portfolio records. Supabase anonymous users operate under the PostgreSQL `authenticated` role, not `anon`; ownership uses `auth.uid() = owner_user_id` plus checks that referenced parent rows have the same owner. The JWT `is_anonymous` claim may distinguish anonymous visitors from permanent users where necessary. The unauthenticated `anon` role receives no table access by default; the normal flow signs in anonymously before reading configuration. Repeat-email detection is restricted to leads connected to the same owned `visitor_id`, so it cannot be used to enumerate whether another person's email exists.
 
 Anonymous identity is durable only while local auth state remains available. Clearing browser data, signing out, private browsing, or changing device/browser may prevent same-device recovery. Owned incomplete quiz sessions remain recoverable for 72 hours after latest accepted activity. The required contact-and-consent step creates or reuses a lead before Question 1; later booking/client conversion links the same stable IDs rather than replacing them.
 
@@ -1664,7 +1668,7 @@ RLS is enabled on every Phase 1 table. Migrations explicitly revoke broad defaul
 | `site_visitors` | Owner create/read; safe owned updates only | Authorized management | Direct create/read; restricted activity/counter RPC or column-safe update |
 | `portfolio_sessions` | Owner create/read; safe owned updates only | Authorized management | Direct create/read; constrained update/RPC |
 | `quiz_sessions` | Owner create/read; safe owned progress updates only | Authorized management | Direct create/read; constrained autosave/result/link RPC |
-| `leads` | No list/read/update/delete or arbitrary insert | Authorized CRM access | `begin_qualified_quiz`/trusted linking only |
+| `leads` | No list/read/update/delete or arbitrary insert | Authorized CRM access | `begin_qualified_quiz_v2`/trusted linking only |
 | `bookings` | No list or arbitrary mutation | Authorized booking access | Submission RPC or trusted webhook |
 | `analytics_events` | No listing/update/delete | Authorized reporting access | Restricted event RPC only |
 | `projects` | Select only `published = true` | Full authorized management | Direct read only |
@@ -1682,6 +1686,7 @@ Phase 1 admin authorization uses a server-controlled JWT `app_metadata` role cla
 | Responsibility | Caller | Minimum behavior |
 |---|---|---|
 | Lead submission | Owned anonymous/permanent user | Accept approved contact/business and source IDs only; validate ownership; normalize input; set safe CRM defaults internally |
+| Repeat-assessment business scope | Owned anonymous/permanent user | Return only a same-owner business-name prompt; reuse the stable lead for `same_business`; create a separate lead for `another_business`; never reveal cross-owner email matches |
 | Booking submission or webhook processing | Owned user for submission; trusted server for webhook | Link a lead, preserve visitor/session/quiz attribution, validate provider data, set status/provider fields internally |
 | Business-critical analytics creation | Owned user or trusted server | Allowlist event names/properties, validate owned attribution IDs, assign owner/time internally, prevent arbitrary lead attachment |
 | Quiz-to-lead conversion/linking | Owned user or trusted server | Verify quiz ownership/canonical source, set both relationship directions transactionally, reject conflicts/reassignment |

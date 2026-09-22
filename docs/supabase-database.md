@@ -94,7 +94,7 @@ Anonymous users operate through PostgreSQL role `authenticated`; ownership remai
 
 Visitor-callable security-definer functions validate `auth.uid()`, ownership of every referenced row, bounded scalar/JSON inputs, and fixed `search_path = ''`. They assign CRM state, ownership, prices, timestamps, proposal state, and orchestration values internally.
 
-Existing restricted functions include lead/booking/analytics/linking operations. The connected flow adds `begin_qualified_quiz`, while trusted proposal state functions are service-role-only. The former browser-wide result persistence grant is revoked when the trusted Edge path is installed.
+Existing restricted functions include lead/booking/analytics/linking operations. The connected flow uses `begin_qualified_quiz_v2`; it recognizes a reused email only inside the current anonymous owner's visitor record, returns a minimal same/another-business decision, reuses the stable lead for the same business, and creates a separate lead for another business. Cross-device recognition remains unavailable until an email OTP flow is approved. The legacy `begin_qualified_quiz` function remains for migration compatibility but browser execution is revoked. Trusted proposal state functions are service-role-only, and the former browser-wide result persistence grant is revoked.
 
 Four Edge Functions form the external boundary:
 
@@ -125,7 +125,7 @@ Do not put secret values on a command line that may be captured in shell history
 - Leads, consent, bookings, delivery events, and CRM attribution are not deleted merely because proposal access expires.
 - Legal/business retention periods and destructive cleanup remain deferred; do not install a destructive cron job.
 
-Make uses two scenarios. Scenario A receives one signed idempotent immediate-delivery request and sends the proposal link/key through an authorized Gmail connection. Scenario B runs every 15 minutes, asks `make-proposal-followups` for due work, revalidates immediately before sending, and acknowledges the result. Follow-ups occur at +24, +48, and +72 hours; +96 marks an eligible unbooked lead cold without sending a fourth email. Any booking row or valid stop request suppresses later automation. Both scenarios remain inactive until backend/security verification is complete.
+Make uses two scenarios. Scenario A receives one signed idempotent immediate-delivery request and sends the proposal link/key through an authorized Gmail connection. Its final Webhook Response must return JSON containing `accepted: true` and the exact incoming `delivery_id`; a generic HTTP 2xx response is rejected and cannot mark the proposal email `sent`. Scenario B runs every 15 minutes, asks `make-proposal-followups` for due work, revalidates immediately before sending, and acknowledges the result. Follow-ups occur at +24, +48, and +72 hours; +96 marks an eligible unbooked lead cold without sending a fourth email. Any booking row or valid stop request suppresses later automation. Do not treat either scenario as production-ready until the Gmail connection, idempotency branch, final acknowledgement, and controlled delivery test are verified.
 
 No PDF is generated. Make does not receive database authority, the Supabase service-role key, or permission to decide eligibility.
 
