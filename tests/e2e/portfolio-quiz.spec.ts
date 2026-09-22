@@ -67,7 +67,7 @@ async function mockSupabaseQuiz(page: import("@playwright/test").Page, observed:
     if (url.pathname.endsWith("/functions/v1/finalize-proposal")) {
       const payload = request.postDataJSON() as { operation?: string };
       return json(payload.operation === "issue"
-        ? { proposalReference: ids.proposal, accessKey: "ABCD234567", proposal: { ...proposalDraft, expiresAt: "2026-09-25T05:00:00.000Z" } }
+        ? { proposalReference: ids.proposal, proposal: { ...proposalDraft, expiresAt: "2026-09-25T05:00:00.000Z" } }
         : { proposal: proposalDraft });
     }
     return json({ message: "unhandled mock request" }, 404);

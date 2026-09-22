@@ -200,7 +200,7 @@ export async function issueProposal(
   context: OwnedQuizContext,
   selection: RoadmapSelection,
   client?: SupabaseClient,
-): Promise<{ proposal: ProposalViewModel; proposalReference: string; accessKey: string }> {
+): Promise<{ proposal: ProposalViewModel; proposalReference: string }> {
   const response = await clientOrDefault(client).functions.invoke("finalize-proposal", {
     body: {
       operation: "issue",
@@ -209,7 +209,7 @@ export async function issueProposal(
     },
   });
   if (response.error || !response.data?.proposal) throw safeServiceError();
-  return response.data as { proposal: ProposalViewModel; proposalReference: string; accessKey: string };
+  return response.data as { proposal: ProposalViewModel; proposalReference: string };
 }
 
 export const defaultQuizService: QuizService = {

@@ -16,6 +16,7 @@
     "firebase:test-rules": "firebase emulators:exec --only firestore \"node --test tests/firestore-rules.test.mjs\"",
     "test:supabase:static": "node --test tests/supabase-migrations-static.test.mjs",
     "test:supabase:db": "supabase test db",
+    "test:edge": "deno test --allow-env supabase/functions/tests",
     "lint": "eslint src next.config.ts eslint.config.mjs",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:static && npm run test:unit",

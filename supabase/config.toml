@@ -24,3 +24,20 @@ enable_anonymous_sign_ins = true
 enabled = false
 provider = "turnstile"
 secret = "env(SUPABASE_AUTH_CAPTCHA_SECRET)"
+
+# The browser-owned finalization endpoint relies on the Supabase gateway JWT
+# check and repeats ownership validation with the caller's bearer token.
+[functions.finalize-proposal]
+verify_jwt = true
+
+# These public/server-to-server endpoints implement their own proposal-key,
+# signed-token, or shared-secret authentication and therefore cannot require a
+# visitor JWT at the gateway.
+[functions.verify-proposal]
+verify_jwt = false
+
+[functions.make-proposal-followups]
+verify_jwt = false
+
+[functions.stop-proposal-followups]
+verify_jwt = false
