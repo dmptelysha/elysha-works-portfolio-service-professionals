@@ -45,9 +45,9 @@ The result and protected proposal will also be easier to scan:
 1. The quiz page immediately shows the three audience choices.
 2. The visitor selects an audience. The choice is held locally; no qualified lead is created yet.
 3. The contact step asks for first name, last name, business name, email, and proposal/follow-up consent.
-4. Submitting valid details starts Supabase email OTP verification behind Turnstile protection.
+4. Submitting valid details starts Supabase email OTP sign-in behind Turnstile protection.
 5. The interface changes in place to a six-digit verification-code step. It shows a masked email, a resend countdown, Change email, and Verify actions.
-6. A correct code signs the visitor into a verified, non-anonymous Supabase Auth identity. Only then does the application create or reuse the owned visitor/session/quiz context and call the restricted lead RPC.
+6. A correct code signs the visitor into a verified, non-anonymous Supabase Auth identity. This is an intentional session replacement, not an assumption that the anonymous UUID will be preserved. Only then does the application create or reuse the owned visitor/session/quiz context and call the restricted lead RPC.
 7. If the verified identity already has a lead for a business, the interface asks whether the assessment is for that business or another business. It never reveals data belonging to a different authenticated identity.
 8. The visitor answers the audience-specific questions without page navigation or reload. Progress is stored under the verified owner's `auth.uid()` and has the approved 72-hour resume window.
 9. The trusted Cortex endpoint recalculates the result from stored answers and approved catalog data.
@@ -67,21 +67,24 @@ The exact Gmail address, SMTP username, App Password or OAuth credential, and ot
 
 ### 4.2 Session transition
 
-The contact flow calls `signInWithOtp` for the normalized email, with account creation allowed. This gives the same outward response for a new or returning address and avoids an email-existence oracle. `verifyOtp` completes the sign-in.
+The selected implementation path is passwordless sign-in, not native anonymous-user conversion. The contact flow calls `signInWithOtp` for the normalized email, with account creation allowed. This gives the same outward response for a new or returning address and avoids an email-existence oracle. `verifyOtp` completes the sign-in and may replace the current anonymous session with a different permanent-user `auth.uid()`.
 
-Qualified quiz initialization is deliberately deferred until after OTP verification. This avoids transferring a quiz or lead from a temporary anonymous user to a different permanent user. If a portfolio-level anonymous session already exists, it remains an anonymous attribution record; the verified quiz receives a new owned context and copies only approved attribution fields such as source, campaign, referrer host, and landing path. It does not copy protected identifiers or arbitrary browser data.
+Qualified quiz initialization is deliberately deferred until after OTP verification. No lead, qualified quiz session, proposal, or protected answer snapshot may be owned by the pre-verification anonymous identity. This avoids transferring a quiz or lead from a temporary anonymous user to a different permanent user. If a portfolio-level anonymous session already exists, it remains an anonymous attribution record; the verified quiz receives a new owned context and copies only approved, non-PII attribution fields held in memory, such as source, campaign, referrer host, and landing path. It does not copy protected identifiers or arbitrary browser data. Unverified contact fields remain component memory only and are cleared on cancel, successful verification, page unload, or the existing 72-hour local-attempt purge; they are never written into the quiz persistence snapshot.
+
+The implementation must include an isolated Auth integration test proving the actual session behavior for: a new email, an existing email, OTP verification, anonymous-session replacement, and the resulting `auth.uid()`. If the current Supabase project behaves differently from the documented passwordless flow, implementation pauses and this identity decision is revised before schema deployment. Native `updateUser({ email })` conversion is not mixed into this flow because existing-email conflicts require a separate merge policy.
 
 After verification, every qualified-lead RPC verifies all of the following:
 
 - `auth.uid()` is present;
 - the JWT `is_anonymous` claim is false;
 - `auth.users.email_confirmed_at` is present;
-- the normalized requested email equals the authenticated user's normalized email;
+- `auth.users.email` is present and becomes the sole canonical normalized lead email;
 - every supplied visitor, portfolio-session, and quiz-session identifier belongs to the same `auth.uid()`.
 
 ### 4.3 Abuse controls
 
 - Turnstile remains required for starting OTP and Anonymous Auth operations in production.
+- Supabase Dashboard Auth limits remain authoritative for per-IP OTP issuance and verification. Before launch, the configured limits are recorded and tested; the application does not claim that OTP alone prevents abuse.
 - The Send code button locks while pending.
 - Resend is unavailable for at least 60 seconds after a successful request.
 - The verification view accepts exactly six digits and limits UI retries. Supabase Auth remains authoritative for server-side expiry and verification throttling.
@@ -89,6 +92,7 @@ After verification, every qualified-lead RPC verifies all of the following:
 - The UI must not say whether an email already has an account or lead.
 - No proposal, initial proposal email, or follow-up is created until OTP verification and consent both succeed.
 - The consent timestamp is recorded after verification, not when the unverified form is first submitted.
+- Trusted lead creation and proposal issuance enforce per-user/per-quiz idempotency. Repeated clicks, reopened tabs, and network retries cannot create duplicate leads, proposals, or initial emails.
 
 ### 4.4 Repeat assessments
 
@@ -122,7 +126,6 @@ Create a versioned `begin_verified_qualified_quiz` function rather than silently
 - first name;
 - last name;
 - business name;
-- normalized email;
 - consent boolean and approved consent version;
 - optional same-business/another-business choice.
 
@@ -130,14 +133,17 @@ It derives `auth_user_id`, verification time, CRM defaults, source, timestamps, 
 
 The function is `SECURITY DEFINER`, uses `SET search_path = ''`, schema-qualifies every object, validates all ownership relationships, and is executable only by `authenticated`. A permanent authenticated user and an anonymous authenticated user share the PostgreSQL role, so the function must additionally reject `is_anonymous = true`.
 
+The browser does not supply `auth_user_id`, canonical email, or verification time. The function derives them from `auth.uid()` and `auth.users`, accepts only the name/business/consent fields plus owned context IDs, and sets protected values internally. A single authenticated user may have multiple leads only for distinct businesses; same-business retries reuse the existing lead and remain idempotent.
+
 ### 5.3 Rollout compatibility
 
 Database rollout is additive first:
 
 1. Add columns, indexes, constraints, and the new RPC.
 2. Deploy and verify the OTP-capable frontend and generated types.
-3. Confirm the live quiz uses only the new RPC.
-4. In a separate migration, revoke browser execution of `begin_qualified_quiz_v2`.
+3. Confirm the live quiz uses only the new RPC and emits versioned adoption telemetry that contains no PII.
+4. Keep a measured compatibility window for cached assets and already-open tabs. The legacy RPC returns a controlled upgrade-required response after the window begins, without creating a new unverified lead.
+5. After telemetry shows no supported client using v2 for the approved compatibility interval, revoke browser execution of `begin_qualified_quiz_v2` in a separate migration.
 
 This order avoids a live outage while ensuring the legacy unverified path is removed promptly after the new client is active. No table, data, schema, or existing proposal record is dropped or reset.
 
@@ -184,13 +190,13 @@ Dialog states:
 | `success` | **Success! Your proposal is ready.**; confirms delivery to the masked email; View My Roadmap; Book a Discovery Call |
 | `error` | Explains that the roadmap is still visible in this browser; Retry email; never claims delivery |
 
-The success state is driven by the Make delivery acknowledgement already used to start the exact 72-hour proposal window. Closing and reopening the result must not send a duplicate email.
+The success state is driven by the Make delivery acknowledgement already used to start the exact 72-hour proposal window. Make must return a durable delivery receipt or accepted-job identifier bound to the existing idempotency key; a transport-level HTTP 200 without that receipt is not sufficient to display success. Closing and reopening the result must not send a duplicate email.
 
 ## 7. Direct Booking Handoff
 
 Because the booking application is a separate surface, contact information must not be passed through query parameters, `localStorage`, or a readable JWT.
 
-The proposal/quiz booking action requests a short-lived, single-use opaque handoff token from trusted server logic. The server stores or signs only the minimum claims required to resolve:
+The proposal/quiz booking action requests a short-lived, single-use opaque handoff token from trusted server logic. The portfolio Edge Function is the issuer and the booking backend is the consumer. The token is an opaque random value; the booking backend stores only its hash and the minimum server-side handoff record required to resolve:
 
 - verified Supabase user ID;
 - lead ID;
@@ -198,11 +204,11 @@ The proposal/quiz booking action requests a short-lived, single-use opaque hando
 - normalized verified email;
 - business name;
 - quiz/proposal attribution;
-- issued-at, expiry, nonce, and intended booking audience.
+- issued-at, expiry, hashed nonce, and intended booking audience.
 
-The browser receives only the opaque token and navigates to the booking application. The booking backend validates the token server-to-server, marks it consumed, prepopulates the intake record, and opens date/time selection. Recommended lifetime: ten minutes. Reuse, expiry, audience mismatch, or invalid signature falls back to the normal booking form without revealing which check failed.
+The browser receives only the opaque token and navigates to the booking application. The booking backend validates the hash and audience, atomically marks the record consumed, prepopulates the intake record, and opens date/time selection. Recommended lifetime: ten minutes. Reuse, expiry, audience mismatch, or invalid token falls back to the normal booking form without revealing which check failed.
 
-This capability depends on a corresponding trusted endpoint in the booking backend at `crm.elyshaworks.com`. The portfolio must not fake direct booking with client-stored PII if that endpoint is unavailable.
+This capability depends on a corresponding trusted endpoint and secure token store in the booking backend at `crm.elyshaworks.com`. It is a separate rollout gate: until the issuer/consumer contract passes replay, expiry, and fallback tests, the current booking intake remains active. The portfolio must not fake direct booking with client-stored PII if that endpoint is unavailable.
 
 ## 8. Component and Service Boundaries
 
@@ -266,11 +272,11 @@ The shared proposal view model adds last name only where the experience needs it
 ## 11. Deployment and Configuration
 
 1. Add tests and implementation locally; run typecheck, unit/component tests, static database tests, build, and lint.
-2. Configure a non-production Supabase Auth email template and the approved Gmail SMTP sender before production smoke testing.
+2. Confirm the exact owner-approved Gmail/Google Workspace address and whether Supabase will authenticate with an App Password or another currently supported SMTP mechanism. Configure a non-production Auth email template and sender before production smoke testing.
 3. Inspect the exact linked Supabase project, remote migrations, functions, policies, and pending SQL.
 4. Present the required remote migration safety report and wait for explicit approval before any database push.
 5. Apply the additive migration and deploy required Edge Functions.
-6. Configure the production Gmail sender in Supabase Auth and verify the Google account's security, App Password/OAuth setup, sender identity, and delivery limits without exposing credentials.
+6. Configure the production Gmail sender in Supabase Auth and verify the Google account's security, SMTP authentication method, From-address alignment, sender identity, delivery limits, and test delivery without exposing credentials. Personal Gmail remains acceptable for the approved initial volume but is explicitly treated as quota- and deliverability-limited.
 7. Deploy the OTP frontend to Firebase Hosting, smoke-test, then apply the legacy-RPC revocation migration.
 8. Add the trusted booking-backend handoff endpoint before enabling the direct-to-date-selection behavior.
 9. Generate updated TypeScript database types only after the verified remote schema is live.
