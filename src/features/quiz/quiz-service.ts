@@ -52,6 +52,11 @@ function safeServiceError(): Error {
   return new Error(SERVICE_ERROR);
 }
 
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error
+    && (error as { code?: unknown }).code === "23505";
+}
+
 export async function ensureAnonymousSession(client?: SupabaseClient, captchaToken?: string): Promise<Session> {
   const supabase = clientOrDefault(client);
   const current = await supabase.auth.getSession();
@@ -109,8 +114,18 @@ export async function createOwnedQuizContext(
       .insert({ owner_user_id: ownerUserId, landing_path: landingPath })
       .select("id")
       .single();
-    if (visitorResult.error || !visitorResult.data) throw safeServiceError();
-    visitorId = requireUuid(visitorResult.data.id);
+    if (isUniqueViolation(visitorResult.error)) {
+      const racedVisitorResult = await supabase
+        .from("site_visitors")
+        .select("id")
+        .eq("owner_user_id", ownerUserId)
+        .single();
+      if (racedVisitorResult.error || !racedVisitorResult.data) throw safeServiceError();
+      visitorId = requireUuid(racedVisitorResult.data.id);
+    } else {
+      if (visitorResult.error || !visitorResult.data) throw safeServiceError();
+      visitorId = requireUuid(visitorResult.data.id);
+    }
   }
 
   const portfolioResult = await supabase
