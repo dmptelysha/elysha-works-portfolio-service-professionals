@@ -110,6 +110,7 @@ describe("Supabase quiz service", () => {
       sessionUserId: USER_ID,
       tableResponses: [
         { data: { id: DEFINITION_ID, version: 1, audience_key: "service_businesses" }, error: null },
+        { data: null, error: null },
         { data: { id: VISITOR_ID }, error: null },
         { data: { id: PORTFOLIO_SESSION_ID }, error: null },
         { data: { id: QUIZ_SESSION_ID }, error: null },
@@ -122,11 +123,11 @@ describe("Supabase quiz service", () => {
     })).resolves.toEqual(context);
 
     expect(fake.tableCalls.map((entry) => entry.table)).toEqual([
-      "quiz_definitions", "site_visitors", "portfolio_sessions", "quiz_sessions",
+      "quiz_definitions", "site_visitors", "site_visitors", "portfolio_sessions", "quiz_sessions",
     ]);
-    const visitorInsert = fake.tableCalls[1].chain.find((call) => call.method === "insert");
+    const visitorInsert = fake.tableCalls[2].chain.find((call) => call.method === "insert");
     expect(visitorInsert?.args[0]).toMatchObject({ owner_user_id: USER_ID, landing_path: "/quiz/" });
-    const quizInsert = fake.tableCalls[3].chain.find((call) => call.method === "insert");
+    const quizInsert = fake.tableCalls[4].chain.find((call) => call.method === "insert");
     expect(quizInsert?.args[0]).toMatchObject({
       owner_user_id: USER_ID,
       visitor_id: VISITOR_ID,
@@ -135,6 +136,32 @@ describe("Supabase quiz service", () => {
       question_set_version: 1,
       audience_key: "service_businesses",
     });
+  });
+
+  it("reuses the anonymous owner's existing visitor before creating a fresh quiz session", async () => {
+    const fake = fakeClient({
+      sessionUserId: USER_ID,
+      tableResponses: [
+        { data: { id: DEFINITION_ID, version: 1, audience_key: "service_businesses" }, error: null },
+        { data: { id: VISITOR_ID }, error: null },
+        { data: { id: PORTFOLIO_SESSION_ID }, error: null },
+        { data: { id: QUIZ_SESSION_ID }, error: null },
+      ],
+    });
+
+    await expect(createOwnedQuizContext("service_businesses", {
+      client: fake.client as never,
+      landingPath: "/quiz/",
+    })).resolves.toEqual(context);
+
+    const visitorLookup = fake.tableCalls[1];
+    expect(visitorLookup.table).toBe("site_visitors");
+    expect(visitorLookup.chain).toEqual(expect.arrayContaining([
+      { method: "select", args: ["id"] },
+      { method: "eq", args: ["owner_user_id", USER_ID] },
+      { method: "maybeSingle", args: [] },
+    ]));
+    expect(visitorLookup.chain.some((call) => call.method === "insert")).toBe(false);
   });
 
   it("submits only approved contact fields and owned attribution through the RPC", async () => {

@@ -66,9 +66,9 @@ export function LeadContactStep({ onSubmit }: LeadContactStepProps) {
           <span>I agree to receive the initial proposal and up to three follow-ups unless I book a discovery call.</span>
         </label>
         {error ? <p className="quiz-validation" role="alert">{error}</p> : null}
-        {submitting ? <p className="quiz-contact-status" role="status">Saving your detailsâ€¦</p> : null}
+        {submitting ? <p className="quiz-contact-status" role="status">Saving your details…</p> : null}
         <button className="quiz-primary" disabled={!canSubmit} type="submit">
-          Continue to Assessment <span aria-hidden="true">â†’</span>
+          Continue to Assessment <span aria-hidden="true">→</span>
         </button>
       </form>
     </section>

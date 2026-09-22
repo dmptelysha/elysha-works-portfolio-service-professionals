@@ -77,6 +77,7 @@ describe("local portfolio quiz", () => {
     render(<LeadContactStep onSubmit={async (contact) => { submitted = contact; }} />);
 
     const submit = screen.getByRole("button", { name: /continue to assessment/i });
+    expect(submit).toHaveTextContent("Continue to Assessment →");
     expect(submit).toBeDisabled();
     await user.type(screen.getByLabelText(/first name/i), "  Mara  ");
     await user.type(screen.getByLabelText(/business name/i), "  Mara Consulting  ");
@@ -124,7 +125,9 @@ describe("local portfolio quiz", () => {
 
     await waitFor(() => expect(service.previewProposal).toHaveBeenCalledWith(expect.objectContaining({ quizSessionId: ownedContext.quizSessionId })));
     expect(service.saveOwnedQuizProgress).toHaveBeenCalled();
-    await user.click(await screen.findByRole("button", { name: /create my 3-day proposal/i }));
+    const createProposal = await screen.findByRole("button", { name: /create my 3-day proposal/i });
+    expect(createProposal).toHaveTextContent("Create My 3-Day Proposal →");
+    await user.click(createProposal);
     await waitFor(() => expect(service.issueProposal).toHaveBeenCalledWith(
       expect.objectContaining({ quizSessionId: ownedContext.quizSessionId }),
       expect.objectContaining({ tierKey: expect.any(String), platform: expect.any(String) }),
@@ -154,7 +157,7 @@ describe("local portfolio quiz", () => {
     await user.click(submit);
 
     expect(submit).toBeDisabled();
-    expect(screen.getByRole("status")).toHaveTextContent(/saving your details/i);
+    expect(screen.getByRole("status")).toHaveTextContent("Saving your details…");
     expect(service.submitLeadContact).toHaveBeenCalledOnce();
     finishSubmission();
     expect(await screen.findByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();

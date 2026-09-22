@@ -93,13 +93,25 @@ export async function createOwnedQuizContext(
     throw safeServiceError();
   }
 
-  const visitorResult = await supabase
+  const existingVisitorResult = await supabase
     .from("site_visitors")
-    .insert({ owner_user_id: ownerUserId, landing_path: landingPath })
     .select("id")
-    .single();
-  if (visitorResult.error || !visitorResult.data) throw safeServiceError();
-  const visitorId = requireUuid(visitorResult.data.id);
+    .eq("owner_user_id", ownerUserId)
+    .maybeSingle();
+  if (existingVisitorResult.error) throw safeServiceError();
+
+  let visitorId: string;
+  if (existingVisitorResult.data) {
+    visitorId = requireUuid(existingVisitorResult.data.id);
+  } else {
+    const visitorResult = await supabase
+      .from("site_visitors")
+      .insert({ owner_user_id: ownerUserId, landing_path: landingPath })
+      .select("id")
+      .single();
+    if (visitorResult.error || !visitorResult.data) throw safeServiceError();
+    visitorId = requireUuid(visitorResult.data.id);
+  }
 
   const portfolioResult = await supabase
     .from("portfolio_sessions")

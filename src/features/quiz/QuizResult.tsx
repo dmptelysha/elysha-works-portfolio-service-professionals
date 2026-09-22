@@ -139,7 +139,7 @@ export function QuizResult({
           </div>
           {!proposal.expiresAt ? (
             <button className="quiz-primary" disabled={issuing} onClick={() => void onIssue()} type="button">
-              {issuing ? "Creating your proposalâ€¦" : "Create My 3-Day Proposal"} <span aria-hidden="true">â†’</span>
+              {issuing ? "Creating your proposal…" : "Create My 3-Day Proposal"} <span aria-hidden="true">→</span>
             </button>
           ) : null}
           <button className="quiz-back" onClick={onStartOver} type="button">Start a new assessment</button>
