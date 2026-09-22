@@ -8,6 +8,7 @@ import {
   type CortexInput,
   type CortexResult,
   type DiagnosticScores,
+  type DecisionTraceEntry,
   type ExplanationTraceEntry,
   type PlatformKey,
   type PlatformScores,
@@ -343,7 +344,17 @@ export function calculateRecommendation(input: CortexInput): CortexResult {
   const aggregated = aggregate(input);
   const route = chooseRoute(aggregated.solutions, aggregated.platforms, aggregated.flags);
   let primary = choosePrimarySolution(aggregated.solutions, aggregated.flags);
+  const highestSolutionScore = Math.max(
+    ...SOLUTIONS.map((solution) => solutionValue(aggregated.solutions, solution)),
+  );
+  const lowConfidence = highestSolutionScore < 4;
+  if (lowConfidence) {
+    const q1Scores = aggregated.trace.find((entry) => entry.questionKey === "q1_goal")?.after.solutions;
+    if (q1Scores) primary = choosePrimarySolution(q1Scores, aggregated.flags);
+  }
+  const scoredPrimary = primary;
   if (route === "custom") primary = "custom_app";
+  const customRouteOverrodePrimary = route === "custom" && scoredPrimary !== "custom_app";
   const platform = choosePlatform(route, aggregated.platforms, aggregated.flags);
   const offerKey = chooseOffer(route, aggregated.diagnostic.systemComplexity, aggregated.flags);
   const offer = PACKAGE_BY_KEY.get(offerKey);
@@ -367,9 +378,47 @@ export function calculateRecommendation(input: CortexInput): CortexResult {
   });
   const primaryScore = solutionValue(aggregated.solutions, primary);
   const supportingSolutionTypes = SOLUTIONS.filter(
-    (solution) => solution !== primary && solutionValue(aggregated.solutions, solution) >= 4 && primaryScore - solutionValue(aggregated.solutions, solution) <= 2,
+    (solution) =>
+      solution !== primary &&
+      solutionValue(aggregated.solutions, solution) >= 4 &&
+      Math.abs(primaryScore - solutionValue(aggregated.solutions, solution)) <= 2,
   );
   const selectedSignalLabels = [...aggregated.flags].filter((signal) => !["simple_scope", "no_system_effect"].includes(signal));
+  const decisionTrace: DecisionTraceEntry[] = [
+    {
+      ruleKey: "primary_solution",
+      outcome: primary,
+      reason: customRouteOverrodePrimary
+        ? `The score-based primary was ${scoredPrimary.replace("_", " ")}, but an approved custom-route guardrail requires custom app as the primary solution.`
+        : lowConfidence
+        ? "No solution reached the qualifying score of 4, so the primary recommendation follows the Q1 goal signal and is marked low confidence."
+        : `The highest qualifying solution score and the approved tie-break rules selected ${primary.replace("_", " ")}.`,
+    },
+    {
+      ruleKey: "build_route",
+      outcome: route,
+      reason: route === "custom"
+        ? "Approved custom-operation or critical-complexity signals require a custom route."
+        : "No approved rule required a custom build, so the recommendation stays on the platform route.",
+    },
+    {
+      ruleKey: "platform",
+      outcome: platform,
+      reason: route === "custom"
+        ? "A custom application is required by the selected build route."
+        : "Platform-fit scores and the approved audience tie-break selected this platform.",
+    },
+    {
+      ruleKey: "base_offer",
+      outcome: offerKey,
+      reason: `The ${route} route, system-complexity score of ${aggregated.diagnostic.systemComplexity}, and capability guardrails selected this offer.`,
+    },
+    {
+      ruleKey: "pricing",
+      outcome: String(offer.basePriceUsd + pricing.addonTotalUsd),
+      reason: "The estimate uses the approved base price plus only selected add-ons not already included in the offer; scope-review items remain unpriced.",
+    },
+  ];
 
   return {
     cortexVersion: CORTEX_VERSION,
@@ -402,5 +451,10 @@ export function calculateRecommendation(input: CortexInput): CortexResult {
     estimatedProjectInvestmentUsd: offer.basePriceUsd + pricing.addonTotalUsd,
     estimatedRecurringCosts: pricing.estimatedRecurringCosts,
     explanationTrace: aggregated.trace,
+    decisionTrace,
+    confidenceLevel: lowConfidence ? "low" : "standard",
+    confidenceMessage: lowConfidence
+      ? "Low-confidence planning recommendation: no solution reached the qualifying score, so this direction follows your primary goal and should be confirmed in a strategy call."
+      : "The recommendation met the approved qualifying-score and route rules.",
   };
 }

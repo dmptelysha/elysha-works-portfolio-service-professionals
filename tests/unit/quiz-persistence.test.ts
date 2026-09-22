@@ -24,6 +24,12 @@ class MemoryStorage implements Storage {
   setItem(key: string, value: string) { this.values.set(key, value); }
 }
 
+class ThrowingStorage extends MemoryStorage {
+  override getItem(_key: string): string | null { throw new DOMException("Storage blocked", "SecurityError"); }
+  override setItem(_key: string, _value: string): void { throw new DOMException("Storage blocked", "QuotaExceededError"); }
+  override removeItem(_key: string): void { throw new DOMException("Storage blocked", "SecurityError"); }
+}
+
 const NOW = Date.UTC(2026, 8, 22, 0, 0, 0);
 const attempt = (overrides: Partial<SavedQuizAttempt> = {}): SavedQuizAttempt => ({
   storageVersion: 1,
@@ -84,11 +90,40 @@ describe("quiz local persistence", () => {
     expect(storage.getItem("unrelated")).toBe("keep");
   });
 
+  it("degrades safely when browser storage is blocked or full", () => {
+    const storage = new ThrowingStorage();
+    expect(loadQuizAttempt(storage, NOW)).toEqual({ status: "unavailable" });
+    expect(saveQuizAttempt(storage, attempt())).toBe(false);
+    expect(clearQuizAttempt(storage)).toBe(false);
+  });
+
+  it("rejects unknown questions, invalid options, and malformed completed snapshots", () => {
+    for (const value of [
+      { ...attempt(), answers: { unexpected_question: ["anything"] } },
+      { ...attempt(), answers: { q1_goal: ["not_an_approved_option"] } },
+      { ...attempt(), status: "completed", result: {} },
+    ]) {
+      const storage = new MemoryStorage();
+      storage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(value));
+      expect(loadQuizAttempt(storage, NOW)).toEqual({ status: "discarded", reason: "invalid_shape" });
+    }
+  });
+
   it("preserves a completed immutable result snapshot", () => {
     const storage = new MemoryStorage();
     const completed = attempt({
       status: "completed",
       currentQuestionIndex: 7,
+      answers: {
+        q1_goal: ["coach_goal_enroll_students"],
+        q2_setup: ["coach_setup_unclear_website"],
+        q3_blocker: ["coach_blocker_questions_no_booking"],
+        q4_capabilities: ["coach_capability_booking"],
+        q5_complexity: ["coach_complexity_one_offer"],
+        q6_readiness: ["readiness_ready_now"],
+        q7_platform: ["platform_recommend"],
+        q8_support: ["support_client_assets"],
+      },
       result: {
         cortexVersion: CORTEX_VERSION,
         questionSetVersion: QUESTION_SET_VERSION,
@@ -120,6 +155,15 @@ describe("quiz local persistence", () => {
         estimatedProjectInvestmentUsd: 2500,
         estimatedRecurringCosts: [],
         explanationTrace: [],
+        decisionTrace: [
+          { ruleKey: "primary_solution", outcome: "funnel", reason: "Qualified score." },
+          { ruleKey: "build_route", outcome: "platform", reason: "No custom requirement." },
+          { ruleKey: "platform", outcome: "systeme_io", reason: "Best fit." },
+          { ruleKey: "base_offer", outcome: "platform_growth", reason: "Complexity match." },
+          { ruleKey: "pricing", outcome: "2500", reason: "Approved base price." },
+        ],
+        confidenceLevel: "standard",
+        confidenceMessage: "Qualified recommendation.",
       },
     });
     saveQuizAttempt(storage, completed);

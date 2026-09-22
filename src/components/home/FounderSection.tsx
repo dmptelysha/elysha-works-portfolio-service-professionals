@@ -18,6 +18,9 @@ export function FounderSection() {
             <div><dt>02</dt><dd>Choose the simplest system that fits.</dd></div>
             <div><dt>03</dt><dd>Build a clearer experience from inquiry onward.</dd></div>
           </dl>
+          <a className="portfolio-text-link founder-cta" href="/booking/">
+            Book a strategy call <span aria-hidden="true">→</span>
+          </a>
         </div>
       </div>
     </section>

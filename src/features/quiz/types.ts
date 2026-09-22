@@ -140,6 +140,14 @@ export interface ExplanationTraceEntry {
   flags: readonly string[];
 }
 
+export type RecommendationConfidence = "standard" | "low";
+
+export interface DecisionTraceEntry {
+  ruleKey: "primary_solution" | "build_route" | "platform" | "base_offer" | "pricing";
+  outcome: string;
+  reason: string;
+}
+
 export interface PricedAddon {
   addonKey: string;
   name: string;
@@ -201,6 +209,9 @@ export interface CortexResult {
   estimatedProjectInvestmentUsd: number;
   estimatedRecurringCosts: readonly string[];
   explanationTrace: readonly ExplanationTraceEntry[];
+  decisionTrace: readonly DecisionTraceEntry[];
+  confidenceLevel: RecommendationConfidence;
+  confidenceMessage: string;
 }
 
 export type QuizStatus = "in_progress" | "completed";

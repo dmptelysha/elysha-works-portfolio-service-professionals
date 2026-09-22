@@ -5,6 +5,7 @@ import type { CortexResult, PlatformKey, ReadinessLevel, SolutionType } from "./
 interface QuizResultProps {
   result: CortexResult;
   onStartOver: () => void;
+  persistenceAvailable: boolean;
 }
 
 const platformNames: Record<PlatformKey, string> = {
@@ -34,7 +35,7 @@ const money = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-export function QuizResult({ result, onStartOver }: QuizResultProps) {
+export function QuizResult({ result, onStartOver, persistenceAvailable }: QuizResultProps) {
   const relevantProjects = PROJECTS.filter((project) => project.audienceKeys.includes(result.audienceKey)).slice(0, 2);
   const includedSupport = result.selectedSupportItems.filter((item) => item.disposition === "included");
 
@@ -44,6 +45,9 @@ export function QuizResult({ result, onStartOver }: QuizResultProps) {
         <p className="quiz-kicker">Your personalized roadmap</p>
         <h1 id="result-title">Your Personalized Roadmap</h1>
         <p>{result.recommendedSolutionTitle}</p>
+        <strong className={`result-confidence result-confidence--${result.confidenceLevel}`}>
+          {result.confidenceLevel === "low" ? "Low-confidence recommendation" : "Qualified recommendation"}
+        </strong>
         <span>Calculated locally · No contact details required</span>
       </header>
 
@@ -166,6 +170,15 @@ export function QuizResult({ result, onStartOver }: QuizResultProps) {
           <p className="result-number">13 · Why this fits</p>
           <h2 id="fit-title">A route shaped by your answers</h2>
           <p>{result.recommendationReason}</p>
+          <p className="result-confidence-note">{result.confidenceMessage}</p>
+          <ol className="decision-trace">
+            {result.decisionTrace.map((entry) => (
+              <li key={entry.ruleKey}>
+                <strong>{entry.ruleKey.replaceAll("_", " ")}: {entry.outcome.replaceAll("_", " ")}</strong>
+                <span>{entry.reason}</span>
+              </li>
+            ))}
+          </ol>
         </section>
 
         <section className="result-card" aria-labelledby="future-title">
@@ -201,8 +214,10 @@ export function QuizResult({ result, onStartOver }: QuizResultProps) {
       <footer className="result-control">
         <div>
           <p className="result-number">Your control</p>
-          <h2>Your result stays on this device</h2>
-          <p>No lead was created. Clearing browser data or switching devices may remove this saved roadmap.</p>
+          <h2>{persistenceAvailable ? "Your result stays on this device" : "Keep this result page open"}</h2>
+          <p>{persistenceAvailable
+            ? "No lead was created. Clearing browser data or switching devices may remove this saved roadmap."
+            : "No lead was created, and this browser could not save the roadmap for recovery after a reload."}</p>
         </div>
         <button className="quiz-back" onClick={onStartOver} type="button">Start a new assessment</button>
       </footer>

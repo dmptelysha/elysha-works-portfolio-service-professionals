@@ -203,6 +203,40 @@ describe("cortex-local-v0.1 locked outcomes", () => {
     expect(researching.readinessLevel).toBe("researching");
     expect(researching.recommendedOfferKey).toBe(normal.recommendedOfferKey);
   });
+
+  it("does not label a much higher score as supporting when a custom guardrail overrides the primary", () => {
+    const result = calculateRecommendation(
+      complete("service_businesses", {
+        q1_goal: "service_goal_book_appointments",
+        q2_setup: "service_setup_disconnected_booking",
+        q3_blocker: "service_blocker_inquiries_no_booking",
+        q4_capabilities: ["service_capability_booking"],
+        q5_complexity: "service_complexity_custom_operations",
+        q6_readiness: "readiness_ready_now",
+        q7_platform: "platform_recommend",
+        q8_support: ["support_client_assets"],
+      }),
+    );
+
+    expect(result.primarySolutionType).toBe("custom_app");
+    expect(result.scores.funnel - result.scores.customApp).toBeGreaterThan(2);
+    expect(result.supportingSolutionTypes).not.toContain("funnel");
+    expect(result.decisionTrace[0].reason).toMatch(/score-based primary was (?:funnel|automation).*custom-route guardrail/i);
+    expect(result.decisionTrace[0].outcome).toBe("custom_app");
+  });
+
+  it("records ordered decision rules and an explicit confidence state", () => {
+    const result = calculateRecommendation(coachProgram);
+    expect(result.decisionTrace.map((entry) => entry.ruleKey)).toEqual([
+      "primary_solution",
+      "build_route",
+      "platform",
+      "base_offer",
+      "pricing",
+    ]);
+    expect(result.confidenceLevel).toBe("standard");
+    expect(result.confidenceMessage).toMatch(/qualifying-score/i);
+  });
 });
 
 describe("cortex-local-v0.1 pricing", () => {

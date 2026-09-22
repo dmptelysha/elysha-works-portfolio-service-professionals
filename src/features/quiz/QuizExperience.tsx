@@ -3,6 +3,8 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import Link from "next/link";
 
+import { SITE_CONTENT } from "@/data/site-content";
+
 import { AudienceSelector } from "./AudienceSelector";
 import { calculateRecommendation } from "./cortex";
 import {
@@ -24,21 +26,68 @@ import {
   type SavedQuizAttempt,
 } from "./types";
 
+function getBrowserStorage() {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function QuizExperience() {
   const [state, dispatch] = useReducer(quizReducer, undefined, createInitialQuizState);
   const [hydrated, setHydrated] = useState(false);
+  const [persistenceAvailable, setPersistenceAvailable] = useState(true);
   const createdAtRef = useRef(new Date().toISOString());
+  const resumeDialogRef = useRef<HTMLElement>(null);
+  const resumeButtonRef = useRef<HTMLButtonElement>(null);
+  const resumeReturnFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    const loaded = loadQuizAttempt(window.localStorage);
+    const storage = getBrowserStorage();
+    const loaded = storage ? loadQuizAttempt(storage) : { status: "unavailable" as const };
     if (loaded.status === "valid") {
       createdAtRef.current = loaded.attempt.createdAt;
       dispatch({ type: "LOAD_RESUME", attempt: loaded.attempt });
       if (loaded.attempt.status === "completed") dispatch({ type: "RESUME" });
     }
-    const hydrationTimer = window.setTimeout(() => setHydrated(true), 0);
+    const hydrationTimer = window.setTimeout(() => {
+      if (loaded.status === "unavailable") setPersistenceAvailable(false);
+      setHydrated(true);
+    }, 0);
     return () => window.clearTimeout(hydrationTimer);
   }, []);
+
+  useEffect(() => {
+    if (!state.resumeCandidate) return;
+    resumeReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    resumeButtonRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        dispatch({ type: "DISMISS_RESUME" });
+        return;
+      }
+      if (event.key !== "Tab" || !resumeDialogRef.current) return;
+      const focusable = [...resumeDialogRef.current.querySelectorAll<HTMLElement>("button, a[href]")]
+        .filter((element) => !element.hasAttribute("disabled"));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      resumeReturnFocusRef.current?.focus();
+    };
+  }, [state.resumeCandidate]);
 
   useEffect(() => {
     if (!hydrated || !state.audienceKey || state.resumeCandidate) return;
@@ -57,7 +106,11 @@ export function QuizExperience() {
       updatedAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + QUIZ_TTL_MS).toISOString(),
     };
-    saveQuizAttempt(window.localStorage, attempt);
+    const storage = getBrowserStorage();
+    if (!storage || !saveQuizAttempt(storage, attempt)) {
+      const failureTimer = window.setTimeout(() => setPersistenceAvailable(false), 0);
+      return () => window.clearTimeout(failureTimer);
+    }
   }, [hydrated, state]);
 
   useEffect(() => {
@@ -74,7 +127,8 @@ export function QuizExperience() {
   }, [state.answers, state.audienceKey, state.screen]);
 
   const startOver = () => {
-    clearQuizAttempt(window.localStorage);
+    const storage = getBrowserStorage();
+    if (!storage || !clearQuizAttempt(storage)) setPersistenceAvailable(false);
     createdAtRef.current = new Date().toISOString();
     dispatch({ type: "START_OVER" });
   };
@@ -111,7 +165,7 @@ export function QuizExperience() {
             <div className="quiz-intro-notes">
               <span>About 2 minutes</span>
               <span>No contact details required</span>
-              <span>Saved on this device for 30 days</span>
+              <span>{persistenceAvailable ? "Saved on this device for 30 days" : "Recovery is unavailable in this browser"}</span>
             </div>
             <button className="quiz-primary" onClick={() => dispatch({ type: "CONTINUE_INTRO" })} type="button">
               Start My Assessment <span aria-hidden="true">→</span>
@@ -150,23 +204,40 @@ export function QuizExperience() {
             <p className="quiz-kicker">Your answers are safe</p>
             <h1>Let’s try that calculation again.</h1>
             <p>{state.errorMessage}</p>
-            <button className="quiz-primary" onClick={() => dispatch({ type: "RETRY_CALCULATION" })} type="button">Retry calculation</button>
+            <div className="quiz-error-actions">
+              <button className="quiz-primary" onClick={() => dispatch({ type: "RETRY_CALCULATION" })} type="button">Retry calculation</button>
+              <button className="quiz-secondary" onClick={startOver} type="button">Start over</button>
+            </div>
           </section>
         ) : null}
 
         {hydrated && state.screen === "result" && state.result ? (
-          <QuizResult result={state.result} onStartOver={startOver} />
+          <QuizResult result={state.result} onStartOver={startOver} persistenceAvailable={persistenceAvailable} />
         ) : null}
       </main>
 
+      {hydrated && !persistenceAvailable ? (
+        <p className="quiz-storage-notice" role="status">
+          Device recovery is unavailable. Keep this page open until you finish or save the result another way.
+        </p>
+      ) : null}
+
+      <footer className="quiz-footer">
+        <Link href="/" prefetch={false}>Back to portfolio</Link>
+        <span>Local assessment · No contact details required</span>
+        <nav aria-label="Quiz footer">
+          {SITE_CONTENT.footer.legal.map((item) => <a href={item.href} key={item.href}>{item.label}</a>)}
+        </nav>
+      </footer>
+
       {state.resumeCandidate ? (
         <div className="resume-backdrop">
-          <section className="resume-dialog" role="dialog" aria-modal="true" aria-labelledby="resume-title">
+          <section ref={resumeDialogRef} className="resume-dialog" role="dialog" aria-modal="true" aria-labelledby="resume-title">
             <p className="quiz-kicker">Saved on this device</p>
             <h2 id="resume-title">Continue your roadmap?</h2>
             <p>We found an unfinished assessment from the last 30 days.</p>
             <div className="resume-actions">
-              <button className="quiz-primary" onClick={() => dispatch({ type: "RESUME" })} type="button">Resume</button>
+              <button ref={resumeButtonRef} className="quiz-primary" onClick={() => dispatch({ type: "RESUME" })} type="button">Resume</button>
               <button className="quiz-secondary" onClick={startOver} type="button">Start over</button>
               <button className="quiz-back" onClick={() => dispatch({ type: "DISMISS_RESUME" })} type="button">Not now</button>
             </div>

@@ -150,6 +150,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .portfolio-primary-cta span:last-child { position: absolute; right: 2rem; font-size: 1.35em; }
 .portfolio-text-link { margin-top: 1.5rem; padding-bottom: .3rem; border-bottom: 1px solid rgba(255,255,255,.45); color: var(--portfolio-muted); }
 .portfolio-text-link:hover { border-color: var(--portfolio-gold); color: var(--portfolio-gold); }
+.founder-cta { display: inline-flex; align-items: center; gap: .65rem; }
 
 .portfolio-footer { padding: clamp(3rem, 6vw, 6rem) 0 2rem; border-top: 1px solid var(--portfolio-line); background: #050606; }
 .footer-main { display: grid; grid-template-columns: minmax(16rem, 1fr) auto; gap: 3rem; align-items: start; }

@@ -81,7 +81,7 @@ describe("verified projects", () => {
     const dialog = screen.getByRole("dialog", { name: /teacher elysha preview/i });
     const frame = within(dialog).getByTitle("Teacher Elysha preview");
     expect(frame).toHaveAttribute("src", "/assets/project-previews/esl-tutor/index.html");
-    expect(frame).toHaveAttribute("sandbox");
+    expect(frame).toHaveAttribute("sandbox", "");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
@@ -103,6 +103,7 @@ describe("remaining homepage sections", () => {
       "src",
       "/assets/v3-hero/elysha-portrait-cutout.png",
     );
+    expect(screen.getByRole("link", { name: /book a strategy call/i })).toHaveAttribute("href", "/booking/");
   });
 
   it("uses only the approved testimonial placeholder with no fake attribution", () => {

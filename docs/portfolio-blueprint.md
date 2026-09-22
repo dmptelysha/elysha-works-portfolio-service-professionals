@@ -71,7 +71,7 @@ Choose audience type Card
 Multi-step Quiz
 Personalized Result
 Audience-Filtered Projects
-Footer
+Footer with Back to portfolio, Privacy, and Terms links
 
 The result appears in the same journey after quiz completion. The visitor can review the result without submitting personal information.
 
@@ -208,6 +208,8 @@ Do not invent performance metrics. Use honest project context, including beta or
 **Suggested copy:**
 
 > I’m Elysha Dumpit, the founder of Elysha Works. I design websites, funnels, automations, and custom systems around the way a business actually attracts, serves, and supports its customers. My goal is not to add more tools. It is to create a clearer journey—from first inquiry to an organized client experience.
+
+Include a restrained **Book a strategy call** link to the existing `/booking/` flow.
 
 ### 3.8 Testimonial
 

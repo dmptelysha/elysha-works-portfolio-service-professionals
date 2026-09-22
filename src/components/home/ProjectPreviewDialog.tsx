@@ -83,7 +83,7 @@ export function ProjectPreviewDialog({ project, onClose, returnFocusTo }: Projec
           <iframe
             title={`${project.title} preview`}
             src={project.previewUrl}
-            sandbox="allow-scripts allow-same-origin"
+            sandbox=""
             referrerPolicy="no-referrer"
           />
         </div>

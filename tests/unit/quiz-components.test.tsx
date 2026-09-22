@@ -25,6 +25,8 @@ describe("local portfolio quiz", () => {
 
     render(<QuizExperience />);
     expect(await screen.findByRole("heading", { name: /which best describes your business/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/elysha-works-privacy-policy/");
+    expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/elysha-works-terms-of-service/");
     await user.click(screen.getByRole("button", { name: /service-based business/i }));
     expect(screen.getByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /start my assessment/i }));
@@ -33,7 +35,9 @@ describe("local portfolio quiz", () => {
     for (const [index, question] of definition.questions.entries()) {
       expect(screen.getByText(`Question ${index + 1} of 8`)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: question.prompt })).toBeInTheDocument();
-      await user.click(screen.getByRole("button", { name: question.options[0].label }));
+      const option = screen.getByRole(question.selection === "single" ? "radio" : "button", { name: question.options[0].label });
+      await user.click(option);
+      if (question.selection === "single") expect(option).toHaveAttribute("aria-checked", "true");
       await user.click(screen.getByRole("button", { name: index === 7 ? /see my roadmap/i : /continue/i }));
     }
 
@@ -60,12 +64,42 @@ describe("local portfolio quiz", () => {
     }
     expect(screen.getByRole("heading", { name: /estimated project investment/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /book a strategy call/i })).toHaveAttribute("href", "/booking/");
+    expect(screen.getByRole("navigation", { name: /quiz footer/i })).toBeInTheDocument();
     expect(window.location.href).toBe(initialUrl);
     expect(fetchSpy).not.toHaveBeenCalled();
 
     const saved = JSON.parse(localStorage.getItem(QUIZ_STORAGE_KEY) ?? "null") as SavedQuizAttempt;
     expect(saved.status).toBe("completed");
     expect(saved.result?.recommendedOfferKey).toBeTruthy();
+  });
+
+  it("supports the complete keyboard pattern for single-choice radio groups", async () => {
+    const user = userEvent.setup();
+    render(<QuizExperience />);
+    await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await user.click(screen.getByRole("button", { name: /start my assessment/i }));
+
+    const radios = screen.getAllByRole("radio");
+    radios[0].focus();
+    await user.keyboard("{ArrowDown}");
+    expect(radios[1]).toHaveFocus();
+    expect(radios[1]).toHaveAttribute("aria-checked", "true");
+    expect(radios[0]).toHaveAttribute("tabindex", "-1");
+    await user.keyboard("{End}");
+    expect(radios.at(-1)).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(radios[0]).toHaveFocus();
+  });
+
+  it("shows truthful recovery copy when local storage writes are unavailable", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Storage full", "QuotaExceededError");
+    });
+    render(<QuizExperience />);
+    await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    expect(await screen.findByRole("status")).toHaveTextContent(/recovery is unavailable/i);
+    expect(screen.getByText(/recovery is unavailable in this browser/i)).toBeInTheDocument();
   });
 
   it("offers resume, start-over, and not-now choices for an unfinished attempt", async () => {
@@ -89,10 +123,15 @@ describe("local portfolio quiz", () => {
 
     const { unmount } = render(<QuizExperience />);
     const dialog = await screen.findByRole("dialog", { name: /continue your roadmap/i });
-    expect(within(dialog).getByRole("button", { name: /resume/i })).toBeInTheDocument();
+    const resumeButton = within(dialog).getByRole("button", { name: /resume/i });
+    expect(resumeButton).toHaveFocus();
     expect(within(dialog).getByRole("button", { name: /start over/i })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: /not now/i })).toBeInTheDocument();
-    await user.click(within(dialog).getByRole("button", { name: /resume/i }));
+    const notNowButton = within(dialog).getByRole("button", { name: /not now/i });
+    notNowButton.focus();
+    await user.tab();
+    expect(resumeButton).toHaveFocus();
+    await user.click(resumeButton);
     expect(screen.getByText("Question 2 of 8")).toBeInTheDocument();
 
     unmount();
@@ -110,7 +149,7 @@ describe("local portfolio quiz", () => {
 
     const definition = QUIZ_DEFINITIONS.custom_order_businesses;
     for (const [index, question] of definition.questions.entries()) {
-      await user.click(screen.getByRole("button", { name: question.options[0].label }));
+      await user.click(screen.getByRole(question.selection === "single" ? "radio" : "button", { name: question.options[0].label }));
       await user.click(screen.getByRole("button", { name: index === 7 ? /see my roadmap/i : /continue/i }));
     }
     await screen.findByRole("heading", { name: /your personalized roadmap/i });
