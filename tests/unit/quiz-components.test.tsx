@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,6 +16,21 @@ import {
   QUESTION_SET_VERSION,
   type SavedQuizAttempt,
 } from "@/features/quiz/types";
+
+const turnstileControls = vi.hoisted(() => ({
+  onError: null as null | (() => void),
+  onExpire: null as null | (() => void),
+  onSuccess: null as null | ((token: string) => void),
+}));
+
+vi.mock("@marsidev/react-turnstile", () => ({
+  Turnstile: (props: { onError: () => void; onExpire: () => void; onSuccess: (token: string) => void }) => {
+    turnstileControls.onError = props.onError;
+    turnstileControls.onExpire = props.onExpire;
+    turnstileControls.onSuccess = props.onSuccess;
+    return <div data-testid="turnstile-runtime" />;
+  },
+}));
 
 const ownedContext: OwnedQuizContext = {
   ownerUserId: "10000000-0000-4000-8000-000000000001",
@@ -69,6 +84,9 @@ describe("local portfolio quiz", () => {
     localStorage.clear();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
+    turnstileControls.onError = null;
+    turnstileControls.onExpire = null;
+    turnstileControls.onSuccess = null;
   });
 
   it("shows the three audience choices immediately while the security check initializes", async () => {
@@ -85,6 +103,35 @@ describe("local portfolio quiz", () => {
     await user.click(screen.getByRole("button", { name: /service-based business/i }));
     expect(screen.getByRole("heading", { name: /where should we send your 3-day proposal/i })).toBeInTheDocument();
     expect(service.createOwnedQuizContext).not.toHaveBeenCalled();
+  });
+
+  it("unblocks contact submission on Turnstile success and safely blocks again on expiry or error", async () => {
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "test-site-key");
+    const user = userEvent.setup();
+    render(<QuizExperience service={createFakeQuizService()} />);
+
+    await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await user.type(screen.getByLabelText(/first name/i), "Mara");
+    await user.type(screen.getByLabelText(/business name/i), "Mara Consulting");
+    await user.type(screen.getByLabelText(/^email/i), "mara@example.com");
+    await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
+    const submit = screen.getByRole("button", { name: /continue to assessment/i });
+
+    expect(submit).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(/preparing the secure assessment/i);
+
+    act(() => turnstileControls.onSuccess?.("valid-turnstile-token"));
+    await waitFor(() => expect(submit).toBeEnabled());
+
+    act(() => turnstileControls.onExpire?.());
+    await waitFor(() => expect(submit).toBeDisabled());
+
+    act(() => turnstileControls.onSuccess?.("refreshed-turnstile-token"));
+    await waitFor(() => expect(submit).toBeEnabled());
+
+    act(() => turnstileControls.onError?.());
+    await waitFor(() => expect(submit).toBeDisabled());
+    expect(screen.getByText(/security check failed/i)).toBeInTheDocument();
   });
 
   it("validates and normalizes required lead contact details without navigating", async () => {
