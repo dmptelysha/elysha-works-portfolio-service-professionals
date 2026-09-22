@@ -6,6 +6,11 @@ import { ContextualNav } from "@/components/home/ContextualNav";
 import { Hero } from "@/components/home/Hero";
 import { isAllowedPreviewUrl } from "@/components/home/ProjectPreviewDialog";
 import { ProjectsSection } from "@/components/home/ProjectsSection";
+import { FaqSection } from "@/components/home/FaqSection";
+import { FinalCtaSection } from "@/components/home/FinalCtaSection";
+import { FounderSection } from "@/components/home/FounderSection";
+import { SiteFooter } from "@/components/home/SiteFooter";
+import { TestimonialSection } from "@/components/home/TestimonialSection";
 
 describe("portfolio hero", () => {
   it("preserves the approved hero and routes both assessment actions to /quiz", () => {
@@ -86,5 +91,44 @@ describe("verified projects", () => {
     expect(isAllowedPreviewUrl("/assets/project-previews/esl-tutor/index.html")).toBe(true);
     expect(isAllowedPreviewUrl("https://example.com/unsafe")).toBe(false);
     expect(isAllowedPreviewUrl("/assets/project-previews/not-real/index.html")).toBe(false);
+  });
+});
+
+describe("remaining homepage sections", () => {
+  it("renders the approved founder content and verified portrait", () => {
+    render(<FounderSection />);
+    expect(screen.getByRole("heading", { name: "Strategy first. Then the right system." })).toBeInTheDocument();
+    expect(screen.getByText(/I’m Elysha Dumpit, the founder of Elysha Works/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Elysha Dumpit, founder of Elysha Works" })).toHaveAttribute(
+      "src",
+      "/assets/v3-hero/elysha-portrait-cutout.png",
+    );
+  });
+
+  it("uses only the approved testimonial placeholder with no fake attribution", () => {
+    render(<TestimonialSection />);
+    expect(screen.getByText("Client testimonial will be added after review and approval.")).toBeInTheDocument();
+    expect(screen.queryByText(/CEO|Founder at|—/)).not.toBeInTheDocument();
+  });
+
+  it("renders eight FAQs and keeps only one answer expanded", async () => {
+    const user = userEvent.setup();
+    render(<FaqSection />);
+    const buttons = screen.getAllByRole("button");
+    expect(buttons).toHaveLength(8);
+    await user.click(buttons[0]);
+    expect(buttons[0]).toHaveAttribute("aria-expanded", "true");
+    await user.click(buttons[1]);
+    expect(buttons[0]).toHaveAttribute("aria-expanded", "false");
+    expect(buttons[1]).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("renders the final quiz CTA and only verified footer links", () => {
+    const { rerender } = render(<FinalCtaSection />);
+    expect(screen.getByRole("link", { name: /get my personalized roadmap/i })).toHaveAttribute("href", "/quiz");
+    rerender(<SiteFooter />);
+    expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/elysha-works-privacy-policy");
+    expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/elysha-works-terms-of-service");
+    expect(screen.queryByRole("link", { name: /facebook|instagram|linkedin/i })).not.toBeInTheDocument();
   });
 });
