@@ -52,7 +52,7 @@ function safeServiceError(): Error {
   return new Error(SERVICE_ERROR);
 }
 
-export async function ensureAnonymousSession(client?: SupabaseClient): Promise<Session> {
+export async function ensureAnonymousSession(client?: SupabaseClient, captchaToken?: string): Promise<Session> {
   const supabase = clientOrDefault(client);
   const current = await supabase.auth.getSession();
   if (current.error) throw safeServiceError();
@@ -61,7 +61,9 @@ export async function ensureAnonymousSession(client?: SupabaseClient): Promise<S
     return current.data.session;
   }
 
-  const created = await supabase.auth.signInAnonymously();
+  const created = await supabase.auth.signInAnonymously(
+    captchaToken ? { options: { captchaToken } } : undefined,
+  );
   if (created.error || !created.data.session) throw safeServiceError();
   requireUuid(created.data.session.user.id);
   return created.data.session;
@@ -69,10 +71,10 @@ export async function ensureAnonymousSession(client?: SupabaseClient): Promise<S
 
 export async function createOwnedQuizContext(
   audienceKey: AudienceKey,
-  options: { client?: SupabaseClient; landingPath?: string } = {},
+  options: { client?: SupabaseClient; landingPath?: string; captchaToken?: string } = {},
 ): Promise<OwnedQuizContext> {
   const supabase = clientOrDefault(options.client);
-  const session = await ensureAnonymousSession(supabase);
+  const session = await ensureAnonymousSession(supabase, options.captchaToken);
   const ownerUserId = requireUuid(session.user.id);
   const landingPath = options.landingPath?.startsWith("/") ? options.landingPath : "/quiz/";
 

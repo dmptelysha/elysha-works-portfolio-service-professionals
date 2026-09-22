@@ -1,6 +1,6 @@
 # Make proposal automation operator guide
 
-Status: both Make scenarios are created and intentionally inactive. The shared automation secret has been rotated, stored as a Supabase Edge Function secret, and configured in Scenario B through the `X-Make-Automation-Secret` request header. No scenario has been run and no email has been sent. Both scenarios must remain inactive until controlled email and suppression tests pass.
+Status: both Make scenarios are created and intentionally inactive. The shared automation secret has been rotated, stored as a Supabase Edge Function secret, and configured in Scenario B through the `X-Make-Automation-Secret` request header. No scenario has been run and no email has been sent. Both scenarios must remain inactive until the backend is verified through controlled email and suppression tests.
 
 This automation sends a link and a separate access key to a private three-day proposal page. It does not generate or attach a PDF. Supabase remains authoritative for proposal expiry, booking suppression, follow-up eligibility, and cold-lead transitions. Make never receives a Supabase service-role credential.
 
@@ -23,13 +23,13 @@ Scenario ID: `6362134`. Connection name: `Elysha's Gmail connection (dmpt.elysha
 Keep the scenario inactive while building it. Its modules, in exact order, are:
 
 ```text
-Authenticated Custom Webhook → Shape validation → Data Store lookup
+Authenticated Custom Webhook → Secret/shape filter → Data Store lookup
 → Router (sent/active/new) → Data Store create `processing`
 → Gmail Send Email → Data Store update `sent` → Webhook Response
 ```
 
 1. **Authenticated Custom Webhook** receives the flat contract in `make-payload-examples/redacted-initial-proposal.json`. Make API-key authentication is enabled and requires the `x-make-apikey` header. The production webhook URL exists only in the `MAKE_PROPOSAL_WEBHOOK_URL` Supabase secret; the key exists only in Make's keychain and the `MAKE_PROPOSAL_WEBHOOK_SECRET` Supabase secret.
-2. **Shape validation** requires all 15 approved fields and requires `X-Elysha-Operation-Id` to equal `delivery_id` when the request-header value is available for mapping. The Edge Function continues to emit `X-Elysha-Signature` for defense in depth, but Make's native API-key authentication is the enforced request-authentication boundary.
+2. **Secret/shape filter** requires all 15 approved fields and requires `X-Elysha-Operation-Id` to equal `delivery_id` when the request-header value is available for mapping. The Edge Function continues to emit `X-Elysha-Signature` for defense in depth, but Make's native API-key authentication is the enforced request-authentication boundary.
 3. **Data Store lookup** uses `delivery_id` as the idempotency key. The store may contain only `delivery_id`, status, lease timestamps, attempt count, and redacted error code. It must not store the raw access key, email body, recipient email, stop token, or proposal content.
 4. **Router** returns success without another send when status is `sent`; rejects a still-active `processing` lease; and permits `new`, `failed`, or a stale `processing` record to proceed. A processing lease is stale after 20 minutes.
 5. **Data Store create `processing`** claims delivery before Gmail. A concurrent duplicate must not pass this step.

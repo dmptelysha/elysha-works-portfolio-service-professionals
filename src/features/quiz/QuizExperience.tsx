@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import Link from "next/link";
+import { Turnstile } from "@marsidev/react-turnstile";
 
 import { SITE_CONTENT } from "@/data/site-content";
 
@@ -51,6 +52,8 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [issueError, setIssueError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaError, setCaptchaError] = useState(false);
   const createdAtRef = useRef(new Date().toISOString());
   const ownedContextRef = useRef<OwnedQuizContext | null>(null);
   const contextPromiseRef = useRef<Promise<OwnedQuizContext> | null>(null);
@@ -61,7 +64,10 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const ensureOwnedContext = useCallback((audienceKey: AudienceKey) => {
     if (ownedContextRef.current?.audienceKey === audienceKey) return Promise.resolve(ownedContextRef.current);
     if (!contextPromiseRef.current) {
-      contextPromiseRef.current = service.createOwnedQuizContext(audienceKey, { landingPath: "/quiz/" })
+      contextPromiseRef.current = service.createOwnedQuizContext(audienceKey, {
+        landingPath: "/quiz/",
+        captchaToken: captchaToken ?? undefined,
+      })
         .then((context) => {
           ownedContextRef.current = context;
           return context;
@@ -72,7 +78,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
         });
     }
     return contextPromiseRef.current;
-  }, [service]);
+  }, [captchaToken, service]);
 
   useEffect(() => {
     const storage = getBrowserStorage();
@@ -214,6 +220,9 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   };
 
   const definition = state.audienceKey ? QUIZ_DEFINITIONS[state.audienceKey] : null;
+  const captchaSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
+  const productionCaptchaMissing = process.env.NODE_ENV === "production" && !captchaSiteKey;
+  const audienceSelectionDisabled = productionCaptchaMissing || Boolean(captchaSiteKey && !captchaToken);
   const question = definition?.questions[state.currentQuestionIndex];
   const flushProgress = async () => {
     if (!state.audienceKey) return;
@@ -264,7 +273,41 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
       <main className="quiz-main">
         {!hydrated ? <div className="quiz-loading" aria-live="polite">Preparing your roadmap…</div> : null}
 
-        {hydrated && state.screen === "audience" ? <AudienceSelector onSelect={chooseAudience} /> : null}
+        {hydrated && state.screen === "audience" ? (
+          <AudienceSelector
+            onSelect={chooseAudience}
+            selectionDisabled={audienceSelectionDisabled}
+            securityCheck={(
+              <div className="quiz-security-check" aria-live="polite">
+                {captchaSiteKey ? (
+                  <>
+                    <Turnstile
+                      siteKey={captchaSiteKey}
+                      onSuccess={(token) => {
+                        setCaptchaToken(token);
+                        setCaptchaError(false);
+                      }}
+                      onExpire={() => setCaptchaToken(null)}
+                      onError={() => {
+                        setCaptchaToken(null);
+                        setCaptchaError(true);
+                      }}
+                      options={{
+                        action: "anonymous_quiz_start",
+                        appearance: "interaction-only",
+                        refreshExpired: "auto",
+                        theme: "dark",
+                      }}
+                    />
+                    <span>{captchaError ? "Security check failed. Please retry it before choosing your path." : "Protected by Cloudflare Turnstile"}</span>
+                  </>
+                ) : productionCaptchaMissing ? (
+                  <span>Secure assessment setup is temporarily unavailable.</span>
+                ) : null}
+              </div>
+            )}
+          />
+        ) : null}
 
         {hydrated && state.screen === "contact" ? (
           <LeadContactStep onSubmit={async (contact) => {

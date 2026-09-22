@@ -95,6 +95,16 @@ describe("Supabase quiz service", () => {
     expect(fake.signInAnonymously).toHaveBeenCalledOnce();
   });
 
+  it("forwards the Turnstile token when creating an anonymous session", async () => {
+    const fake = fakeClient({ signInUserId: USER_ID });
+    await expect(ensureAnonymousSession(fake.client as never, "turnstile-token")).resolves.toMatchObject({
+      user: { id: USER_ID },
+    });
+    expect(fake.signInAnonymously).toHaveBeenCalledWith({
+      options: { captchaToken: "turnstile-token" },
+    });
+  });
+
   it("looks up the active definition and validates all returned owned UUIDs", async () => {
     const fake = fakeClient({
       sessionUserId: USER_ID,

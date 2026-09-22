@@ -29,7 +29,10 @@ Browser-safe build variables:
 ```text
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ```
+
+`NEXT_PUBLIC_TURNSTILE_SITE_KEY` is intentionally public and is restricted to the approved production hostnames in Cloudflare. Supabase validates its short-lived token with the corresponding secret. Never put the Turnstile secret in a `NEXT_PUBLIC_` variable.
 
 Supabase Edge Function/server secrets:
 

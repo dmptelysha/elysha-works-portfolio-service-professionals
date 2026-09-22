@@ -1,8 +1,12 @@
+import type { ReactNode } from "react";
+
 import { QUIZ_DEFINITIONS } from "./questions";
 import type { AudienceKey } from "./types";
 
 interface AudienceSelectorProps {
   onSelect: (audienceKey: AudienceKey) => void;
+  selectionDisabled?: boolean;
+  securityCheck?: ReactNode;
 }
 
 const audienceNumbers: Record<AudienceKey, string> = {
@@ -11,7 +15,7 @@ const audienceNumbers: Record<AudienceKey, string> = {
   custom_order_businesses: "03",
 };
 
-export function AudienceSelector({ onSelect }: AudienceSelectorProps) {
+export function AudienceSelector({ onSelect, selectionDisabled = false, securityCheck }: AudienceSelectorProps) {
   return (
     <section className="quiz-stage quiz-audience" aria-labelledby="audience-title">
       <aside
@@ -32,10 +36,12 @@ export function AudienceSelector({ onSelect }: AudienceSelectorProps) {
       <p className="quiz-lede">
         Choose the closest fit. Your answers stay on this device until you decide to take the next step.
       </p>
+      {securityCheck}
       <div className="audience-grid">
         {Object.values(QUIZ_DEFINITIONS).map((definition) => (
           <button
             className="audience-card"
+            disabled={selectionDisabled}
             key={definition.audienceKey}
             onClick={() => onSelect(definition.audienceKey)}
             type="button"

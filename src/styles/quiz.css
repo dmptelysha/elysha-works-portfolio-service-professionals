@@ -79,6 +79,18 @@
   line-height: 1.65;
 }
 
+.quiz-security-check {
+  display: grid;
+  justify-items: start;
+  gap: .55rem;
+  min-height: 1.25rem;
+  margin-top: 1.25rem;
+  color: var(--portfolio-muted);
+  font-size: .7rem;
+}
+
+.quiz-security-check > span { line-height: 1.45; }
+
 .audience-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -105,6 +117,12 @@
   border-color: rgba(255, 211, 105, .72);
   background: #10110e;
   transform: translateY(-.35rem);
+}
+
+.audience-card:disabled {
+  cursor: wait;
+  opacity: .52;
+  transform: none;
 }
 
 .audience-number { color: var(--portfolio-gold); font-size: .7rem; letter-spacing: .16em; }

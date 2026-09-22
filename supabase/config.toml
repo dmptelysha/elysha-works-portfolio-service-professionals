@@ -15,13 +15,13 @@ sql_paths = ["./seed.sql"]
 
 [auth]
 enabled = true
-site_url = "http://127.0.0.1:3000"
-additional_redirect_urls = ["http://localhost:3000"]
+site_url = "https://elyshaworks.com"
+additional_redirect_urls = ["https://www.elyshaworks.com", "http://localhost:3000", "http://127.0.0.1:3000"]
 enable_signup = true
 enable_anonymous_sign_ins = true
 
 [auth.captcha]
-enabled = false
+enabled = true
 provider = "turnstile"
 secret = "env(SUPABASE_AUTH_CAPTCHA_SECRET)"
 
