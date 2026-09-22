@@ -1,0 +1,88 @@
+.proposal-shell {
+  min-height: 100svh;
+  overflow-x: clip;
+  background:
+    radial-gradient(circle at 8% 8%, rgba(255, 211, 105, .13), transparent 26rem),
+    radial-gradient(circle at 94% 56%, rgba(197, 138, 28, .1), transparent 34rem),
+    #050606;
+  color: #f7f5ef;
+  font-family: Inter, Arial, sans-serif;
+}
+
+.proposal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: min(92vw, 96rem);
+  min-height: clamp(4rem, 8vh, 6rem);
+  margin-inline: auto;
+  border-bottom: 1px solid rgba(255, 211, 105, .18);
+  color: #aaa99f;
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.proposal-brand { display: inline-flex; gap: .28rem; align-items: center; color: #ffd369; text-decoration: none; text-transform: none; }
+.proposal-brand b { color: #f7f5ef; }
+.proposal-lock { display: grid; min-height: calc(100svh - 6rem); place-items: center; padding: 3rem 1rem; }
+.proposal-lock > section { width: min(100%, 37rem); padding: clamp(1.5rem, 5vw, 4rem); border: 1px solid rgba(255, 211, 105, .24); background: rgba(8, 9, 8, .94); box-shadow: 0 2rem 6rem rgba(0, 0, 0, .42); }
+.proposal-kicker, .proposal-number { margin: 0 0 1rem; color: #ffd369; font-size: .68rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.proposal-lock h1, .proposal-hero h1, .proposal-panel h2, .proposal-comparison h2, .proposal-next h2 { margin: 0; letter-spacing: -.05em; line-height: .98; }
+.proposal-lock h1 { font-size: clamp(2.7rem, 7vw, 5.2rem); }
+.proposal-lock > section > p:not(.proposal-kicker) { color: #aaa99f; line-height: 1.65; }
+.proposal-lock form { display: grid; gap: .85rem; margin-top: 2rem; }
+.proposal-lock label { font-size: .72rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.proposal-lock input { min-height: 4.25rem; padding: 0 1rem; border: 1px solid rgba(255, 211, 105, .42); outline: none; background: #0b0c0b; color: #ffd369; font: 800 clamp(1.25rem, 5vw, 2rem)/1 Inter, sans-serif; letter-spacing: .22em; text-transform: uppercase; }
+.proposal-lock input:focus { border-color: #ffd369; box-shadow: 0 0 0 3px rgba(255, 211, 105, .12); }
+.proposal-primary { display: inline-flex; min-height: 3.75rem; align-items: center; justify-content: center; gap: 1rem; padding: .9rem 1.4rem; border: 1px solid #ffd369; background: #ffd369; color: #050606; font-weight: 800; text-decoration: none; cursor: pointer; transition: transform .2s ease, box-shadow .2s ease; }
+.proposal-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 1rem 2.5rem rgba(255, 211, 105, .18); }
+.proposal-primary:disabled { cursor: not-allowed; opacity: .45; }
+.proposal-error { margin: .25rem 0 0; color: #ffd3c9; font-size: .8rem; line-height: 1.5; }
+.proposal-main { width: min(92vw, 96rem); margin-inline: auto; padding: clamp(2rem, 5vw, 5rem) 0 clamp(4rem, 8vw, 8rem); }
+.proposal-document { border: 1px solid rgba(255, 255, 255, .14); }
+.proposal-hero { padding: clamp(2.5rem, 7vw, 7rem) clamp(1.25rem, 6vw, 6rem); text-align: center; }
+.proposal-hero h1 { max-width: 68rem; margin-inline: auto; font-size: clamp(3rem, 7.5vw, 7.5rem); }
+.proposal-hero > p:not(.proposal-kicker) { margin: 1.4rem 0 .75rem; color: #ffd369; font-size: clamp(1.15rem, 2.3vw, 2rem); font-weight: 750; }
+.proposal-hero > span { color: #aaa99f; font-size: .76rem; }
+.proposal-panel { min-height: 25rem; padding: clamp(2rem, 6vw, 6rem); border-top: 1px solid rgba(255, 255, 255, .14); background: rgba(9, 10, 9, .78); }
+.proposal-panel--gold { background: #ffd369; color: #050606; }
+.proposal-panel--gold .proposal-number { color: #5a480e; }
+.proposal-panel h2, .proposal-comparison h2, .proposal-next h2 { max-width: 65rem; font-size: clamp(2.5rem, 6vw, 6.5rem); }
+.proposal-panel > p:not(.proposal-number), .proposal-panel li, .proposal-comparison header > p:last-child, .proposal-next > p:not(.proposal-number) { max-width: 58rem; color: #aaa99f; font-size: clamp(.95rem, 1.4vw, 1.15rem); line-height: 1.7; }
+.proposal-panel--gold > p:not(.proposal-number), .proposal-panel--gold li { color: rgba(5, 6, 6, .72); }
+.proposal-panel ul { display: grid; gap: .65rem; max-width: 58rem; margin: 2rem 0 0; padding-left: 1.2rem; }
+.proposal-investment { display: block; margin-top: 2rem; color: #ffd369; font-size: clamp(1.25rem, 2.6vw, 2.5rem); }
+.proposal-comparison { padding: clamp(2rem, 6vw, 6rem); border-top: 1px solid rgba(255, 255, 255, .14); }
+.proposal-tier-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: clamp(2.5rem, 5vw, 4.5rem); }
+.proposal-tier { display: flex; min-width: 0; flex-direction: column; padding: clamp(1.25rem, 2.5vw, 2.25rem); border: 1px solid rgba(255, 255, 255, .14); background: #090a09; }
+.proposal-tier--selected { border-color: #ffd369; box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, .32); }
+.proposal-tier-title { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.proposal-tier-title h3 { margin: 0; font-size: clamp(2rem, 3.2vw, 3.7rem); letter-spacing: -.05em; }
+.proposal-tier-title span { padding: .35rem .5rem; background: #ffd369; color: #050606; font-size: .62rem; font-weight: 800; text-transform: uppercase; }
+.proposal-tier > p { color: #aaa99f; line-height: 1.55; }
+.proposal-tier > strong { color: #ffd369; font-size: .76rem; letter-spacing: .08em; text-transform: uppercase; }
+.proposal-tier-price { display: grid; gap: .4rem; margin-top: 1.5rem; padding: 1.25rem 0; border-block: 1px solid rgba(255, 255, 255, .12); }
+.proposal-tier-price small { color: #aaa99f; }
+.proposal-tier-price b { color: #ffd369; font-size: clamp(1.55rem, 2.4vw, 2.5rem); }
+.proposal-tier ul { display: grid; gap: .65rem; margin: 1.4rem 0 0; padding-left: 1.1rem; color: #d2d0c9; font-size: .82rem; line-height: 1.5; }
+.proposal-unavailable { padding: .8rem; border-left: 2px solid #ffd369; background: rgba(255, 211, 105, .08); font-size: .75rem; }
+.proposal-next { padding: clamp(2rem, 6vw, 6rem); border-top: 1px solid rgba(255, 255, 255, .14); background: #11120f; }
+.proposal-next .proposal-primary { margin-top: 1.5rem; }
+
+@media (max-width: 900px) {
+  .proposal-tier-grid { grid-template-columns: 1fr; }
+  .proposal-tier { min-height: 0; }
+}
+
+@media (max-width: 520px) {
+  .proposal-header > span { display: none; }
+  .proposal-main { width: min(100% - 2rem, 96rem); }
+  .proposal-hero { padding-inline: 1rem; }
+  .proposal-panel, .proposal-comparison, .proposal-next { min-height: 0; padding: 2rem 1.25rem; }
+  .proposal-primary { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proposal-primary { transition: none; }
+}

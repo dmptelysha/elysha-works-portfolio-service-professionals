@@ -5,6 +5,7 @@ import "../../public/hero-roadmap.css";
 import "./globals.css";
 import "../styles/portfolio.css";
 import "../styles/quiz.css";
+import "../styles/proposal.css";
 
 export const metadata: Metadata = {
   title: "Elysha Works | Strategy-First Business Systems",

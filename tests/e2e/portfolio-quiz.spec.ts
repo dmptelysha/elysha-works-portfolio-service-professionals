@@ -232,7 +232,26 @@ test("hero secondary action opens the assessment instructions", async ({ page })
   await expect(page.getByRole("complementary", { name: /clear roadmap in three steps/i })).toBeInViewport();
 });
 
-test("homepage and quiz have no horizontal overflow across the required viewport matrix", async ({ page }, testInfo) => {
+test("proposal access stays on-page and does not disclose why access failed", async ({ page }) => {
+  await page.route("https://*.supabase.co/functions/v1/verify-proposal", async (route) => {
+    await route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "proposal_unavailable" }),
+    });
+  });
+  await page.goto(`/proposal/?ref=${ids.proposal}`);
+  const initialNavigationCount = await page.evaluate(() => performance.getEntriesByType("navigation").length);
+  await page.getByLabel(/proposal access key/i).fill("ABCD234567");
+  await page.getByRole("button", { name: /view my proposal/i }).click();
+  const message = await page.locator(".proposal-error[role='alert']").textContent();
+  expect(message).toMatch(/could not verify this proposal/i);
+  expect(message).not.toMatch(/wrong|expired|locked/i);
+  expect(await page.evaluate(() => performance.getEntriesByType("navigation").length)).toBe(initialNavigationCount);
+  await expect(page).toHaveURL(new RegExp(`/proposal/\\?ref=${ids.proposal}$`));
+});
+
+test("homepage, quiz, and proposal access have no horizontal overflow across the required viewport matrix", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "The explicit matrix runs once in the desktop browser project.");
   const viewports = [
     [320, 568], [360, 740], [375, 812], [390, 844], [430, 932],
@@ -262,5 +281,9 @@ test("homepage and quiz have no horizontal overflow across the required viewport
         expect(box!.height).toBeGreaterThanOrEqual(44);
       }
     }
+
+    await page.goto(`/proposal/?ref=${ids.proposal}`);
+    const proposalOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(proposalOverflow, `proposal overflow at ${width}x${height}`).toBeLessThanOrEqual(1);
   }
 });

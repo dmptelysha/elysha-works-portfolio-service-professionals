@@ -127,6 +127,7 @@ test("the static export contains the homepage and live auxiliary routes", () => 
   const expected = [
     "out/index.html",
     "out/quiz/index.html",
+    "out/proposal/index.html",
     "out/quiz/__next.quiz.__PAGE__.txt",
     "out/booking/index.html",
     "out/thank-you/index.html",
@@ -139,4 +140,16 @@ test("the static export contains the homepage and live auxiliary routes", () => 
   for (const file of expected) {
     assert.ok(existsSync(fromRoot(file)), `missing ${file}`);
   }
+});
+
+test("the protected proposal route is client-verified and does not embed private content", () => {
+  const page = readFileSync(fromRoot("src/app/proposal/page.tsx"), "utf8");
+  const access = readFileSync(fromRoot("src/features/proposal/ProposalAccess.tsx"), "utf8");
+  const service = readFileSync(fromRoot("src/features/proposal/proposal-service.ts"), "utf8");
+
+  assert.match(page, /ProposalAccess/);
+  assert.match(access, /sessionStorage/);
+  assert.match(service, /verify-proposal/);
+  assert.doesNotMatch(`${page}\n${access}`, /mara@example|Mara Consulting/i);
+  assert.doesNotMatch(access, /localStorage/);
 });
