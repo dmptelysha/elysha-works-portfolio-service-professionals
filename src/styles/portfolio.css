@@ -24,6 +24,19 @@ button, a { -webkit-tap-highlight-color: transparent; }
   transform: translateY(0);
 }
 
+.contextual-nav .portfolio-nav {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease;
+}
+
+.contextual-nav--visible .portfolio-nav {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .portfolio-nav {
   position: relative;
   display: grid;

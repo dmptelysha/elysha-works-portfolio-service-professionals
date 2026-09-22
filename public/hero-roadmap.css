@@ -7,7 +7,7 @@
   position: relative;
   display: grid;
   place-items: center;
-  min-height: 100svh;
+  min-height: max(100svh, 100vh);
   overflow: hidden;
   padding: clamp(3rem, 6svh, 5.75rem) clamp(1.25rem, 5vw, 6rem);
   background:
@@ -253,7 +253,7 @@
 
 @media (max-width: 640px) {
   .hero-roadmap {
-    min-height: 100svh;
+    min-height: max(100svh, 100vh);
     padding: clamp(2rem, 4.5svh, 3rem) clamp(1rem, 5vw, 1.5rem);
   }
 

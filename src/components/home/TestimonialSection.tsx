@@ -3,7 +3,7 @@ import { SITE_CONTENT } from "@/data/site-content";
 export function TestimonialSection() {
   const { testimonial } = SITE_CONTENT;
   return (
-    <section className="portfolio-section testimonial-section" aria-labelledby="testimonial-title">
+    <section className="portfolio-section testimonial-section" id="testimonial" aria-labelledby="testimonial-title">
       <div className="portfolio-shell testimonial-inner">
         <p className="section-eyebrow">{testimonial.eyebrow}</p>
         <figure>

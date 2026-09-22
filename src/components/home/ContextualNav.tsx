@@ -16,6 +16,7 @@ export function BrandMark() {
 export function ContextualNav() {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState("projects");
+  const [pastHero, setPastHero] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -55,9 +56,21 @@ export function ContextualNav() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (!("IntersectionObserver" in window)) return;
+    const hero = document.getElementById("top");
+    if (!hero) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setPastHero(!entry.isIntersecting),
+      { threshold: 0.01 },
+    );
+    observer.observe(hero);
+    return () => observer.disconnect();
+  }, []);
+
   const close = () => setOpen(false);
   return (
-    <div className="contextual-nav" ref={rootRef}>
+    <div className={`contextual-nav${pastHero ? " contextual-nav--visible" : ""}`} ref={rootRef}>
       <nav className="portfolio-nav" aria-label="Portfolio navigation">
         <Link className="portfolio-nav-brand" href="/#top" aria-label="Elysha Works home" onClick={close}>
           <BrandMark />
