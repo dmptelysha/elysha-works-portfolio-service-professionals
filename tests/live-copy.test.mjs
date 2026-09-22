@@ -28,54 +28,59 @@ test("live snapshot assets and auxiliary routes are available under public", () 
   }
 });
 
-test("the portfolio blueprint remains documentation, not homepage functionality", () => {
+test("the portfolio blueprint remains the documented source of truth", () => {
   assert.ok(existsSync(fromRoot("docs/portfolio-blueprint.md")));
-  const page = readFileSync(fromRoot("src/app/page.tsx"), "utf8");
-  assert.doesNotMatch(page, /lead qualifier|quiz/i);
 });
 
-test("the Next homepage renders the complete live portfolio snapshot", () => {
-  const snapshotPath = fromRoot("src/content/live-home.html");
-  assert.ok(existsSync(snapshotPath), "missing live homepage snapshot");
-
-  const snapshot = readFileSync(snapshotPath, "utf8");
-  assert.match(snapshot, /Clear websites\./);
-  for (const id of ["problem", "journey", "work", "services", "process", "about", "faq", "contact"]) {
-    assert.match(snapshot, new RegExp(`id=["']${id}["']`), `missing #${id}`);
+test("the Next homepage composes the approved seven-section React experience", () => {
+  const page = readFileSync(fromRoot("src/app/page.tsx"), "utf8");
+  assert.doesNotMatch(page, /live-home\.html/);
+  assert.doesNotMatch(page, /dangerouslySetInnerHTML/);
+  for (const component of [
+    "Hero",
+    "ProjectsSection",
+    "FounderSection",
+    "TestimonialSection",
+    "FaqSection",
+    "FinalCtaSection",
+    "SiteFooter",
+  ]) {
+    assert.match(page, new RegExp(`<${component}`), `missing ${component}`);
   }
-  assert.doesNotMatch(snapshot, /lead qualifier|portfolio quiz/i);
-
-  const page = readFileSync(fromRoot("src/app/page.tsx"), "utf8");
-  assert.match(page, /live-home\.html/);
-  assert.match(page, /dangerouslySetInnerHTML/);
-  assert.match(page, /suppressHydrationWarning/);
 });
 
-test("the live homepage styles and scripts are exposed as public assets", () => {
-  for (const file of ["public/site.css", "public/scroll-scenes.css", "public/site.js"]) {
+test("the homepage exposes the approved roadmap hero hierarchy", () => {
+  const snapshot = readFileSync(fromRoot("src/components/home/Hero.tsx"), "utf8");
+  const content = readFileSync(fromRoot("src/data/site-content.ts"), "utf8");
+
+  assert.match(snapshot, /hero-promise-accent/);
+  assert.match(snapshot, /hero-trust/);
+  assert.match(content, /Strategy-first guidance for growing businesses\./);
+  assert.match(content, /Get My Personalized Roadmap/);
+  assert.match(content, /See how the assessment works/);
+});
+
+test("the authored homepage styles are available", () => {
+  for (const file of ["public/hero-roadmap.css", "src/styles/portfolio.css"]) {
     assert.ok(existsSync(fromRoot(file)), `missing ${file}`);
   }
+
+  const layout = readFileSync(fromRoot("src/app/layout.tsx"), "utf8");
+  assert.match(layout, /public\/hero-roadmap\.css/);
+  assert.match(layout, /styles\/portfolio\.css/);
 });
 
-test("client-only enhancements begin after React hydration", () => {
+test("the root layout no longer injects the legacy runtime", () => {
   const layout = readFileSync(fromRoot("src/app/layout.tsx"), "utf8");
-  const runtimePath = fromRoot("src/app/live-runtime.tsx");
-  assert.ok(existsSync(runtimePath), "missing client runtime");
-  assert.doesNotMatch(layout, /document\.documentElement\.classList\.add/);
-
-  const runtime = readFileSync(runtimePath, "utf8");
-  assert.match(runtime, /^"use client";/);
-  assert.match(runtime, /useEffect/);
-  assert.match(runtime, /classList\.add\("js-ready"\)/);
-  assert.doesNotMatch(layout, /next\/script/);
-  for (const script of [
-    "/assets/vendor/scrollcraft/scrollcraft.js",
-    "/site.js",
-    "/assets/v3-project-viewer.js",
-    "/assets/v3-content-guard.js",
-    "/assets/rhea-chat.mjs",
+  for (const legacy of [
+    "LiveRuntime",
+    "scrollcraft.css",
+    "public/site.css",
+    "scroll-scenes.css",
+    "v3-project-viewer.css",
+    "rhea-chat.css",
   ]) {
-    assert.match(runtime, new RegExp(script.replaceAll("/", "\\/")));
+    assert.doesNotMatch(layout, new RegExp(legacy.replaceAll("/", "\\/")));
   }
 });
 

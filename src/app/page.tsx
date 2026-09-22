@@ -1,25 +1,26 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
-function readLiveHomepageBody() {
-  const source = readFileSync(
-    join(process.cwd(), "src", "content", "live-home.html"),
-    "utf8",
-  );
-  const body = source.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-
-  if (!body) {
-    throw new Error("The live portfolio snapshot does not contain a body element.");
-  }
-
-  return body[1];
-}
+import { ContextualNav } from "@/components/home/ContextualNav";
+import { FaqSection } from "@/components/home/FaqSection";
+import { FinalCtaSection } from "@/components/home/FinalCtaSection";
+import { FounderSection } from "@/components/home/FounderSection";
+import { Hero } from "@/components/home/Hero";
+import { ProjectsSection } from "@/components/home/ProjectsSection";
+import { SiteFooter } from "@/components/home/SiteFooter";
+import { TestimonialSection } from "@/components/home/TestimonialSection";
 
 export default function Home() {
   return (
-    <div
-      suppressHydrationWarning
-      dangerouslySetInnerHTML={{ __html: readLiveHomepageBody() }}
-    />
+    <>
+      <a className="portfolio-skip-link" href="#main">Skip to content</a>
+      <main id="main">
+        <Hero />
+        <ContextualNav />
+        <ProjectsSection />
+        <FounderSection />
+        <TestimonialSection />
+        <FaqSection />
+        <FinalCtaSection />
+      </main>
+      <SiteFooter />
+    </>
   );
 }
