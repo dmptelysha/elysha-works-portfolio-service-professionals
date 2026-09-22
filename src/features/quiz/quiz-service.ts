@@ -4,6 +4,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 import type {
   AudienceKey,
+  EmailOtpChallenge,
   LeadContactInput,
   LeadContactSubmissionResult,
   ProposalDraftViewModel,
@@ -29,6 +30,8 @@ export interface QuizProgressInput {
 }
 
 export interface QuizService {
+  requestEmailOtp: typeof requestEmailOtp;
+  verifyEmailOtp: typeof verifyEmailOtp;
   createOwnedQuizContext: typeof createOwnedQuizContext;
   submitLeadContact: typeof submitLeadContact;
   saveOwnedQuizProgress: typeof saveOwnedQuizProgress;
@@ -39,6 +42,8 @@ export interface QuizService {
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CONTACT_ERROR = "We could not save your details. Please try again.";
 const SERVICE_ERROR = "The assessment service is temporarily unavailable. Please try again.";
+const OTP_ERROR = "We could not verify that code. Check it or request a new one.";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function clientOrDefault(client?: SupabaseClient): SupabaseClient {
   return client ?? getSupabaseBrowserClient();
@@ -56,6 +61,54 @@ function safeServiceError(): Error {
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error
     && (error as { code?: unknown }).code === "23505";
+}
+
+function normalizeEmail(email: string): string {
+  const normalized = email.trim().toLowerCase();
+  if (!EMAIL_PATTERN.test(normalized)) throw new Error(OTP_ERROR);
+  return normalized;
+}
+
+export async function requestEmailOtp(
+  email: string,
+  captchaToken: string,
+  client?: SupabaseClient,
+): Promise<EmailOtpChallenge> {
+  const normalizedEmail = normalizeEmail(email);
+  if (!captchaToken.trim()) throw new Error(OTP_ERROR);
+  const response = await clientOrDefault(client).auth.signInWithOtp({
+    email: normalizedEmail,
+    options: { shouldCreateUser: true, captchaToken: captchaToken.trim() },
+  });
+  if (response.error) throw new Error(OTP_ERROR);
+  const requestedAt = new Date();
+  return {
+    email: normalizedEmail,
+    requestedAt: requestedAt.toISOString(),
+    resendAvailableAt: new Date(requestedAt.getTime() + 60_000).toISOString(),
+  };
+}
+
+export async function verifyEmailOtp(
+  email: string,
+  token: string,
+  client?: SupabaseClient,
+): Promise<Session> {
+  const normalizedEmail = normalizeEmail(email);
+  if (!/^\d{6}$/.test(token)) throw new Error(OTP_ERROR);
+  const response = await clientOrDefault(client).auth.verifyOtp({
+    email: normalizedEmail,
+    token,
+    type: "email",
+  });
+  const session = response.data.session;
+  const user = session?.user;
+  if (response.error || !session || !user || user.is_anonymous !== false
+    || user.email?.trim().toLowerCase() !== normalizedEmail || !user.email_confirmed_at) {
+    throw new Error(OTP_ERROR);
+  }
+  requireUuid(user.id);
+  return session;
 }
 
 export async function ensureAnonymousSession(client?: SupabaseClient, captchaToken?: string): Promise<Session> {
@@ -256,6 +309,8 @@ export async function issueProposal(
 }
 
 export const defaultQuizService: QuizService = {
+  requestEmailOtp,
+  verifyEmailOtp,
   createOwnedQuizContext,
   submitLeadContact,
   saveOwnedQuizProgress,

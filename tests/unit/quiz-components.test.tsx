@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QuizExperience } from "@/features/quiz/QuizExperience";
 import { calculateRecommendation } from "@/features/quiz/cortex";
+import { EmailOtpStep } from "@/features/quiz/EmailOtpStep";
 import { LeadContactStep } from "@/features/quiz/LeadContactStep";
 import type { OwnedQuizContext } from "@/features/quiz/quiz-service";
 import { QUIZ_DEFINITIONS } from "@/features/quiz/questions";
@@ -67,14 +68,32 @@ function createFakeQuizService() {
       proposal: { ...buildProposalDraft(identity, answers, result, selection), expiresAt: "2026-09-25T05:00:00.000Z" },
     };
   });
-  return { createOwnedQuizContext, submitLeadContact, saveOwnedQuizProgress, previewProposal, issueProposal };
+  const requestEmailOtp = vi.fn(async (email: string) => ({
+    email: email.trim().toLowerCase(),
+    requestedAt: "2026-09-23T00:00:00.000Z",
+    resendAvailableAt: "2026-09-23T00:01:00.000Z",
+  }));
+  const verifyEmailOtp = vi.fn(async () => ({
+    access_token: "test-access-token",
+    refresh_token: "test-refresh-token",
+    expires_in: 3600,
+    token_type: "bearer",
+    user: {
+      id: ownedContext.ownerUserId,
+      email: "mara@example.com",
+      is_anonymous: false,
+      email_confirmed_at: "2026-09-23T00:00:00.000Z",
+    },
+  } as never));
+  return { requestEmailOtp, verifyEmailOtp, createOwnedQuizContext, submitLeadContact, saveOwnedQuizProgress, previewProposal, issueProposal };
 }
 
 async function completeContactStep(
   user: ReturnType<typeof userEvent.setup>,
-  values = { firstName: "Mara", businessName: "Mara Consulting", email: "Mara@Example.com" },
+  values = { firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "Mara@Example.com" },
 ) {
   await user.type(screen.getByLabelText(/first name/i), values.firstName);
+  await user.type(screen.getByLabelText(/last name/i), values.lastName);
   await user.type(screen.getByLabelText(/business name/i), values.businessName);
   await user.type(screen.getByLabelText(/^email/i), values.email);
   await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
@@ -104,6 +123,35 @@ describe("local portfolio quiz", () => {
     turnstileControls.mounts = 0;
   });
 
+  it("accepts only a six-digit email code and keeps account state private", async () => {
+    const user = userEvent.setup();
+    const onVerify = vi.fn(async () => undefined);
+    const onResend = vi.fn(async () => undefined);
+    const onChangeEmail = vi.fn();
+    render(
+      <EmailOtpStep
+        email="person@example.com"
+        resendAvailableAt="2026-09-23T00:01:00.000Z"
+        now={() => new Date("2026-09-23T00:00:00.000Z").getTime()}
+        onChangeEmail={onChangeEmail}
+        onResend={onResend}
+        onVerify={onVerify}
+      />,
+    );
+
+    expect(screen.getByText(/p\*\*\*\*n@example\.com/i)).toBeInTheDocument();
+    const verify = screen.getByRole("button", { name: /verify email/i });
+    expect(verify).toBeDisabled();
+    await user.type(screen.getByLabelText(/verification code/i), "12a34-56");
+    expect(screen.getByLabelText(/verification code/i)).toHaveValue("123456");
+    await user.click(verify);
+    expect(onVerify).toHaveBeenCalledWith("123456");
+    expect(screen.getByRole("button", { name: /resend in 60s/i })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /change email/i }));
+    expect(onChangeEmail).toHaveBeenCalledOnce();
+  });
+
+
   it("shows the three audience choices immediately while the security check initializes", async () => {
     vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "test-site-key");
     const user = userEvent.setup();
@@ -129,6 +177,7 @@ describe("local portfolio quiz", () => {
 
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
     await user.type(screen.getByLabelText(/first name/i), "Mara");
+    await user.type(screen.getByLabelText(/last name/i), "Santos");
     await user.type(screen.getByLabelText(/business name/i), "Mara Consulting");
     await user.type(screen.getByLabelText(/^email/i), "mara@example.com");
     await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
@@ -169,6 +218,7 @@ describe("local portfolio quiz", () => {
     expect(submit).toHaveTextContent("Continue to Assessment →");
     expect(submit).toBeDisabled();
     await user.type(screen.getByLabelText(/first name/i), "  Mara  ");
+    await user.type(screen.getByLabelText(/last name/i), "  Santos  ");
     await user.type(screen.getByLabelText(/business name/i), "  Mara Consulting  ");
     await user.type(screen.getByLabelText(/^email/i), "  MARA@EXAMPLE.COM  ");
     expect(submit).toBeDisabled();
@@ -177,6 +227,7 @@ describe("local portfolio quiz", () => {
 
     await waitFor(() => expect(submitted).toEqual({
       firstName: "Mara",
+      lastName: "Santos",
       businessName: "Mara Consulting",
       email: "mara@example.com",
       consent: true,
@@ -311,6 +362,7 @@ describe("local portfolio quiz", () => {
 
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
     await user.type(screen.getByLabelText(/first name/i), "Mara");
+    await user.type(screen.getByLabelText(/last name/i), "Santos");
     await user.type(screen.getByLabelText(/business name/i), "Mara Consulting");
     await user.type(screen.getByLabelText(/^email/i), "mara@example.com");
     await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
@@ -463,7 +515,7 @@ describe("local portfolio quiz", () => {
     const user = userEvent.setup();
     render(<QuizExperience service={createFakeQuizService()} />);
     await user.click(await screen.findByRole("button", { name: /custom-order business/i }));
-    await completeContactStep(user, { firstName: "Mara", businessName: "La Jaysiedel Cakes", email: "mara@example.com" });
+    await completeContactStep(user, { firstName: "Mara", lastName: "Santos", businessName: "La Jaysiedel Cakes", email: "mara@example.com" });
     await user.click(screen.getByRole("button", { name: /start my assessment/i }));
 
     const definition = QUIZ_DEFINITIONS.custom_order_businesses;

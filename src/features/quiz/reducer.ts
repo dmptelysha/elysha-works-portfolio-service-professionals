@@ -107,13 +107,14 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
     case "CONTACT_ACCEPTED": {
       if (!state.audienceKey || state.screen !== "contact") return state;
       const firstName = action.contact.firstName.trim();
+      const lastName = action.contact.lastName.trim();
       const businessName = action.contact.businessName.trim();
       const email = action.contact.email.trim().toLowerCase();
-      if (!firstName || !businessName || !email || !action.contact.consent) return state;
+      if (!firstName || !lastName || !businessName || !email || !action.contact.consent) return state;
       return {
         ...state,
         screen: "intro",
-        contact: { firstName, businessName, email, consent: true },
+        contact: { firstName, lastName, businessName, email, consent: true },
         clientIdentity: { firstName, businessName },
       };
     }

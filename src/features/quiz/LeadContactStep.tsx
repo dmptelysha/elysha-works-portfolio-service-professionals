@@ -14,6 +14,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function LeadContactStep({ onSubmit, securityError = false, securityReady = true }: LeadContactStepProps) {
   const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
@@ -23,7 +24,7 @@ export function LeadContactStep({ onSubmit, securityError = false, securityReady
 
   const normalizedEmail = email.trim().toLowerCase();
   const canSubmit = Boolean(
-    firstName.trim() && businessName.trim() && EMAIL_PATTERN.test(normalizedEmail) && consent && securityReady && !submitting,
+    firstName.trim() && lastName.trim() && businessName.trim() && EMAIL_PATTERN.test(normalizedEmail) && consent && securityReady && !submitting,
   );
 
   const submitContact = async (businessScope?: LeadContactInput["businessScope"]) => {
@@ -40,6 +41,7 @@ export function LeadContactStep({ onSubmit, securityError = false, securityReady
     try {
       const result = await onSubmit({
         firstName: firstName.trim(),
+        lastName: lastName.trim(),
         businessName: businessName.trim(),
         email: normalizedEmail,
         consent: true,
@@ -71,6 +73,10 @@ export function LeadContactStep({ onSubmit, securityError = false, securityReady
         <label>
           <span>First name</span>
           <input autoComplete="given-name" name="firstName" required value={firstName} onChange={(event) => setFirstName(event.target.value)} />
+        </label>
+        <label>
+          <span>Last name</span>
+          <input autoComplete="family-name" name="lastName" required value={lastName} onChange={(event) => setLastName(event.target.value)} />
         </label>
         <label>
           <span>Business name</span>

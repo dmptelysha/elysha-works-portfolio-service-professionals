@@ -18,6 +18,7 @@ import type {
 
 const contact: LeadContactInput = {
   firstName: "Ely",
+  lastName: "Santos",
   businessName: "La Jaysiedel Cakes",
   email: "owner@example.com",
   consent: true,

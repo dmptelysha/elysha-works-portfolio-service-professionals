@@ -59,6 +59,11 @@ test('Supabase scaffold has the ordered reproducible assets', () => {
   assert.ok(read('supabase/tests/02_rls_ownership.test.sql').length > 0);
   assert.ok(read('supabase/tests/03_rpc_and_integrity.test.sql').length > 0);
   assert.ok(read('supabase/tests/04_proposal_flow.test.sql').length > 0);
+  const config = read('supabase/config.toml');
+  assert.match(config, /\[auth\.email\]/);
+  assert.match(config, /otp_expiry\s*=\s*600/);
+  assert.match(config, /\[auth\.email\.template\.magic_link\]/);
+  assert.match(read('supabase/templates/magic-link.html'), /\{\{\s*\.Token\s*\}\}/);
 });
 
 test('proposal migration is additive, keeps eleven tables, and locks trusted functions down', () => {

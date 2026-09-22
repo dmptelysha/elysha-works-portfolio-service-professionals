@@ -42,7 +42,7 @@ describe("quiz reducer", () => {
     expect(state.screen).toBe("contact");
     state = quizReducer(state, {
       type: "CONTACT_ACCEPTED",
-      contact: { firstName: "Mara", businessName: "Mara Consulting", email: "mara@example.com", consent: true },
+      contact: { firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "mara@example.com", consent: true },
     });
     expect(state.screen).toBe("intro");
     expect(state.clientIdentity).toEqual({ firstName: "Mara", businessName: "Mara Consulting" });
@@ -53,7 +53,7 @@ describe("quiz reducer", () => {
 
   it("supports single and multi-select answers, Next, Back, and editing", () => {
     let state = quizReducer(createInitialQuizState(), { type: "SELECT_AUDIENCE", audienceKey: "coaches_educators" });
-    state = quizReducer(state, { type: "CONTACT_ACCEPTED", contact: { firstName: "Ely", businessName: "Ely Works", email: "ely@example.com", consent: true } });
+    state = quizReducer(state, { type: "CONTACT_ACCEPTED", contact: { firstName: "Ely", lastName: "Santos", businessName: "Ely Works", email: "ely@example.com", consent: true } });
     state = quizReducer(state, { type: "CONTINUE_INTRO" });
     state = quizReducer(state, { type: "ANSWER_SINGLE", questionKey: "q1_goal", optionKey: "coach_goal_book_calls" });
     state = quizReducer(state, { type: "NEXT" });
@@ -70,7 +70,7 @@ describe("quiz reducer", () => {
 
   it("does not advance without a valid current answer", () => {
     let state = quizReducer(createInitialQuizState(), { type: "SELECT_AUDIENCE", audienceKey: "service_businesses" });
-    state = quizReducer(state, { type: "CONTACT_ACCEPTED", contact: { firstName: "Mara", businessName: "Mara Consulting", email: "mara@example.com", consent: true } });
+    state = quizReducer(state, { type: "CONTACT_ACCEPTED", contact: { firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "mara@example.com", consent: true } });
     state = quizReducer(state, { type: "CONTINUE_INTRO" });
     state = quizReducer(state, { type: "NEXT" });
     expect(state.currentQuestionIndex).toBe(0);

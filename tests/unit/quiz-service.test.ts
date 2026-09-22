@@ -5,8 +5,10 @@ import {
   ensureAnonymousSession,
   issueProposal,
   previewProposal,
+  requestEmailOtp,
   saveOwnedQuizProgress,
   submitLeadContact,
+  verifyEmailOtp,
   type OwnedQuizContext,
 } from "@/features/quiz/quiz-service";
 
@@ -51,6 +53,20 @@ function fakeClient(options: {
     data: { session: options.signInUserId ? { user: { id: options.signInUserId } } : null },
     error: null,
   }));
+  const signInWithOtp = vi.fn(async () => ({ data: {}, error: null }));
+  const verifyOtp = vi.fn(async () => ({
+    data: {
+      session: {
+        user: {
+          id: USER_ID,
+          email: "person@example.com",
+          is_anonymous: false,
+          email_confirmed_at: "2026-09-23T00:00:00.000Z",
+        },
+      },
+    },
+    error: null,
+  }));
   const rpc = vi.fn(async () => options.rpcResponse ?? {
     data: [{ submission_status: "accepted", lead_id: LEAD_ID, quiz_session_id: QUIZ_SESSION_ID, existing_business_name: null }],
     error: null,
@@ -58,7 +74,7 @@ function fakeClient(options: {
   const invoke = vi.fn(async () => options.functionResponse ?? { data: { proposal: { expiresAt: null } }, error: null });
   return {
     client: {
-      auth: { getSession, signInAnonymously },
+      auth: { getSession, signInAnonymously, signInWithOtp, verifyOtp },
       from: vi.fn((table: string) => {
         const chain: Array<{ method: string; args: unknown[] }> = [];
         tableCalls.push({ table, chain });
@@ -69,6 +85,8 @@ function fakeClient(options: {
     },
     getSession,
     signInAnonymously,
+    signInWithOtp,
+    verifyOtp,
     rpc,
     invoke,
     tableCalls,
@@ -86,6 +104,39 @@ const context: OwnedQuizContext = {
 };
 
 describe("Supabase quiz service", () => {
+  it("requests a passwordless email code with normalized email and Turnstile", async () => {
+    const fake = fakeClient();
+
+    await expect(requestEmailOtp(" Person@Example.com ", "turnstile-token", fake.client as never))
+      .resolves.toMatchObject({ email: "person@example.com" });
+
+    expect(fake.signInWithOtp).toHaveBeenCalledWith({
+      email: "person@example.com",
+      options: { shouldCreateUser: true, captchaToken: "turnstile-token" },
+    });
+  });
+
+  it("verifies the six-digit email code and rejects anonymous sessions", async () => {
+    const fake = fakeClient();
+
+    await expect(verifyEmailOtp(" Person@Example.com ", "123456", fake.client as never))
+      .resolves.toMatchObject({ user: { id: USER_ID, email: "person@example.com", is_anonymous: false } });
+
+    expect(fake.verifyOtp).toHaveBeenCalledWith({
+      email: "person@example.com",
+      token: "123456",
+      type: "email",
+    });
+
+    const anonymous = fakeClient();
+    anonymous.verifyOtp.mockResolvedValueOnce({
+      data: { session: { user: { id: USER_ID, email: "person@example.com", is_anonymous: true, email_confirmed_at: "2026-09-23T00:00:00.000Z" } } },
+      error: null,
+    });
+    await expect(verifyEmailOtp("person@example.com", "123456", anonymous.client as never))
+      .rejects.toThrow("We could not verify that code. Check it or request a new one.");
+  });
+
   it("reuses an existing anonymous session without signing in again", async () => {
     const fake = fakeClient({ sessionUserId: USER_ID });
     await expect(ensureAnonymousSession(fake.client as never)).resolves.toMatchObject({ user: { id: USER_ID } });
@@ -201,7 +252,7 @@ describe("Supabase quiz service", () => {
   it("submits only approved contact fields and owned attribution through the RPC", async () => {
     const fake = fakeClient();
     await expect(submitLeadContact(context, {
-      firstName: " Mara ", businessName: " Mara Consulting ", email: "MARA@EXAMPLE.COM", consent: true,
+      firstName: " Mara ", lastName: " Santos ", businessName: " Mara Consulting ", email: "MARA@EXAMPLE.COM", consent: true,
     }, fake.client as never)).resolves.toEqual({ status: "accepted", leadId: LEAD_ID, quizSessionId: QUIZ_SESSION_ID });
 
     expect(fake.rpc).toHaveBeenCalledWith("begin_qualified_quiz_v2", {
@@ -232,7 +283,7 @@ describe("Supabase quiz service", () => {
       },
     });
     const contact = {
-      firstName: "Mara", businessName: "Mara Consulting", email: "mara@example.com", consent: true as const,
+      firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "mara@example.com", consent: true as const,
     };
     await expect(submitLeadContact(context, contact, fake.client as never)).resolves.toEqual({
       status: "business_scope_required",
@@ -286,7 +337,7 @@ describe("Supabase quiz service", () => {
       rpcResponse: { data: null, error: { message: "mara@example.com sb_secret_should_not_leak" } },
     });
     await expect(submitLeadContact(context, {
-      firstName: "Mara", businessName: "Mara Consulting", email: "mara@example.com", consent: true,
+      firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "mara@example.com", consent: true,
     }, fake.client as never)).rejects.toThrow("We could not save your details. Please try again.");
   });
 });

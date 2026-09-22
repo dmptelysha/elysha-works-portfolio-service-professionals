@@ -52,10 +52,17 @@ export interface RoadmapSelection {
 
 export interface LeadContactInput {
   firstName: string;
+  lastName: string;
   businessName: string;
   email: string;
   consent: true;
   businessScope?: "same_business" | "another_business";
+}
+
+export interface EmailOtpChallenge {
+  email: string;
+  requestedAt: string;
+  resendAvailableAt: string;
 }
 
 export type LeadContactSubmissionResult =
