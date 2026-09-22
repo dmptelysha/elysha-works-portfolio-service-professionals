@@ -6,6 +6,7 @@ import {
   CORTEX_VERSION,
   QUESTION_SET_VERSION,
   type CortexResult,
+  type ProposalDraftViewModel,
   type SavedQuizAttempt,
 } from "@/features/quiz/types";
 
@@ -17,6 +18,7 @@ const result = {
   technicalConstraintSignals: [],
   selectedSupportOptionKeys: [],
 } as unknown as CortexResult;
+const proposal = { expiresAt: null } as unknown as ProposalDraftViewModel;
 const saved = {
   storageVersion: 3,
   cortexVersion: CORTEX_VERSION,
@@ -82,18 +84,18 @@ describe("quiz reducer", () => {
     expect(state.resumeCandidate).toBeNull();
     state = quizReducer(state, { type: "LOAD_RESUME", attempt: saved });
     state = quizReducer(state, { type: "RESUME" });
-    expect(state.screen).toBe("question");
+    expect(state.screen).toBe("contact");
     expect(state.currentQuestionIndex).toBe(1);
     expect(state.answers.q1_goal).toEqual(["coach_goal_enroll_students"]);
     state = quizReducer(state, { type: "START_OVER" });
     expect(state).toEqual(createInitialQuizState());
   });
 
-  it("restores a completed snapshot directly to the result", () => {
+  it("requires contact re-entry when restoring a completed local snapshot", () => {
     const completed = { ...saved, status: "completed", result } as SavedQuizAttempt;
     let state = quizReducer(createInitialQuizState(), { type: "LOAD_RESUME", attempt: completed });
     state = quizReducer(state, { type: "RESUME" });
-    expect(state.screen).toBe("result");
+    expect(state.screen).toBe("contact");
     expect(state.result).toBe(result);
   });
 
@@ -109,7 +111,7 @@ describe("quiz reducer", () => {
     expect(state.answers.q1_goal).toEqual(["coach_goal_book_calls"]);
     state = quizReducer(state, { type: "RETRY_CALCULATION" });
     expect(state.screen).toBe("calculating");
-    state = quizReducer(state, { type: "CALCULATION_SUCCESS", result });
+    state = quizReducer(state, { type: "CALCULATION_SUCCESS", result, proposal });
     expect(state.screen).toBe("result");
     expect(state.result).toBe(result);
     expect(state.roadmapSelection).toEqual({ tierKey: "advanced", platform: "systeme_io", offerKey: "platform_growth" });

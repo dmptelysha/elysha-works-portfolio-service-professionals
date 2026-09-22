@@ -17,6 +17,9 @@ interface QuizResultProps {
   selection: RoadmapSelection;
   onSelect: (selection: RoadmapSelection) => void;
   onStartOver: () => void;
+  onIssue: () => Promise<void>;
+  issuing: boolean;
+  issueError: string | null;
   persistenceAvailable: boolean;
 }
 
@@ -35,7 +38,17 @@ const readinessNames: Record<ReadinessLevel, string> = {
   researching: "Researching for later",
 };
 
-export function QuizResult({ result, proposal, selection, onSelect, onStartOver, persistenceAvailable }: QuizResultProps) {
+export function QuizResult({
+  result,
+  proposal,
+  selection,
+  onSelect,
+  onStartOver,
+  onIssue,
+  issuing,
+  issueError,
+  persistenceAvailable,
+}: QuizResultProps) {
   const relevantProjects = PROJECTS.filter((project) => project.audienceKeys.includes(result.audienceKey)).slice(0, 2);
 
   if (proposal) {
@@ -122,7 +135,13 @@ export function QuizResult({ result, proposal, selection, onSelect, onStartOver,
             <p>{proposal.expiresAt
               ? `Access expires at ${new Date(proposal.expiresAt).toLocaleString("en-US")}.`
               : "Your exact 72-hour expiration begins only after the initial proposal email is delivered."}</p>
+            {issueError ? <p className="quiz-validation" role="alert">{issueError}</p> : null}
           </div>
+          {!proposal.expiresAt ? (
+            <button className="quiz-primary" disabled={issuing} onClick={() => void onIssue()} type="button">
+              {issuing ? "Creating your proposalâ€¦" : "Create My 3-Day Proposal"} <span aria-hidden="true">â†’</span>
+            </button>
+          ) : null}
           <button className="quiz-back" onClick={onStartOver} type="button">Start a new assessment</button>
         </footer>
       </article>

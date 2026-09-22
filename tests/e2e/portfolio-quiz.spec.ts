@@ -1,13 +1,86 @@
 import { expect, test } from "@playwright/test";
 
-const blockedBackendPatterns = [
-  /supabase\.co/i,
-  /\/rest\/v1/i,
-  /\/auth\/v1/i,
-  /\/functions\/v1/i,
+const forbiddenBackendPatterns = [
   /firestore|firebaseio\.com/i,
+  /hook\.(?:us\d+\.)?make\.com/i,
   /google-analytics|analytics\.google/i,
 ];
+
+const ids = {
+  user: "10000000-0000-4000-8000-000000000001",
+  definition: "20000000-0000-4000-8000-000000000001",
+  visitor: "30000000-0000-4000-8000-000000000001",
+  portfolioSession: "40000000-0000-4000-8000-000000000001",
+  quiz: "50000000-0000-4000-8000-000000000001",
+  lead: "60000000-0000-4000-8000-000000000001",
+  proposal: "70000000-0000-4000-8000-000000000001",
+};
+
+const proposalDraft = {
+  client: { firstName: "Mara", businessName: "Mara Consulting" },
+  pointA: { heading: "Where Mara Consulting is now", summary: "The current path needs clearer qualification.", evidence: ["Manual lead handling"] },
+  pointB: { heading: "Where the business wants to go", summary: "A connected inquiry-to-booking path.", evidence: ["Qualified discovery calls"] },
+  recommendation: {
+    title: "A connected lead and booking system",
+    reason: "The selected answers prioritize qualification and follow-up.",
+    buildRoute: "platform",
+    platform: "gohighlevel",
+    offerKey: "platform_growth",
+    offerName: "Growth System",
+    basePriceUsd: 2500,
+    includedFeatures: [],
+    estimatedProjectInvestmentUsd: 2500,
+  },
+  selection: { tierKey: "advanced", platform: "gohighlevel", offerKey: "platform_growth" },
+  tiers: [],
+  expiresAt: null,
+};
+
+async function mockSupabaseQuiz(page: import("@playwright/test").Page, observed: string[]) {
+  await page.route("https://*.supabase.co/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    observed.push(`${request.method()} ${url.pathname}`);
+    const json = (body: unknown, status = 200) => route.fulfill({
+      status,
+      contentType: "application/json",
+      body: JSON.stringify(body),
+    });
+
+    if (url.pathname.endsWith("/auth/v1/signup")) return json({
+      access_token: "test-anonymous-access-token",
+      token_type: "bearer",
+      expires_in: 3600,
+      refresh_token: "test-anonymous-refresh-token",
+      user: { id: ids.user, aud: "authenticated", role: "authenticated", is_anonymous: true },
+    });
+    if (url.pathname.endsWith("/rest/v1/quiz_definitions")) {
+      return json({ id: ids.definition, version: 1, audience_key: "service_businesses" });
+    }
+    if (url.pathname.endsWith("/rest/v1/site_visitors") && request.method() === "POST") return json({ id: ids.visitor });
+    if (url.pathname.endsWith("/rest/v1/portfolio_sessions") && request.method() === "POST") return json({ id: ids.portfolioSession });
+    if (url.pathname.endsWith("/rest/v1/quiz_sessions") && request.method() === "POST") return json({ id: ids.quiz });
+    if (url.pathname.endsWith("/rest/v1/quiz_sessions") && request.method() === "PATCH") return json(null, 204);
+    if (url.pathname.endsWith("/rest/v1/rpc/begin_qualified_quiz")) {
+      return json([{ lead_id: ids.lead, quiz_session_id: ids.quiz }]);
+    }
+    if (url.pathname.endsWith("/functions/v1/finalize-proposal")) {
+      const payload = request.postDataJSON() as { operation?: string };
+      return json(payload.operation === "issue"
+        ? { proposalReference: ids.proposal, accessKey: "ABCD234567", proposal: { ...proposalDraft, expiresAt: "2026-09-25T05:00:00.000Z" } }
+        : { proposal: proposalDraft });
+    }
+    return json({ message: "unhandled mock request" }, 404);
+  });
+}
+
+async function fillQuizContact(page: import("@playwright/test").Page) {
+  await page.getByLabel(/first name/i).fill("Mara");
+  await page.getByLabel(/business name/i).fill("Mara Consulting");
+  await page.getByLabel(/^email/i).fill("mara@example.com");
+  await page.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }).check();
+  await page.getByRole("button", { name: /continue to assessment/i }).click();
+}
 
 test("homepage keeps the hero clear and reveals contextual navigation at Projects", async ({ page }, testInfo) => {
   await page.goto("/");
@@ -97,15 +170,18 @@ test("hero centers the roadmap CTA and preserves spacious desktop rhythm", async
   expect(gaps[4]).toBeGreaterThanOrEqual(19);
 });
 
-test("quiz resumes after reload, completes locally, and creates no backend request", async ({ page }) => {
-  const blockedRequests: string[] = [];
+test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or page navigation", async ({ page }) => {
+  const forbiddenRequests: string[] = [];
+  const supabaseRequests: string[] = [];
   page.on("request", (request) => {
-    if (blockedBackendPatterns.some((pattern) => pattern.test(request.url()))) blockedRequests.push(request.url());
+    if (forbiddenBackendPatterns.some((pattern) => pattern.test(request.url()))) forbiddenRequests.push(request.url());
   });
+  await mockSupabaseQuiz(page, supabaseRequests);
 
   await page.goto("/quiz/");
   const initialNavigationCount = await page.evaluate(() => performance.getEntriesByType("navigation").length);
   await page.getByRole("button", { name: /service-based business/i }).click();
+  await fillQuizContact(page);
   await page.getByRole("button", { name: /start my assessment/i }).click();
 
   for (let index = 0; index < 3; index += 1) {
@@ -117,6 +193,8 @@ test("quiz resumes after reload, completes locally, and creates no backend reque
 
   await page.reload();
   await page.getByRole("button", { name: /^resume$/i }).click();
+  await fillQuizContact(page);
+  await page.getByRole("button", { name: /start my assessment/i }).click();
   await expect(page.getByText("Question 4 of 8")).toBeVisible();
 
   for (let index = 3; index < 8; index += 1) {
@@ -124,7 +202,7 @@ test("quiz resumes after reload, completes locally, and creates no backend reque
     await page.getByRole("button", { name: index === 7 ? /see my roadmap/i : /^continue/i }).click();
   }
 
-  await expect(page.getByRole("heading", { name: /your personalized roadmap/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Mara.*roadmap for Mara Consulting/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: /compare your roadmap options/i })).toBeVisible();
   await page.getByRole("group", { name: /basic platform/i }).getByRole("button", { name: "Custom App" }).click();
   const selectedRoadmap = page.locator(".roadmap-selection-summary");
@@ -132,8 +210,14 @@ test("quiz resumes after reload, completes locally, and creates no backend reque
   await expect(selectedRoadmap.getByText("Custom Starter", { exact: true }).first()).toBeVisible();
   await page.getByRole("group", { name: /complete platform/i }).getByRole("button", { name: "Custom App" }).click();
   await expect(selectedRoadmap.getByText("Custom Growth", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("link", { name: /book a strategy call/i })).toHaveAttribute("href", "/booking/");
-  expect(blockedRequests).toEqual([]);
+  await expect(page.getByRole("link", { name: /book a discovery call/i })).toHaveAttribute("href", "/booking/");
+  await page.getByRole("button", { name: /create my 3-day proposal/i }).click();
+  await expect(page.getByText(/protected proposal is active/i)).toBeVisible();
+  expect(forbiddenRequests).toEqual([]);
+  expect(supabaseRequests.some((entry) => entry.includes("/auth/v1/signup"))).toBe(true);
+  expect(supabaseRequests.some((entry) => entry.includes("/rest/v1/quiz_sessions"))).toBe(true);
+  expect(supabaseRequests.some((entry) => entry.includes("/rpc/begin_qualified_quiz"))).toBe(true);
+  expect(supabaseRequests.filter((entry) => entry.includes("/functions/v1/finalize-proposal"))).toHaveLength(2);
 
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("elysha-works:quiz-attempt:v1") ?? "null"));
   expect(saved.status).toBe("completed");

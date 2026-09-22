@@ -136,6 +136,9 @@ describe("proposal view model", () => {
       selection,
       onSelect: () => undefined,
       onStartOver: () => undefined,
+      onIssue: async () => undefined,
+      issuing: false,
+      issueError: null,
       persistenceAvailable: true,
     }));
 

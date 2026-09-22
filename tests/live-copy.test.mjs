@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -93,14 +93,17 @@ test("the root layout no longer injects the legacy runtime", () => {
   }
 });
 
-test("the local quiz feature has no Supabase or database client boundary", () => {
-  const quizRoot = fromRoot("src/features/quiz");
-  const source = readdirSync(quizRoot, { recursive: true })
-    .filter((file) => /\.(?:ts|tsx)$/.test(String(file)))
-    .map((file) => readFileSync(join(quizRoot, String(file)), "utf8"))
-    .join("\n");
+test("the quiz uses only the publishable Supabase browser boundary", () => {
+  const source = [
+    readFileSync(fromRoot("src/lib/supabase/browser.ts"), "utf8"),
+    readFileSync(fromRoot("src/features/quiz/quiz-service.ts"), "utf8"),
+  ].join("\n");
 
-  assert.doesNotMatch(source, /@supabase|supabase-js|\.from\s*\(|\/rest\/v1|service_role/i);
+  assert.match(source, /@supabase\/supabase-js/);
+  assert.match(source, /NEXT_PUBLIC_SUPABASE_URL/);
+  assert.match(source, /NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/);
+  assert.match(source, /signInAnonymously/);
+  assert.doesNotMatch(source, /service[_-]?role|SUPABASE_SERVICE/i);
 });
 
 test("Firebase Hosting serves the Next static export from out", () => {

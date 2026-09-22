@@ -3,15 +3,55 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QuizExperience } from "@/features/quiz/QuizExperience";
+import { calculateRecommendation } from "@/features/quiz/cortex";
 import { LeadContactStep } from "@/features/quiz/LeadContactStep";
+import type { OwnedQuizContext } from "@/features/quiz/quiz-service";
 import { QUIZ_DEFINITIONS } from "@/features/quiz/questions";
 import { QUIZ_STORAGE_KEY, QUIZ_TTL_MS } from "@/features/quiz/persistence";
+import { buildProposalDraft } from "@/features/quiz/proposal-view";
+import { defaultRoadmapSelection } from "@/features/quiz/roadmap-options";
 import {
   CATALOG_VERSION,
   CORTEX_VERSION,
   QUESTION_SET_VERSION,
   type SavedQuizAttempt,
 } from "@/features/quiz/types";
+
+const ownedContext: OwnedQuizContext = {
+  ownerUserId: "10000000-0000-4000-8000-000000000001",
+  visitorId: "30000000-0000-4000-8000-000000000001",
+  portfolioSessionId: "40000000-0000-4000-8000-000000000001",
+  quizSessionId: "50000000-0000-4000-8000-000000000001",
+  questionSetId: "20000000-0000-4000-8000-000000000001",
+  questionSetVersion: 1,
+  audienceKey: "service_businesses",
+};
+
+function createFakeQuizService() {
+  let answers: Record<string, readonly string[]> = {};
+  let identity = { firstName: "Mara", businessName: "Mara Consulting" };
+  const createOwnedQuizContext = vi.fn(async (audienceKey: typeof ownedContext.audienceKey) => ({ ...ownedContext, audienceKey }));
+  const submitLeadContact = vi.fn(async (_context: OwnedQuizContext, contact: { firstName: string; businessName: string }) => {
+    identity = { firstName: contact.firstName, businessName: contact.businessName };
+    return { leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId };
+  });
+  const saveOwnedQuizProgress = vi.fn(async (_context: OwnedQuizContext, progress: { answers: Record<string, readonly string[]> }) => {
+    answers = progress.answers;
+  });
+  const previewProposal = vi.fn(async (context: OwnedQuizContext) => {
+    const result = calculateRecommendation({ audienceKey: context.audienceKey, answers });
+    return buildProposalDraft(identity, answers, result, defaultRoadmapSelection(result));
+  });
+  const issueProposal = vi.fn(async (context: OwnedQuizContext, selection: { tierKey: "basic" | "advanced" | "complete"; platform: "systeme_io" | "gohighlevel" | "custom_app"; offerKey: string }) => {
+    const result = calculateRecommendation({ audienceKey: context.audienceKey, answers });
+    return {
+      proposalReference: "70000000-0000-4000-8000-000000000001",
+      accessKey: "ABCD234567",
+      proposal: { ...buildProposalDraft(identity, answers, result, selection), expiresAt: "2026-09-25T05:00:00.000Z" },
+    };
+  });
+  return { createOwnedQuizContext, submitLeadContact, saveOwnedQuizProgress, previewProposal, issueProposal };
+}
 
 async function completeContactStep(
   user: ReturnType<typeof userEvent.setup>,
@@ -65,12 +105,67 @@ describe("local portfolio quiz", () => {
     expect(screen.getByLabelText(/^email/i)).toHaveValue("Mara@Example.com");
   });
 
+  it("creates owned records, submits contact once, saves progress, previews, and issues through the service", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} />);
+
+    await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await completeContactStep(user);
+    await waitFor(() => expect(service.createOwnedQuizContext).toHaveBeenCalledWith("service_businesses", expect.anything()));
+    expect(service.submitLeadContact).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: /start my assessment/i }));
+
+    const definition = QUIZ_DEFINITIONS.service_businesses;
+    for (const [index, question] of definition.questions.entries()) {
+      await user.click(screen.getByRole(question.selection === "single" ? "radio" : "button", { name: question.options[0].label }));
+      await user.click(screen.getByRole("button", { name: index === 7 ? /see my roadmap/i : /continue/i }));
+    }
+
+    await waitFor(() => expect(service.previewProposal).toHaveBeenCalledWith(expect.objectContaining({ quizSessionId: ownedContext.quizSessionId })));
+    expect(service.saveOwnedQuizProgress).toHaveBeenCalled();
+    await user.click(await screen.findByRole("button", { name: /create my 3-day proposal/i }));
+    await waitFor(() => expect(service.issueProposal).toHaveBeenCalledWith(
+      expect.objectContaining({ quizSessionId: ownedContext.quizSessionId }),
+      expect.objectContaining({ tierKey: expect.any(String), platform: expect.any(String) }),
+    ));
+    const issuePayload = service.issueProposal.mock.calls[0][1];
+    expect(Object.keys(issuePayload).sort()).toEqual(["offerKey", "platform", "tierKey"]);
+  });
+
+  it("disables duplicate contact submissions while the owned RPC is pending", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    let finishSubmission!: () => void;
+    service.submitLeadContact.mockImplementation(() => new Promise((resolve) => {
+      finishSubmission = () => resolve({
+        leadId: "60000000-0000-4000-8000-000000000001",
+        quizSessionId: ownedContext.quizSessionId,
+      });
+    }));
+    render(<QuizExperience service={service} />);
+
+    await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await user.type(screen.getByLabelText(/first name/i), "Mara");
+    await user.type(screen.getByLabelText(/business name/i), "Mara Consulting");
+    await user.type(screen.getByLabelText(/^email/i), "mara@example.com");
+    await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
+    const submit = screen.getByRole("button", { name: /continue to assessment/i });
+    await user.click(submit);
+
+    expect(submit).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(/saving your details/i);
+    expect(service.submitLeadContact).toHaveBeenCalledOnce();
+    finishSubmission();
+    expect(await screen.findByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
+  });
+
   it("completes all eight questions without navigation or network calls", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const initialUrl = window.location.href;
 
-    render(<QuizExperience />);
+    render(<QuizExperience service={createFakeQuizService()} />);
     expect(await screen.findByRole("heading", { name: /which best describes your business/i })).toBeInTheDocument();
     const instructions = screen.getByRole("complementary", { name: /clear roadmap in three steps/i });
     expect(instructions).toHaveAttribute("id", "assessment-instructions");
@@ -130,7 +225,7 @@ describe("local portfolio quiz", () => {
 
   it("supports the complete keyboard pattern for single-choice radio groups", async () => {
     const user = userEvent.setup();
-    render(<QuizExperience />);
+    render(<QuizExperience service={createFakeQuizService()} />);
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
     await completeContactStep(user);
     await user.click(screen.getByRole("button", { name: /start my assessment/i }));
@@ -152,7 +247,7 @@ describe("local portfolio quiz", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new DOMException("Storage full", "QuotaExceededError");
     });
-    render(<QuizExperience />);
+    render(<QuizExperience service={createFakeQuizService()} />);
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
     await completeContactStep(user);
     expect(await screen.findByRole("status")).toHaveTextContent(/recovery is unavailable/i);
@@ -179,7 +274,7 @@ describe("local portfolio quiz", () => {
     };
     localStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(attempt));
 
-    const { unmount } = render(<QuizExperience />);
+    const { unmount } = render(<QuizExperience service={createFakeQuizService()} />);
     const dialog = await screen.findByRole("dialog", { name: /continue your roadmap/i });
     const resumeButton = within(dialog).getByRole("button", { name: /resume/i });
     expect(resumeButton).toHaveFocus();
@@ -190,10 +285,13 @@ describe("local portfolio quiz", () => {
     await user.tab();
     expect(resumeButton).toHaveFocus();
     await user.click(resumeButton);
+    expect(screen.getByRole("heading", { name: /where should we send your 3-day proposal/i })).toBeInTheDocument();
+    await completeContactStep(user);
+    await user.click(screen.getByRole("button", { name: /start my assessment/i }));
     expect(screen.getByText("Question 2 of 8")).toBeInTheDocument();
 
     unmount();
-    render(<QuizExperience />);
+    render(<QuizExperience service={createFakeQuizService()} />);
     await user.click(within(await screen.findByRole("dialog", { name: /continue your roadmap/i })).getByRole("button", { name: /start over/i }));
     expect(screen.getByRole("heading", { name: /which best describes your business/i })).toBeInTheDocument();
     expect(localStorage.getItem(QUIZ_STORAGE_KEY)).toBeNull();
@@ -201,7 +299,7 @@ describe("local portfolio quiz", () => {
 
   it("renders a contact-qualified personalized proposal without persisting contact identity", async () => {
     const user = userEvent.setup();
-    render(<QuizExperience />);
+    render(<QuizExperience service={createFakeQuizService()} />);
     await user.click(await screen.findByRole("button", { name: /custom-order business/i }));
     await completeContactStep(user, { firstName: "Mara", businessName: "La Jaysiedel Cakes", email: "mara@example.com" });
     await user.click(screen.getByRole("button", { name: /start my assessment/i }));
@@ -219,10 +317,5 @@ describe("local portfolio quiz", () => {
     expect(saved).not.toContain("Mara");
     expect(saved).not.toContain("La Jaysiedel Cakes");
     expect(saved).not.toContain("mara@example.com");
-    localStorage.setItem(QUIZ_STORAGE_KEY, saved!);
-    render(<QuizExperience />);
-    await waitFor(() => {
-      expect(screen.getAllByRole("heading", { name: /your personalized roadmap/i })).toHaveLength(1);
-    });
   });
 });

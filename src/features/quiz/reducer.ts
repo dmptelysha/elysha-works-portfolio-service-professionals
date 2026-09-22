@@ -5,6 +5,8 @@ import type {
   ClientIdentity,
   CortexResult,
   LeadContactInput,
+  ProposalDraftViewModel,
+  ProposalViewModel,
   QuizAnswers,
   RoadmapSelection,
   SavedQuizAttempt,
@@ -28,6 +30,7 @@ export interface QuizState {
   roadmapSelection: RoadmapSelection | null;
   contact: LeadContactInput | null;
   clientIdentity: ClientIdentity | null;
+  proposal: ProposalDraftViewModel | ProposalViewModel | null;
   errorMessage: string | null;
   validationMessage: string | null;
   resumeCandidate: SavedQuizAttempt | null;
@@ -45,7 +48,8 @@ export type QuizAction =
   | { type: "TOGGLE_MULTIPLE"; questionKey: string; optionKey: string }
   | { type: "NEXT" }
   | { type: "BACK" }
-  | { type: "CALCULATION_SUCCESS"; result: CortexResult }
+  | { type: "CALCULATION_SUCCESS"; result: CortexResult; proposal: ProposalDraftViewModel }
+  | { type: "PROPOSAL_ISSUED"; proposal: ProposalViewModel }
   | { type: "SELECT_ROADMAP"; selection: RoadmapSelection }
   | { type: "CALCULATION_FAILURE"; message: string }
   | { type: "RETRY_CALCULATION" };
@@ -60,6 +64,7 @@ export function createInitialQuizState(): QuizState {
     roadmapSelection: null,
     contact: null,
     clientIdentity: null,
+    proposal: null,
     errorMessage: null,
     validationMessage: null,
     resumeCandidate: null,
@@ -77,7 +82,7 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
       if (!attempt || !attempt.audienceKey) return state;
       return {
         ...state,
-        screen: attempt.status === "completed" && attempt.result ? "result" : "question",
+        screen: "contact",
         audienceKey: attempt.audienceKey,
         answers: attempt.answers,
         currentQuestionIndex: attempt.currentQuestionIndex,
@@ -85,6 +90,7 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         roadmapSelection: attempt.roadmapSelection,
         contact: null,
         clientIdentity: null,
+        proposal: null,
         errorMessage: null,
         validationMessage: null,
         resumeCandidate: null,
@@ -113,7 +119,7 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
     }
     case "CONTINUE_INTRO":
       if (!state.audienceKey || !state.clientIdentity) return state;
-      return { ...state, screen: "question", currentQuestionIndex: 0 };
+      return { ...state, screen: "question" };
     case "ANSWER_SINGLE":
       return {
         ...state,
@@ -157,9 +163,13 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         ...state,
         screen: "result",
         result: action.result,
+        proposal: action.proposal,
         roadmapSelection: defaultRoadmapSelection(action.result),
         errorMessage: null,
       };
+    case "PROPOSAL_ISSUED":
+      if (state.screen !== "result") return state;
+      return { ...state, proposal: action.proposal };
     case "SELECT_ROADMAP":
       if (!state.result) return state;
       try {

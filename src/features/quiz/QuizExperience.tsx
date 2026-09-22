@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import Link from "next/link";
 
 import { SITE_CONTENT } from "@/data/site-content";
@@ -16,7 +16,11 @@ import {
   saveQuizAttempt,
 } from "./persistence";
 import { QUIZ_DEFINITIONS } from "./questions";
-import { buildProposalDraft } from "./proposal-view";
+import {
+  defaultQuizService,
+  type OwnedQuizContext,
+  type QuizService,
+} from "./quiz-service";
 import { createInitialQuizState, quizReducer } from "./reducer";
 import { QuizQuestion } from "./QuizQuestion";
 import { QuizResult } from "./QuizResult";
@@ -25,7 +29,6 @@ import {
   CORTEX_VERSION,
   QUESTION_SET_VERSION,
   type AudienceKey,
-  type LeadContactInput,
   type SavedQuizAttempt,
 } from "./types";
 
@@ -38,19 +41,38 @@ function getBrowserStorage() {
 }
 
 interface QuizExperienceProps {
-  onSubmitContact?: (contact: LeadContactInput) => Promise<void>;
+  service?: QuizService;
 }
 
-const acceptContactLocally = async () => {};
-
-export function QuizExperience({ onSubmitContact = acceptContactLocally }: QuizExperienceProps = {}) {
+export function QuizExperience({ service = defaultQuizService }: QuizExperienceProps = {}) {
   const [state, dispatch] = useReducer(quizReducer, undefined, createInitialQuizState);
   const [hydrated, setHydrated] = useState(false);
   const [persistenceAvailable, setPersistenceAvailable] = useState(true);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [issuing, setIssuing] = useState(false);
+  const [issueError, setIssueError] = useState<string | null>(null);
   const createdAtRef = useRef(new Date().toISOString());
+  const ownedContextRef = useRef<OwnedQuizContext | null>(null);
+  const contextPromiseRef = useRef<Promise<OwnedQuizContext> | null>(null);
   const resumeDialogRef = useRef<HTMLElement>(null);
   const resumeButtonRef = useRef<HTMLButtonElement>(null);
   const resumeReturnFocusRef = useRef<HTMLElement | null>(null);
+
+  const ensureOwnedContext = useCallback((audienceKey: AudienceKey) => {
+    if (ownedContextRef.current?.audienceKey === audienceKey) return Promise.resolve(ownedContextRef.current);
+    if (!contextPromiseRef.current) {
+      contextPromiseRef.current = service.createOwnedQuizContext(audienceKey, { landingPath: "/quiz/" })
+        .then((context) => {
+          ownedContextRef.current = context;
+          return context;
+        })
+        .catch((error) => {
+          contextPromiseRef.current = null;
+          throw error;
+        });
+    }
+    return contextPromiseRef.current;
+  }, [service]);
 
   useEffect(() => {
     const storage = getBrowserStorage();
@@ -124,35 +146,111 @@ export function QuizExperience({ onSubmitContact = acceptContactLocally }: QuizE
   }, [hydrated, state]);
 
   useEffect(() => {
-    if (state.screen !== "calculating" || !state.audienceKey) return;
-    try {
-      const result = calculateRecommendation({ audienceKey: state.audienceKey, answers: state.answers });
-      dispatch({ type: "CALCULATION_SUCCESS", result });
-    } catch {
-      dispatch({
-        type: "CALCULATION_FAILURE",
-        message: "We could not calculate your roadmap. Your answers are still saved on this device.",
+    if (!hydrated || !state.audienceKey || state.resumeCandidate) return;
+    void ensureOwnedContext(state.audienceKey).catch(() => {
+      setSyncMessage("We could not start the secure assessment. Check your connection and try again.");
+    });
+  }, [ensureOwnedContext, hydrated, state.audienceKey, state.resumeCandidate]);
+
+  useEffect(() => {
+    if (!hydrated || state.screen !== "question" || !state.audienceKey || !ownedContextRef.current) return;
+    const question = QUIZ_DEFINITIONS[state.audienceKey].questions[state.currentQuestionIndex];
+    const answered = Boolean(question && state.answers[question.key]?.length);
+    const timer = window.setTimeout(() => {
+      const context = ownedContextRef.current;
+      if (!context) return;
+      void service.saveOwnedQuizProgress(context, {
+        answers: state.answers,
+        currentStep: state.currentQuestionIndex + 1,
+        lastCompletedStep: answered ? state.currentQuestionIndex + 1 : state.currentQuestionIndex,
+      }).then(() => setSyncMessage(null)).catch(() => {
+        setSyncMessage("Cloud save is delayed. Your 3-day device copy is still available.");
       });
-    }
-  }, [state.answers, state.audienceKey, state.screen]);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [hydrated, service, state.answers, state.audienceKey, state.currentQuestionIndex, state.screen]);
+
+  useEffect(() => {
+    if (state.screen !== "calculating" || !state.audienceKey) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const context = await ensureOwnedContext(state.audienceKey!);
+        const [result, proposal] = await Promise.all([
+          Promise.resolve(calculateRecommendation({ audienceKey: state.audienceKey!, answers: state.answers })),
+          service.previewProposal(context),
+        ]);
+        if (!cancelled) dispatch({ type: "CALCULATION_SUCCESS", result, proposal });
+      } catch {
+        if (!cancelled) dispatch({
+          type: "CALCULATION_FAILURE",
+          message: "We could not calculate your roadmap. Your answers are still saved on this device.",
+        });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [ensureOwnedContext, service, state.answers, state.audienceKey, state.screen]);
 
   const startOver = () => {
     const storage = getBrowserStorage();
     if (!storage || !clearQuizAttempt(storage)) setPersistenceAvailable(false);
     createdAtRef.current = new Date().toISOString();
+    ownedContextRef.current = null;
+    contextPromiseRef.current = null;
+    setSyncMessage(null);
+    setIssueError(null);
     dispatch({ type: "START_OVER" });
   };
 
   const chooseAudience = (audienceKey: AudienceKey) => {
     createdAtRef.current = new Date().toISOString();
+    ownedContextRef.current = null;
+    contextPromiseRef.current = null;
+    setSyncMessage(null);
     dispatch({ type: "SELECT_AUDIENCE", audienceKey });
+    void ensureOwnedContext(audienceKey).catch(() => {
+      setSyncMessage("We could not start the secure assessment. Check your connection and try again.");
+    });
   };
 
   const definition = state.audienceKey ? QUIZ_DEFINITIONS[state.audienceKey] : null;
   const question = definition?.questions[state.currentQuestionIndex];
-  const proposal = state.result && state.roadmapSelection && state.clientIdentity
-    ? buildProposalDraft(state.clientIdentity, state.answers, state.result, state.roadmapSelection)
-    : undefined;
+  const flushProgress = async () => {
+    if (!state.audienceKey) return;
+    const question = QUIZ_DEFINITIONS[state.audienceKey].questions[state.currentQuestionIndex];
+    const answered = Boolean(question && state.answers[question.key]?.length);
+    if (!answered) {
+      dispatch({ type: "NEXT" });
+      return;
+    }
+    try {
+      const context = await ensureOwnedContext(state.audienceKey);
+      await service.saveOwnedQuizProgress(context, {
+        answers: state.answers,
+        currentStep: state.currentQuestionIndex + 1,
+        lastCompletedStep: state.currentQuestionIndex + 1,
+      });
+      setSyncMessage(null);
+      dispatch({ type: "NEXT" });
+    } catch {
+      setSyncMessage("We could not save this answer securely. Please try Continue again.");
+    }
+  };
+
+  const issueSelectedProposal = async () => {
+    if (!state.audienceKey || !state.roadmapSelection || issuing) return;
+    setIssuing(true);
+    setIssueError(null);
+    try {
+      const context = await ensureOwnedContext(state.audienceKey);
+      const issued = await service.issueProposal(context, state.roadmapSelection);
+      dispatch({ type: "PROPOSAL_ISSUED", proposal: issued.proposal });
+    } catch {
+      setIssueError("We could not create your proposal email. Please try again.");
+    } finally {
+      setIssuing(false);
+    }
+  };
 
   return (
     <div className="quiz-page-shell">
@@ -170,7 +268,8 @@ export function QuizExperience({ onSubmitContact = acceptContactLocally }: QuizE
 
         {hydrated && state.screen === "contact" ? (
           <LeadContactStep onSubmit={async (contact) => {
-            await onSubmitContact(contact);
+            const context = await ensureOwnedContext(state.audienceKey!);
+            await service.submitLeadContact(context, contact);
             dispatch({ type: "CONTACT_ACCEPTED", contact });
           }} />
         ) : null}
@@ -206,7 +305,7 @@ export function QuizExperience({ onSubmitContact = acceptContactLocally }: QuizE
               optionKey,
             })}
             onBack={() => dispatch({ type: "BACK" })}
-            onContinue={() => dispatch({ type: "NEXT" })}
+            onContinue={() => void flushProgress()}
           />
         ) : null}
 
@@ -234,10 +333,13 @@ export function QuizExperience({ onSubmitContact = acceptContactLocally }: QuizE
         {hydrated && state.screen === "result" && state.result ? (
           <QuizResult
             result={state.result}
-            proposal={proposal}
+            proposal={state.proposal ?? undefined}
             selection={state.roadmapSelection!}
             onSelect={(selection) => dispatch({ type: "SELECT_ROADMAP", selection })}
             onStartOver={startOver}
+            onIssue={issueSelectedProposal}
+            issuing={issuing}
+            issueError={issueError}
             persistenceAvailable={persistenceAvailable}
           />
         ) : null}
@@ -248,6 +350,7 @@ export function QuizExperience({ onSubmitContact = acceptContactLocally }: QuizE
           Device recovery is unavailable. Keep this page open until you finish or save the result another way.
         </p>
       ) : null}
+      {hydrated && syncMessage ? <p className="quiz-storage-notice" role="status">{syncMessage}</p> : null}
 
       <footer className="quiz-footer">
         <Link href="/" prefetch={false}>Back to portfolio</Link>
