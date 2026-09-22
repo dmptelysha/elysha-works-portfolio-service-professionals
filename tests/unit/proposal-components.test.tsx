@@ -93,4 +93,51 @@ describe("protected proposal access", () => {
     expect(await screen.findByRole("heading", { name: /Mara.*Mara Consulting/i })).toBeInTheDocument();
     await waitFor(() => expect(verify).toHaveBeenCalledOnce());
   });
+
+  it("prevents the context menu while the protected proposal route is mounted", () => {
+    render(<ProposalAccess service={{ verify: vi.fn() }} now={() => new Date("2030-01-01T00:00:00.000Z")} />);
+
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    document.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it.each([
+    ["F12", false, false, false],
+    ["s", true, false, false],
+    ["s", false, true, false],
+    ["p", true, false, false],
+    ["u", true, false, false],
+    ["i", true, false, true],
+    ["j", true, false, true],
+    ["c", true, false, true],
+    ["PrintScreen", false, false, false],
+  ])("prevents the protected shortcut %s", (key, ctrlKey, metaKey, shiftKey) => {
+    render(<ProposalAccess service={{ verify: vi.fn() }} now={() => new Date("2030-01-01T00:00:00.000Z")} />);
+
+    const event = new KeyboardEvent("keydown", {
+      key,
+      ctrlKey,
+      metaKey,
+      shiftKey,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("preserves ordinary keyboard and copy shortcuts", () => {
+    render(<ProposalAccess service={{ verify: vi.fn() }} now={() => new Date("2030-01-01T00:00:00.000Z")} />);
+
+    const ordinaryKey = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    const copyShortcut = new KeyboardEvent("keydown", { key: "c", ctrlKey: true, bubbles: true, cancelable: true });
+    document.dispatchEvent(ordinaryKey);
+    document.dispatchEvent(copyShortcut);
+
+    expect(ordinaryKey.defaultPrevented).toBe(false);
+    expect(copyShortcut.defaultPrevented).toBe(false);
+  });
 });

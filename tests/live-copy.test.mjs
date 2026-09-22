@@ -69,6 +69,13 @@ test("the homepage exposes the approved roadmap hero hierarchy", () => {
   assert.match(content, /See how the assessment works/);
 });
 
+test("the static booking route uses a plain anchor instead of Next route prefetching", () => {
+  const finalCta = readFileSync(fromRoot("src/components/home/FinalCtaSection.tsx"), "utf8");
+
+  assert.doesNotMatch(finalCta, /from ["']next\/link["']/);
+  assert.match(finalCta, /<a className="portfolio-text-link" href=\{finalCta\.secondaryHref\}>/);
+});
+
 test("the authored homepage styles are available", () => {
   for (const file of ["public/hero-roadmap.css", "src/styles/portfolio.css"]) {
     assert.ok(existsSync(fromRoot(file)), `missing ${file}`);

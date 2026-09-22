@@ -137,6 +137,27 @@ export function ProposalAccess({ service = defaultProposalService, now = systemN
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const preventContextMenu = (event: MouseEvent) => event.preventDefault();
+    const preventProtectedShortcut = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const commandKey = event.ctrlKey || event.metaKey;
+      const browserShortcut = commandKey && ["s", "p", "u"].includes(key);
+      const developerShortcut = commandKey && event.shiftKey && ["i", "j", "c"].includes(key);
+
+      if (key === "f12" || key === "printscreen" || browserShortcut || developerShortcut) {
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener("contextmenu", preventContextMenu, true);
+    document.addEventListener("keydown", preventProtectedShortcut, true);
+    return () => {
+      document.removeEventListener("contextmenu", preventContextMenu, true);
+      document.removeEventListener("keydown", preventProtectedShortcut, true);
+    };
+  }, []);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       const resolvedReference = reference ?? new URLSearchParams(window.location.search).get("ref") ?? "";
       setProposalReference(resolvedReference);
