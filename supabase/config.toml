@@ -47,6 +47,9 @@ verify_jwt = true
 [functions.request-email-otp]
 verify_jwt = true
 
+[functions.verify-email-otp]
+verify_jwt = true
+
 # These public/server-to-server endpoints implement their own proposal-key,
 # signed-token, or shared-secret authentication and therefore cannot require a
 # visitor JWT at the gateway.
