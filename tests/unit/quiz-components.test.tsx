@@ -25,14 +25,27 @@ const turnstileControls = vi.hoisted(() => ({
   onError: null as null | (() => void),
   onExpire: null as null | (() => void),
   onSuccess: null as null | ((token: string) => void),
+  onTimeout: null as null | (() => void),
+  onUnsupported: null as null | (() => void),
+  options: null as null | Record<string, unknown>,
 }));
 
 vi.mock("@marsidev/react-turnstile", () => ({
-  Turnstile: (props: { onError: () => void; onExpire: () => void; onSuccess: (token: string) => void }) => {
+  Turnstile: (props: {
+    onError: () => void;
+    onExpire: () => void;
+    onSuccess: (token: string) => void;
+    onTimeout: () => void;
+    onUnsupported: () => void;
+    options: Record<string, unknown>;
+  }) => {
     turnstileControls.mounts += 1;
     turnstileControls.onError = props.onError;
     turnstileControls.onExpire = props.onExpire;
     turnstileControls.onSuccess = props.onSuccess;
+    turnstileControls.onTimeout = props.onTimeout;
+    turnstileControls.onUnsupported = props.onUnsupported;
+    turnstileControls.options = props.options;
     return <div data-testid="turnstile-runtime" />;
   },
 }));
@@ -132,6 +145,9 @@ describe("local portfolio quiz", () => {
     turnstileControls.onError = null;
     turnstileControls.onExpire = null;
     turnstileControls.onSuccess = null;
+    turnstileControls.onTimeout = null;
+    turnstileControls.onUnsupported = null;
+    turnstileControls.options = null;
     turnstileControls.mounts = 0;
   });
 
@@ -323,6 +339,7 @@ describe("local portfolio quiz", () => {
     render(<QuizExperience service={service} />);
 
     await screen.findByTestId("turnstile-runtime");
+    expect(turnstileControls.options).toEqual(expect.objectContaining({ appearance: "always", retry: "never" }));
     await act(async () => turnstileControls.onSuccess?.("audience-token"));
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
     await waitFor(() => expect(service.createOwnedQuizContext).toHaveBeenCalledOnce());
@@ -356,6 +373,41 @@ describe("local portfolio quiz", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/preparing email security/i);
   });
 
+  it("requires a fresh Turnstile token after a failed OTP request", async () => {
+    vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "test-site-key");
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    service.requestEmailOtp.mockRejectedValueOnce(new Error("OTP delivery unavailable"));
+    render(<QuizExperience service={service} />);
+
+    await screen.findByTestId("turnstile-runtime");
+    act(() => turnstileControls.onSuccess?.("audience-token"));
+    await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await waitFor(() => expect(service.createOwnedQuizContext).toHaveBeenCalledOnce());
+    await waitFor(() => expect(turnstileControls.mounts).toBeGreaterThanOrEqual(2));
+
+    await user.type(screen.getByLabelText(/first name/i), "Mara");
+    await user.type(screen.getByLabelText(/last name/i), "Santos");
+    await user.type(screen.getByLabelText(/business name/i), "Mara Consulting");
+    await user.type(screen.getByLabelText(/^email/i), "mara@example.com");
+
+    act(() => turnstileControls.onSuccess?.("first-otp-token"));
+    const verifyEmail = screen.getByRole("button", { name: /^verify email$/i });
+    await waitFor(() => expect(verifyEmail).toBeEnabled());
+    await user.click(verifyEmail);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not send a verification code/i);
+    await waitFor(() => expect(verifyEmail).toBeDisabled());
+
+    act(() => turnstileControls.onSuccess?.("fresh-otp-token"));
+    await waitFor(() => expect(verifyEmail).toBeEnabled());
+    await user.click(verifyEmail);
+
+    expect(await screen.findByLabelText(/verification code/i)).toBeInTheDocument();
+    expect(service.requestEmailOtp).toHaveBeenNthCalledWith(1, "mara@example.com", "first-otp-token");
+    expect(service.requestEmailOtp).toHaveBeenNthCalledWith(2, "mara@example.com", "fresh-otp-token");
+  });
+
   it("validates and normalizes required lead contact details without navigating", async () => {
     const user = userEvent.setup();
     const initialUrl = window.location.href;
@@ -375,8 +427,7 @@ describe("local portfolio quiz", () => {
     await user.type(screen.getByLabelText(/last name/i), "  Santos  ");
     await user.type(screen.getByLabelText(/business name/i), "  Mara Consulting  ");
     await user.type(screen.getByLabelText(/^email/i), "  MARA@EXAMPLE.COM  ");
-    expect(submit).toBeDisabled();
-    await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
+    expect(submit).toBeEnabled();
     await user.click(submit);
 
     await waitFor(() => expect(submitted).toEqual({
@@ -384,8 +435,9 @@ describe("local portfolio quiz", () => {
       lastName: "Santos",
       businessName: "Mara Consulting",
       email: "mara@example.com",
-      consent: true,
+      consent: false,
     }));
+    expect(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i })).not.toBeChecked();
     expect(window.location.href).toBe(initialUrl);
   });
 

@@ -6,6 +6,7 @@ import type {
   CortexResult,
   CustomEmailOtpChallenge,
   LeadContactInput,
+  LeadIdentityInput,
   ProposalDraftViewModel,
   ProposalViewModel,
   QuizAnswers,
@@ -31,7 +32,7 @@ export interface QuizState {
   currentQuestionIndex: number;
   result: CortexResult | null;
   roadmapSelection: RoadmapSelection | null;
-  contact: LeadContactInput | null;
+  contact: LeadIdentityInput | null;
   otpChallenge: CustomEmailOtpChallenge | null;
   emailVerified: boolean;
   existingBusinessName: string | null;
@@ -48,11 +49,11 @@ export type QuizAction =
   | { type: "DISMISS_RESUME" }
   | { type: "START_OVER" }
   | { type: "SELECT_AUDIENCE"; audienceKey: AudienceKey }
-  | { type: "OTP_REQUESTED"; contact: LeadContactInput; challenge: CustomEmailOtpChallenge }
+  | { type: "OTP_REQUESTED"; contact: LeadIdentityInput; challenge: CustomEmailOtpChallenge }
   | { type: "OTP_VERIFIED"; grantExpiresAt: string }
   | { type: "OTP_RESET" }
   | { type: "CHANGE_EMAIL" }
-  | { type: "BUSINESS_SCOPE_REQUIRED"; existingBusinessName: string }
+  | { type: "BUSINESS_SCOPE_REQUIRED"; existingBusinessName: string; contact: LeadContactInput }
   | { type: "CONTACT_ACCEPTED"; contact: LeadContactInput }
   | { type: "CONTINUE_INTRO" }
   | { type: "ANSWER_SINGLE"; questionKey: string; optionKey: string }
@@ -130,7 +131,7 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         businessName: action.contact.businessName.trim(),
         email: action.contact.email.trim().toLowerCase(),
       };
-      if (!contact.firstName || !contact.lastName || !contact.businessName || !contact.email || !contact.consent) return state;
+      if (!contact.firstName || !contact.lastName || !contact.businessName || !contact.email) return state;
       if (
         action.challenge.email !== contact.email || action.challenge.verified ||
         !action.challenge.id || !Number.isFinite(Date.parse(action.challenge.expiresAt)) ||
@@ -170,7 +171,7 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
       };
     case "BUSINESS_SCOPE_REQUIRED":
       if (!state.emailVerified || !state.contact) return state;
-      return { ...state, screen: "business_scope", existingBusinessName: action.existingBusinessName };
+      return { ...state, screen: "business_scope", contact: action.contact, existingBusinessName: action.existingBusinessName };
     case "CONTACT_ACCEPTED": {
       if (!state.audienceKey || !state.emailVerified || !["verify_email", "business_scope"].includes(state.screen)) return state;
       const firstName = action.contact.firstName.trim();

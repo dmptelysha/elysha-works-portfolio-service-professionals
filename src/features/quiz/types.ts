@@ -1,5 +1,9 @@
 export * from "../../../supabase/functions/_shared/quiz-engine/types.ts";
 
+import type { LeadContactInput } from "../../../supabase/functions/_shared/quiz-engine/types.ts";
+
+export type LeadIdentityInput = Omit<LeadContactInput, "consent"> & { consent: boolean };
+
 export interface CustomEmailOtpChallenge {
   id: string;
   email: string;

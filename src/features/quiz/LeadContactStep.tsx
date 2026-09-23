@@ -3,13 +3,13 @@
 import { type FormEvent, useState } from "react";
 
 import { InlineEmailVerification } from "./InlineEmailVerification";
-import type { CustomEmailOtpChallenge, LeadContactInput } from "./types";
+import type { CustomEmailOtpChallenge, LeadContactInput, LeadIdentityInput } from "./types";
 
 interface LeadContactStepProps {
   challenge?: CustomEmailOtpChallenge | null;
   emailVerified?: boolean;
-  initialContact?: LeadContactInput | null;
-  onRequestCode: (contact: LeadContactInput) => Promise<void>;
+  initialContact?: LeadIdentityInput | null;
+  onRequestCode: (contact: LeadIdentityInput) => Promise<void>;
   onVerifyCode: (code: string) => Promise<void>;
   onResendCode: () => Promise<void>;
   onChangeEmail: () => void;
@@ -47,15 +47,15 @@ export function LeadContactStep({
   const detailsValid = Boolean(
     firstName.trim() && lastName.trim() && businessName.trim() && EMAIL_PATTERN.test(normalizedEmail),
   );
-  const verificationReady = detailsValid && consent;
-  const canContinue = verificationReady && emailVerified && Boolean(challenge) && !continuing && !setupBusy;
+  const verificationReady = detailsValid;
+  const canContinue = detailsValid && consent && emailVerified && Boolean(challenge) && !continuing && !setupBusy;
 
-  const contact = (): LeadContactInput => ({
+  const contact = (): LeadIdentityInput => ({
     firstName: firstName.trim(),
     lastName: lastName.trim(),
     businessName: businessName.trim(),
     email: normalizedEmail,
-    consent: true,
+    consent,
   });
 
   const handleContinue = async (event: FormEvent<HTMLFormElement>) => {
@@ -64,7 +64,7 @@ export function LeadContactStep({
     setContinuing(true);
     setError(null);
     try {
-      await onContinue(contact());
+      await onContinue({ ...contact(), consent: true });
     } catch {
       setError("Your email is verified, but we could not prepare the secure assessment. Please try again.");
     } finally {

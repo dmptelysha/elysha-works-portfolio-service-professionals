@@ -311,13 +311,15 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     setSetupError(null);
     try {
       const context = await ensureOwnedContext(state.audienceKey);
-      const contact = businessScope ? { ...currentContact, businessScope } : currentContact;
-      if (!state.otpChallenge || !emailVerifiedRef.current) {
+      if (!currentContact.consent || !state.otpChallenge || !emailVerifiedRef.current) {
         throw new Error("verified challenge required");
       }
+      const contact: LeadContactInput = businessScope
+        ? { ...currentContact, consent: true, businessScope }
+        : { ...currentContact, consent: true };
       const result = await service.submitLeadContact(context, state.otpChallenge.id, contact);
       if (result.status === "business_scope_required") {
-        dispatch({ type: "BUSINESS_SCOPE_REQUIRED", existingBusinessName: result.existingBusinessName });
+        dispatch({ type: "BUSINESS_SCOPE_REQUIRED", contact, existingBusinessName: result.existingBusinessName });
       } else {
         dispatch({ type: "CONTACT_ACCEPTED", contact });
       }
@@ -446,17 +448,23 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
             onContinue={(contact) => finishVerifiedSetup(undefined, contact)}
             onRequestCode={async (contact) => {
               setDeliveryEmail(contact.email.trim().toLowerCase());
-              const challenge = await service.requestEmailOtp(contact.email, captchaToken ?? "");
-              dispatch({ type: "OTP_REQUESTED", contact, challenge });
-              setCaptchaToken(null);
-              setCaptchaAttempt((attempt) => attempt + 1);
+              try {
+                const challenge = await service.requestEmailOtp(contact.email, captchaToken ?? "");
+                dispatch({ type: "OTP_REQUESTED", contact, challenge });
+              } finally {
+                setCaptchaToken(null);
+                setCaptchaAttempt((attempt) => attempt + 1);
+              }
             }}
             onResendCode={async () => {
               if (!state.otpChallenge || !state.contact) return;
-              const challenge = await service.requestEmailOtp(state.otpChallenge.email, captchaToken ?? "");
-              dispatch({ type: "OTP_REQUESTED", contact: state.contact, challenge });
-              setCaptchaToken(null);
-              setCaptchaAttempt((attempt) => attempt + 1);
+              try {
+                const challenge = await service.requestEmailOtp(state.otpChallenge.email, captchaToken ?? "");
+                dispatch({ type: "OTP_REQUESTED", contact: state.contact, challenge });
+              } finally {
+                setCaptchaToken(null);
+                setCaptchaAttempt((attempt) => attempt + 1);
+              }
             }}
             onVerifyCode={verifyAndStart}
             securityError={captchaError}
@@ -571,9 +579,18 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
               setCaptchaToken(null);
               setCaptchaError(true);
             }}
+            onTimeout={() => {
+              setCaptchaToken(null);
+              setCaptchaError(true);
+            }}
+            onUnsupported={() => {
+              setCaptchaToken(null);
+              setCaptchaError(true);
+            }}
             options={{
               action: securityAction,
-              appearance: "interaction-only",
+              appearance: "always",
+              retry: "never",
               refreshExpired: "auto",
               theme: "dark",
             }}

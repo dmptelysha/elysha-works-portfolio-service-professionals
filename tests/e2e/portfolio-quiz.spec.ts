@@ -105,16 +105,39 @@ async function fillQuizContact(page: import("@playwright/test").Page) {
   await page.getByLabel(/last name/i).fill("Santos");
   await page.getByLabel(/business name/i).fill("Mara Consulting");
   await page.getByLabel(/^email/i).fill("mara@example.com");
-  await page.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }).check();
-  await page.getByRole("button", { name: /^verify email$/i }).click();
+  const consent = page.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i });
+  const verifyEmail = page.getByRole("button", { name: /^verify email$/i });
+  await expect(consent).not.toBeChecked();
+  await expect(verifyEmail).toBeEnabled();
+  await verifyEmail.click();
   const code = page.getByLabel(/verification code/i);
   await expect(code).toBeVisible();
   await code.fill("123456");
   await page.getByRole("button", { name: /verify code/i }).click();
   await expect(page.getByText(/email verified/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /continue to assessment/i })).toBeDisabled();
+  await consent.check();
   await page.getByRole("button", { name: /continue to assessment/i }).click();
   await expect(page.getByRole("heading", { name: /your roadmap starts with context/i })).toBeVisible();
 }
+
+test("contact and inline OTP fit the laptop viewport without requiring consent to verify", async ({ page }, testInfo) => {
+  test.skip(!["desktop", "short-laptop"].includes(testInfo.project.name), "Desktop and laptop geometry only.");
+  await mockSupabaseQuiz(page, []);
+  await page.goto("/quiz/");
+  await page.getByRole("button", { name: /service-based business/i }).click();
+  await page.getByLabel(/first name/i).fill("Mara");
+  await page.getByLabel(/last name/i).fill("Santos");
+  await page.getByLabel(/business name/i).fill("Mara Consulting");
+  await page.getByLabel(/^email/i).fill("mara@example.com");
+
+  const verifyEmail = page.getByRole("button", { name: /^verify email$/i });
+  await expect(verifyEmail).toBeEnabled();
+  await verifyEmail.click();
+  await expect(page.getByLabel(/verification code/i)).toBeVisible();
+  await expect(page.locator(".quiz-footer")).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1)).toBe(true);
+});
 
 test("homepage keeps the hero clear and reveals contextual navigation at Projects", async ({ page }, testInfo) => {
   await page.goto("/");

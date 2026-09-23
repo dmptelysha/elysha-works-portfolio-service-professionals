@@ -56,6 +56,17 @@ function acceptVerifiedContact(state: QuizState, contact = verifiedContact) {
 }
 
 describe("quiz reducer", () => {
+  it("stores an OTP identity before proposal consent is granted", () => {
+    let state = quizReducer(createInitialQuizState(), { type: "SELECT_AUDIENCE", audienceKey: "service_businesses" });
+    state = quizReducer(state, {
+      type: "OTP_REQUESTED",
+      contact: { ...verifiedContact, consent: false },
+      challenge,
+    });
+    expect(state.screen).toBe("verify_email");
+    expect(state.contact?.consent).toBe(false);
+  });
+
   it("requires accepted contact details between audience and intro", () => {
     let state = createInitialQuizState();
     state = quizReducer(state, { type: "SELECT_AUDIENCE", audienceKey: "coaches_educators" });
