@@ -19,6 +19,7 @@ const expectedMigrations = [
   '202609220003_grant_edge_function_table_access.sql',
   '202609220004_add_repeat_assessment_business_scope.sql',
   '202609230001_add_verified_lead_identity.sql',
+  '202609230002_add_custom_email_otp.sql',
 ];
 
 const phaseOneTables = [
@@ -60,6 +61,7 @@ test('Supabase scaffold has the ordered reproducible assets', () => {
   assert.ok(read('supabase/tests/02_rls_ownership.test.sql').length > 0);
   assert.ok(read('supabase/tests/03_rpc_and_integrity.test.sql').length > 0);
   assert.ok(read('supabase/tests/04_proposal_flow.test.sql').length > 0);
+  assert.ok(read('supabase/tests/05_custom_email_otp.test.sql').length > 0);
   const config = read('supabase/config.toml');
   assert.match(config, /\[auth\.email\]/);
   assert.match(config, /otp_expiry\s*=\s*600/);
@@ -140,6 +142,34 @@ test('verified lead migration derives identity from Auth and remains additive', 
   assert.doesNotMatch(sql, /revoke\s+execute\s+on\s+function\s+public\.begin_qualified_quiz_v2/i);
 });
 
+test('custom OTP migration keeps challenge state private and atomic', () => {
+  const sql = read('supabase/migrations/202609230002_add_custom_email_otp.sql');
+  assert.match(sql, /create\s+schema\s+if\s+not\s+exists\s+private/i);
+  assert.match(sql, /create\s+table\s+private\.email_otp_challenges/i);
+  assert.match(sql, /alter\s+table\s+private\.email_otp_challenges\s+enable\s+row\s+level\s+security/i);
+  assert.match(sql, /revoke\s+all\s+on\s+private\.email_otp_challenges\s+from\s+public,\s*anon,\s*authenticated/i);
+  assert.match(sql, /octet_length\(email_digest\)\s*=\s*32/i);
+  assert.match(sql, /octet_length\(otp_digest\)\s*=\s*32/i);
+  assert.match(sql, /octet_length\(request_ip_digest\)\s*=\s*32/i);
+  assert.match(sql, /function\s+private\.constant_time_equal_32\s*\(/i);
+  assert.match(sql, /for\s+v_index\s+in\s+0\.\.31/i);
+  assert.match(sql, /function\s+public\.record_email_otp_challenge\s*\(/i);
+  assert.match(sql, /function\s+public\.get_email_otp_challenge_context\s*\(/i);
+  assert.match(sql, /function\s+public\.mark_email_otp_delivery\s*\(/i);
+  assert.match(sql, /function\s+public\.verify_email_otp_digest\s*\(/i);
+  assert.match(sql, /function\s+public\.begin_custom_verified_qualified_quiz\s*\(/i);
+  assert.match(sql, /function\s+private\.cleanup_email_otp_challenges\s*\(/i);
+  assert.match(sql, /pg_advisory_xact_lock/gi);
+  assert.match(sql, /email-otp-email.*email-otp-ip.*email-otp-owner/is);
+  assert.match(sql, /elysha-email-otp-cleanup-hourly/i);
+  assert.match(sql, /cron\.schedule/i);
+  assert.match(sql, /cron\.unschedule/i);
+  assert.match(sql, /set\s+search_path\s*=\s*''/i);
+  assert.match(sql, /grant\s+execute\s+on\s+function\s+public\.begin_custom_verified_qualified_quiz\s*\([^;]+to\s+authenticated/is);
+  assert.doesNotMatch(sql, /drop\s+(?:table|schema)\b|truncate\s+(?!table\s+private\.email_otp_challenges)/i);
+  assert.doesNotMatch(sql, /delete\s+from\s+public\./i);
+});
+
 test('migrations create exactly the Phase 1 public tables', () => {
   const sql = allMigrations();
   for (const table of phaseOneTables) {
@@ -149,6 +179,11 @@ test('migrations create exactly the Phase 1 public tables', () => {
   for (const table of reservedTables) {
     assert.doesNotMatch(sql, new RegExp(`create\\s+table\\s+public\\.${table}\\b`, 'i'), table);
   }
+  assert.equal(
+    (sql.match(/create\s+table\s+(?:public|private)\.[a-z_]+/gi) ?? []).length,
+    12,
+    'the custom OTP challenge is the only twelfth runtime table',
+  );
 });
 
 test('migrations define required relationships, status constraints, indexes, and RPCs', () => {

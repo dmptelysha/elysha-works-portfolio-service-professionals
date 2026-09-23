@@ -54,6 +54,17 @@ select throws_ok(
 select throws_ok($$select * from public.record_analytics_event('client_won')$$, '42501', null, 'unauthenticated analytics rejected');
 select throws_ok($$select * from public.submit_lead(null,null,null,'Name',null,'person@example.test')$$, '42501', null, 'unauthenticated lead submission rejected');
 select throws_ok($$select public.mark_expired_quiz_sessions(now())$$, '42501', null, 'cleanup defaults to deny');
+select throws_ok(
+  $$select * from public.begin_custom_verified_qualified_quiz(
+    '31000000-0000-0000-0000-000000000001',
+    '41000000-0000-0000-0000-000000000001',
+    '51000000-0000-0000-0000-000000000001',
+    '61000000-0000-0000-0000-000000000099',
+    'rpc_audience','RPC','Person','RPC Business',true,
+    'proposal_followup_v1',null
+  )$$,
+  '42501', null, 'custom verified quiz defaults to deny'
+);
 
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"11000000-0000-0000-0000-000000000001","role":"authenticated","is_anonymous":true}', true);

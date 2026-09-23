@@ -142,6 +142,7 @@ Add one private table:
 | `verified_at` | `TIMESTAMPTZ` nullable | Server-set after successful digest verification |
 | `grant_expires_at` | `TIMESTAMPTZ` nullable | Ten minutes after verification |
 | `consumed_at` | `TIMESTAMPTZ` nullable | Set by the qualified-lead RPC |
+| `consumed_quiz_session_id` | `UUID` nullable FK | Binds a consumed grant to one quiz so exact retries are idempotent without permitting reuse |
 
 Constraints enforce fixed digest lengths, non-negative bounded attempts, valid status/timestamp combinations, expiry ordering, and the supported purpose allowlist. Add indexes for owner/purpose recency, email-digest recency, IP-digest recency, expiry cleanup, and one active challenge per owner/purpose.
 

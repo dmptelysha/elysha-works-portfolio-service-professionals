@@ -12,6 +12,7 @@ select has_table('public', 'package_catalog');
 select has_table('public', 'addon_catalog');
 select has_table('public', 'quiz_definitions');
 select has_table('public', 'site_content');
+select has_table('private', 'email_otp_challenges');
 
 select has_pk('public', 'site_visitors');
 select has_pk('public', 'portfolio_sessions');
@@ -72,6 +73,13 @@ select has_function('public', 'acknowledge_proposal_work');
 select has_function('public', 'stop_proposal_followups');
 select has_function('public', 'record_trusted_proposal_event');
 select has_function('public', 'begin_verified_qualified_quiz');
+select has_function('public', 'record_email_otp_challenge');
+select has_function('public', 'get_email_otp_challenge_context');
+select has_function('public', 'mark_email_otp_delivery');
+select has_function('public', 'verify_email_otp_digest');
+select has_function('public', 'begin_custom_verified_qualified_quiz');
+select has_function('private', 'constant_time_equal_32');
+select has_function('private', 'cleanup_email_otp_challenges');
 
 select ok((select relrowsecurity from pg_class where oid = 'public.site_visitors'::regclass), 'site_visitors RLS enabled');
 select ok((select relrowsecurity from pg_class where oid = 'public.portfolio_sessions'::regclass), 'portfolio_sessions RLS enabled');
@@ -84,6 +92,12 @@ select ok((select relrowsecurity from pg_class where oid = 'public.package_catal
 select ok((select relrowsecurity from pg_class where oid = 'public.addon_catalog'::regclass), 'addon_catalog RLS enabled');
 select ok((select relrowsecurity from pg_class where oid = 'public.quiz_definitions'::regclass), 'quiz_definitions RLS enabled');
 select ok((select relrowsecurity from pg_class where oid = 'public.site_content'::regclass), 'site_content RLS enabled');
+select ok((select relrowsecurity from pg_class where oid = 'private.email_otp_challenges'::regclass), 'private OTP challenges RLS enabled');
+select is(
+  (select count(*)::integer from pg_policies where schemaname = 'private' and tablename = 'email_otp_challenges'),
+  0,
+  'private OTP table exposes no browser policy'
+);
 
 select has_index('public', 'quiz_sessions', 'quiz_sessions_status_resume_expires_at_idx');
 select has_index('public', 'leads', 'leads_crm_stage_status_idx');
@@ -95,6 +109,11 @@ select has_index('public', 'quiz_sessions', 'quiz_sessions_proposal_reference_ui
 select has_index('public', 'quiz_sessions', 'quiz_sessions_active_proposal_expiry_idx');
 select has_index('public', 'leads', 'leads_due_proposal_follow_up_idx');
 select has_index('public', 'leads', 'leads_auth_user_updated_idx');
+select has_index('private', 'email_otp_challenges', 'email_otp_one_active_owner_purpose_idx');
+select has_index('private', 'email_otp_challenges', 'email_otp_owner_purpose_created_idx');
+select has_index('private', 'email_otp_challenges', 'email_otp_email_digest_created_idx');
+select has_index('private', 'email_otp_challenges', 'email_otp_ip_digest_created_idx');
+select has_index('private', 'email_otp_challenges', 'email_otp_terminal_cleanup_idx');
 
 select * from finish();
 rollback;
