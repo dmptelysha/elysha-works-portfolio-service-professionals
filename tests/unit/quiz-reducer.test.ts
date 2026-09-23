@@ -36,14 +36,22 @@ const saved = {
 } satisfies SavedQuizAttempt;
 
 const verifiedContact = { firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "mara@example.com", consent: true as const };
+const challenge = {
+  id: "70000000-0000-4000-8000-000000000001",
+  email: "mara@example.com",
+  expiresAt: "2026-09-23T00:10:00.000Z",
+  resendAvailableAt: "2026-09-23T00:01:00.000Z",
+  verified: false,
+  grantExpiresAt: null,
+};
 
 function acceptVerifiedContact(state: QuizState, contact = verifiedContact) {
   state = quizReducer(state, {
     type: "OTP_REQUESTED",
     contact,
-    challenge: { email: contact.email, requestedAt: "2026-09-23T00:00:00.000Z", resendAvailableAt: "2026-09-23T00:01:00.000Z" },
+    challenge: { ...challenge, email: contact.email },
   });
-  state = quizReducer(state, { type: "OTP_VERIFIED" });
+  state = quizReducer(state, { type: "OTP_VERIFIED", grantExpiresAt: "2026-09-23T00:20:00.000Z" });
   return quizReducer(state, { type: "CONTACT_ACCEPTED", contact });
 }
 
@@ -56,15 +64,11 @@ describe("quiz reducer", () => {
     state = quizReducer(state, {
       type: "OTP_REQUESTED",
       contact,
-      challenge: {
-        email: "mara@example.com",
-        requestedAt: "2026-09-23T00:00:00.000Z",
-        resendAvailableAt: "2026-09-23T00:01:00.000Z",
-      },
+      challenge,
     });
     expect(state.screen).toBe("verify_email");
     expect(state.clientIdentity).toBeNull();
-    state = quizReducer(state, { type: "OTP_VERIFIED" });
+    state = quizReducer(state, { type: "OTP_VERIFIED", grantExpiresAt: "2026-09-23T00:20:00.000Z" });
     expect(state.screen).toBe("verify_email");
     expect(state.emailVerified).toBe(true);
     state = quizReducer(state, { type: "CONTACT_ACCEPTED", contact });
@@ -81,12 +85,27 @@ describe("quiz reducer", () => {
     state = quizReducer(state, {
       type: "OTP_REQUESTED",
       contact,
-      challenge: { email: contact.email, requestedAt: "2026-09-23T00:00:00.000Z", resendAvailableAt: "2026-09-23T00:01:00.000Z" },
+      challenge: { ...challenge, email: contact.email },
     });
-    state = quizReducer(state, { type: "CHANGE_EMAIL" });
+    state = quizReducer(state, { type: "OTP_RESET" });
     expect(state.screen).toBe("contact");
     expect(state.otpChallenge).toBeNull();
     expect(state.emailVerified).toBe(false);
+  });
+
+  it("replaces a pending challenge on resend and clears all OTP state on start over", () => {
+    let state = quizReducer(createInitialQuizState(), { type: "SELECT_AUDIENCE", audienceKey: "service_businesses" });
+    state = quizReducer(state, { type: "OTP_REQUESTED", contact: verifiedContact, challenge });
+    const replacement = {
+      ...challenge,
+      id: "70000000-0000-4000-8000-000000000002",
+      expiresAt: "2026-09-23T00:12:00.000Z",
+    };
+    state = quizReducer(state, { type: "OTP_REQUESTED", contact: verifiedContact, challenge: replacement });
+    expect(state.otpChallenge).toEqual(replacement);
+    state = quizReducer(state, { type: "START_OVER" });
+    expect(state.otpChallenge).toBeNull();
+    expect(state.contact).toBeNull();
   });
 
   it("supports single and multi-select answers, Next, Back, and editing", () => {

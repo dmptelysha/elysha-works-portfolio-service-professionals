@@ -64,6 +64,9 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaError, setCaptchaError] = useState(false);
   const [captchaAttempt, setCaptchaAttempt] = useState(0);
+  const [securityAction, setSecurityAction] = useState<
+    "anonymous_quiz_start" | "email_otp_request"
+  >("anonymous_quiz_start");
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupBusy, setSetupBusy] = useState(false);
   const [deliveryEmail, setDeliveryEmail] = useState<string | null>(null);
@@ -221,10 +224,15 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     setDeliveryEmail(null);
     setSetupError(null);
     setSetupBusy(false);
+    setSecurityAction("anonymous_quiz_start");
     dispatch({ type: "START_OVER" });
   };
 
-  const chooseAudience = (audienceKey: AudienceKey) => {
+  const captchaSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
+  const productionCaptchaMissing = process.env.NODE_ENV === "production" && !captchaSiteKey;
+  const securityReady = productionCaptchaMissing ? false : !captchaSiteKey || Boolean(captchaToken);
+
+  const chooseAudience = async (audienceKey: AudienceKey) => {
     createdAtRef.current = new Date().toISOString();
     ownedContextRef.current = null;
     contextPromiseRef.current = null;
@@ -235,14 +243,31 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     emailVerifiedRef.current = false;
     setDeliveryEmail(null);
     setSetupError(null);
-    setSetupBusy(false);
-    dispatch({ type: "SELECT_AUDIENCE", audienceKey });
+    setSetupBusy(true);
+    if (!securityReady) {
+      setSetupBusy(false);
+      setSyncMessage("Complete the security check before choosing your business type.");
+      return;
+    }
+    try {
+      const context = await service.createOwnedQuizContext(audienceKey, {
+        landingPath: "/quiz/",
+        captchaToken: captchaToken ?? undefined,
+      });
+      ownedContextRef.current = context;
+      contextPromiseRef.current = Promise.resolve(context);
+      setSecurityAction("email_otp_request");
+      setCaptchaToken(null);
+      setCaptchaAttempt((attempt) => attempt + 1);
+      dispatch({ type: "SELECT_AUDIENCE", audienceKey });
+    } catch {
+      setSyncMessage("We could not start the secure assessment. Check your connection and try again.");
+    } finally {
+      setSetupBusy(false);
+    }
   };
 
   const definition = state.audienceKey ? QUIZ_DEFINITIONS[state.audienceKey] : null;
-  const captchaSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
-  const productionCaptchaMissing = process.env.NODE_ENV === "production" && !captchaSiteKey;
-  const securityReady = productionCaptchaMissing ? false : !captchaSiteKey || Boolean(captchaToken);
   const question = definition?.questions[state.currentQuestionIndex];
   const finishVerifiedSetup = async (businessScope?: "same_business" | "another_business") => {
     if (!state.audienceKey || !state.contact) return;
@@ -251,7 +276,10 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     try {
       const context = await ensureOwnedContext(state.audienceKey);
       const contact = businessScope ? { ...state.contact, businessScope } : state.contact;
-      const result = await service.submitLeadContact(context, contact);
+      if (!state.otpChallenge || !emailVerifiedRef.current) {
+        throw new Error("verified challenge required");
+      }
+      const result = await service.submitLeadContact(context, state.otpChallenge.id, contact);
       if (result.status === "business_scope_required") {
         dispatch({ type: "BUSINESS_SCOPE_REQUIRED", existingBusinessName: result.existingBusinessName });
       } else {
@@ -267,9 +295,9 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const verifyAndStart = async (token: string) => {
     if (!state.otpChallenge) return;
     if (!emailVerifiedRef.current) {
-      await service.verifyEmailOtp(state.otpChallenge.email, token);
+      const verification = await service.verifyEmailOtp(state.otpChallenge.id, token);
       emailVerifiedRef.current = true;
-      dispatch({ type: "OTP_VERIFIED" });
+      dispatch({ type: "OTP_VERIFIED", grantExpiresAt: verification.grantExpiresAt });
     }
     await finishVerifiedSetup();
   };
@@ -367,14 +395,16 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
         {!hydrated ? <div className="quiz-loading" aria-live="polite">Preparing your roadmap…</div> : null}
 
         {hydrated && state.screen === "audience" ? (
-          <AudienceSelector onSelect={chooseAudience} />
+          <AudienceSelector onSelect={(audienceKey) => void chooseAudience(audienceKey)} />
         ) : null}
 
         {hydrated && state.screen === "contact" ? (
           <LeadContactStep onSubmit={async (contact) => {
             setDeliveryEmail(contact.email.trim().toLowerCase());
-            const challenge = await service.requestEmailOtp(contact.email, captchaToken ?? undefined);
+            const challenge = await service.requestEmailOtp(contact.email, captchaToken ?? "");
             dispatch({ type: "OTP_REQUESTED", contact, challenge });
+            setCaptchaToken(null);
+            setCaptchaAttempt((attempt) => attempt + 1);
           }} securityError={captchaError} securityReady={securityReady} />
         ) : null}
 
@@ -401,12 +431,14 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
               resendAvailableAt={state.otpChallenge.resendAvailableAt}
               onVerify={verifyAndStart}
               onResend={async () => {
-                const challenge = await service.requestEmailOtp(state.otpChallenge!.email, captchaToken ?? undefined);
+                const challenge = await service.requestEmailOtp(state.otpChallenge!.email, captchaToken ?? "");
                 dispatch({ type: "OTP_REQUESTED", contact: state.contact!, challenge });
+                setCaptchaToken(null);
+                setCaptchaAttempt((attempt) => attempt + 1);
               }}
               onChangeEmail={() => {
                 emailVerifiedRef.current = false;
-                dispatch({ type: "CHANGE_EMAIL" });
+                dispatch({ type: "OTP_RESET" });
               }}
             />
           )
@@ -515,7 +547,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
               setCaptchaError(true);
             }}
             options={{
-              action: "anonymous_quiz_start",
+              action: securityAction,
               appearance: "interaction-only",
               refreshExpired: "auto",
               theme: "dark",

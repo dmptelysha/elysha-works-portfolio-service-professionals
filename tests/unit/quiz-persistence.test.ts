@@ -87,11 +87,18 @@ describe("quiz local persistence", () => {
       ...attempt(),
       clientIdentity: { firstName: "Mara", businessName: "Mara Coaching" },
       contact: { email: "mara@example.com" },
+      otpChallenge: {
+        id: "70000000-0000-4000-8000-000000000001",
+        email: "mara@example.com",
+        code: "012345",
+      },
     } as SavedQuizAttempt);
     const raw = storage.getItem(QUIZ_STORAGE_KEY) ?? "";
     expect(raw).not.toContain("Mara");
     expect(raw).not.toContain("Mara Coaching");
     expect(raw).not.toContain("mara@example.com");
+    expect(raw).not.toContain("70000000-0000-4000-8000-000000000001");
+    expect(raw).not.toContain("012345");
   });
 
   it("uses a 72-hour recovery window and keeps an attempt valid at the exact boundary", () => {

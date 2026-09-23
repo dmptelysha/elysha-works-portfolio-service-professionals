@@ -4,7 +4,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 import type {
   AudienceKey,
-  EmailOtpChallenge,
+  CustomEmailOtpChallenge,
+  CustomEmailOtpVerification,
   LeadContactInput,
   LeadContactSubmissionResult,
   ProposalDraftViewModel,
@@ -30,10 +31,10 @@ export interface QuizProgressInput {
 }
 
 export interface QuizService {
-  requestEmailOtp: typeof requestEmailOtp;
-  verifyEmailOtp: typeof verifyEmailOtp;
+  requestEmailOtp: typeof requestCustomEmailOtp;
+  verifyEmailOtp: typeof verifyCustomEmailOtp;
   createOwnedQuizContext: typeof createOwnedQuizContext;
-  submitLeadContact: typeof submitLeadContact;
+  submitLeadContact: typeof submitCustomVerifiedLeadContact;
   saveOwnedQuizProgress: typeof saveOwnedQuizProgress;
   previewProposal: typeof previewProposal;
   issueProposal: typeof issueProposal;
@@ -44,6 +45,8 @@ const CONTACT_ERROR = "We could not save your details. Please try again.";
 const SERVICE_ERROR = "The assessment service is temporarily unavailable. Please try again.";
 const OTP_ERROR = "We could not verify that code. Check it or request a new one.";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const EMAIL_OTP_MODE = "custom_make_otp" as const;
 
 function clientOrDefault(client?: SupabaseClient): SupabaseClient {
   return client ?? getSupabaseBrowserClient();
@@ -69,46 +72,59 @@ function normalizeEmail(email: string): string {
   return normalized;
 }
 
-export async function requestEmailOtp(
+export async function requestCustomEmailOtp(
   email: string,
-  captchaToken?: string,
+  turnstileToken: string,
   client?: SupabaseClient,
-): Promise<EmailOtpChallenge> {
+): Promise<CustomEmailOtpChallenge> {
   const normalizedEmail = normalizeEmail(email);
-  const normalizedCaptchaToken = captchaToken?.trim();
-  const response = await clientOrDefault(client).auth.signInWithOtp({
-    email: normalizedEmail,
-    options: { shouldCreateUser: true, ...(normalizedCaptchaToken ? { captchaToken: normalizedCaptchaToken } : {}) },
+  const normalizedToken = turnstileToken.trim();
+  if (!normalizedToken) throw new Error(OTP_ERROR);
+  const response = await clientOrDefault(client).functions.invoke("request-email-otp", {
+    body: {
+      email: normalizedEmail,
+      purpose: "qualified_quiz",
+      turnstileToken: normalizedToken,
+    },
   });
-  if (response.error) throw new Error(OTP_ERROR);
-  const requestedAt = new Date();
+  const data = response.data as Record<string, unknown> | null;
+  if (
+    response.error || !data ||
+    typeof data.challengeId !== "string" || !UUID_PATTERN.test(data.challengeId) ||
+    typeof data.expiresAt !== "string" || !Number.isFinite(Date.parse(data.expiresAt)) ||
+    typeof data.resendAvailableAt !== "string" || !Number.isFinite(Date.parse(data.resendAvailableAt)) ||
+    Date.parse(data.resendAvailableAt) > Date.parse(data.expiresAt)
+  ) throw new Error(OTP_ERROR);
   return {
+    id: data.challengeId,
     email: normalizedEmail,
-    requestedAt: requestedAt.toISOString(),
-    resendAvailableAt: new Date(requestedAt.getTime() + 60_000).toISOString(),
+    expiresAt: new Date(data.expiresAt).toISOString(),
+    resendAvailableAt: new Date(data.resendAvailableAt).toISOString(),
+    verified: false,
+    grantExpiresAt: null,
   };
 }
 
-export async function verifyEmailOtp(
-  email: string,
-  token: string,
+export async function verifyCustomEmailOtp(
+  challengeId: string,
+  code: string,
   client?: SupabaseClient,
-): Promise<Session> {
-  const normalizedEmail = normalizeEmail(email);
-  if (!/^\d{6}$/.test(token)) throw new Error(OTP_ERROR);
-  const response = await clientOrDefault(client).auth.verifyOtp({
-    email: normalizedEmail,
-    token,
-    type: "email",
+): Promise<CustomEmailOtpVerification> {
+  const normalizedChallengeId = requireUuid(challengeId);
+  if (!/^\d{6}$/.test(code)) throw new Error(OTP_ERROR);
+  const response = await clientOrDefault(client).functions.invoke("verify-email-otp", {
+    body: { challengeId: normalizedChallengeId, code },
   });
-  const session = response.data.session;
-  const user = session?.user;
-  if (response.error || !session || !user || user.is_anonymous !== false
-    || user.email?.trim().toLowerCase() !== normalizedEmail || !user.email_confirmed_at) {
-    throw new Error(OTP_ERROR);
-  }
-  requireUuid(user.id);
-  return session;
+  const data = response.data as Record<string, unknown> | null;
+  if (
+    response.error || !data || data.verified !== true ||
+    typeof data.grantExpiresAt !== "string" ||
+    !Number.isFinite(Date.parse(data.grantExpiresAt))
+  ) throw new Error(OTP_ERROR);
+  return {
+    verified: true,
+    grantExpiresAt: new Date(data.grantExpiresAt).toISOString(),
+  };
 }
 
 export async function ensureAnonymousSession(client?: SupabaseClient, captchaToken?: string): Promise<Session> {
@@ -224,16 +240,18 @@ export async function createOwnedQuizContext(
   };
 }
 
-export async function submitLeadContact(
+export async function submitCustomVerifiedLeadContact(
   context: OwnedQuizContext,
+  challengeId: string,
   contact: LeadContactInput,
   client?: SupabaseClient,
 ): Promise<LeadContactSubmissionResult> {
   const supabase = clientOrDefault(client);
-  const response = await supabase.rpc("begin_verified_qualified_quiz", {
+  const response = await supabase.rpc("begin_custom_verified_qualified_quiz", {
     p_visitor_id: requireUuid(context.visitorId),
     p_portfolio_session_id: requireUuid(context.portfolioSessionId),
     p_quiz_session_id: requireUuid(context.quizSessionId),
+    p_challenge_id: requireUuid(challengeId),
     p_audience_key: context.audienceKey,
     p_first_name: contact.firstName.trim(),
     p_last_name: contact.lastName.trim(),
@@ -309,10 +327,10 @@ export async function issueProposal(
 }
 
 export const defaultQuizService: QuizService = {
-  requestEmailOtp,
-  verifyEmailOtp,
+  requestEmailOtp: requestCustomEmailOtp,
+  verifyEmailOtp: verifyCustomEmailOtp,
   createOwnedQuizContext,
-  submitLeadContact,
+  submitLeadContact: submitCustomVerifiedLeadContact,
   saveOwnedQuizProgress,
   previewProposal,
   issueProposal,

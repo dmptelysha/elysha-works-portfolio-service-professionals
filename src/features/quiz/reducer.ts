@@ -4,7 +4,7 @@ import type {
   AudienceKey,
   ClientIdentity,
   CortexResult,
-  EmailOtpChallenge,
+  CustomEmailOtpChallenge,
   LeadContactInput,
   ProposalDraftViewModel,
   ProposalViewModel,
@@ -32,7 +32,7 @@ export interface QuizState {
   result: CortexResult | null;
   roadmapSelection: RoadmapSelection | null;
   contact: LeadContactInput | null;
-  otpChallenge: EmailOtpChallenge | null;
+  otpChallenge: CustomEmailOtpChallenge | null;
   emailVerified: boolean;
   existingBusinessName: string | null;
   clientIdentity: ClientIdentity | null;
@@ -48,8 +48,9 @@ export type QuizAction =
   | { type: "DISMISS_RESUME" }
   | { type: "START_OVER" }
   | { type: "SELECT_AUDIENCE"; audienceKey: AudienceKey }
-  | { type: "OTP_REQUESTED"; contact: LeadContactInput; challenge: EmailOtpChallenge }
-  | { type: "OTP_VERIFIED" }
+  | { type: "OTP_REQUESTED"; contact: LeadContactInput; challenge: CustomEmailOtpChallenge }
+  | { type: "OTP_VERIFIED"; grantExpiresAt: string }
+  | { type: "OTP_RESET" }
   | { type: "CHANGE_EMAIL" }
   | { type: "BUSINESS_SCOPE_REQUIRED"; existingBusinessName: string }
   | { type: "CONTACT_ACCEPTED"; contact: LeadContactInput }
@@ -130,6 +131,11 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         email: action.contact.email.trim().toLowerCase(),
       };
       if (!contact.firstName || !contact.lastName || !contact.businessName || !contact.email || !contact.consent) return state;
+      if (
+        action.challenge.email !== contact.email || action.challenge.verified ||
+        !action.challenge.id || !Number.isFinite(Date.parse(action.challenge.expiresAt)) ||
+        !Number.isFinite(Date.parse(action.challenge.resendAvailableAt))
+      ) return state;
       return {
         ...state,
         screen: "verify_email",
@@ -141,7 +147,17 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
     }
     case "OTP_VERIFIED":
       if (state.screen !== "verify_email" || !state.contact || !state.otpChallenge) return state;
-      return { ...state, emailVerified: true };
+      if (!Number.isFinite(Date.parse(action.grantExpiresAt))) return state;
+      return {
+        ...state,
+        emailVerified: true,
+        otpChallenge: {
+          ...state.otpChallenge,
+          verified: true,
+          grantExpiresAt: action.grantExpiresAt,
+        },
+      };
+    case "OTP_RESET":
     case "CHANGE_EMAIL":
       if (!["verify_email", "business_scope"].includes(state.screen)) return state;
       return {

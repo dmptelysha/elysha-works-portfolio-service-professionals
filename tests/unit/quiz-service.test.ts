@@ -2,13 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createOwnedQuizContext,
+  EMAIL_OTP_MODE,
   ensureAnonymousSession,
   issueProposal,
   previewProposal,
-  requestEmailOtp,
+  requestCustomEmailOtp,
   saveOwnedQuizProgress,
-  submitLeadContact,
-  verifyEmailOtp,
+  submitCustomVerifiedLeadContact,
+  verifyCustomEmailOtp,
   type OwnedQuizContext,
 } from "@/features/quiz/quiz-service";
 
@@ -18,6 +19,7 @@ const VISITOR_ID = "30000000-0000-4000-8000-000000000001";
 const PORTFOLIO_SESSION_ID = "40000000-0000-4000-8000-000000000001";
 const QUIZ_SESSION_ID = "50000000-0000-4000-8000-000000000001";
 const LEAD_ID = "60000000-0000-4000-8000-000000000001";
+const CHALLENGE_ID = "70000000-0000-4000-8000-000000000001";
 
 function thenableBuilder(
   response: { data: unknown; error: unknown },
@@ -104,37 +106,53 @@ const context: OwnedQuizContext = {
 };
 
 describe("Supabase quiz service", () => {
-  it("requests a passwordless email code with normalized email and Turnstile", async () => {
-    const fake = fakeClient();
-
-    await expect(requestEmailOtp(" Person@Example.com ", "turnstile-token", fake.client as never))
-      .resolves.toMatchObject({ email: "person@example.com" });
-
-    expect(fake.signInWithOtp).toHaveBeenCalledWith({
-      email: "person@example.com",
-      options: { shouldCreateUser: true, captchaToken: "turnstile-token" },
-    });
+  it("uses the custom Make OTP configuration mode", () => {
+    expect(EMAIL_OTP_MODE).toBe("custom_make_otp");
   });
 
-  it("verifies the six-digit email code and rejects anonymous sessions", async () => {
-    const fake = fakeClient();
-
-    await expect(verifyEmailOtp(" Person@Example.com ", "123456", fake.client as never))
-      .resolves.toMatchObject({ user: { id: USER_ID, email: "person@example.com", is_anonymous: false } });
-
-    expect(fake.verifyOtp).toHaveBeenCalledWith({
-      email: "person@example.com",
-      token: "123456",
-      type: "email",
-    });
-
-    const anonymous = fakeClient();
-    anonymous.verifyOtp.mockResolvedValueOnce({
-      data: { session: { user: { id: USER_ID, email: "person@example.com", is_anonymous: true, email_confirmed_at: "2026-09-23T00:00:00.000Z" } } },
+  it("requests a custom email code with normalized email and Turnstile", async () => {
+    const fake = fakeClient({ functionResponse: {
+      data: {
+        challengeId: CHALLENGE_ID,
+        expiresAt: "2026-09-23T00:10:00.000Z",
+        resendAvailableAt: "2026-09-23T00:01:00.000Z",
+      },
       error: null,
+    } });
+
+    await expect(requestCustomEmailOtp(" Person@Example.com ", "turnstile-token", fake.client as never))
+      .resolves.toEqual({
+        id: CHALLENGE_ID,
+        email: "person@example.com",
+        expiresAt: "2026-09-23T00:10:00.000Z",
+        resendAvailableAt: "2026-09-23T00:01:00.000Z",
+        verified: false,
+        grantExpiresAt: null,
+      });
+
+    expect(fake.invoke).toHaveBeenCalledWith("request-email-otp", {
+      body: {
+        email: "person@example.com",
+        purpose: "qualified_quiz",
+        turnstileToken: "turnstile-token",
+      },
     });
-    await expect(verifyEmailOtp("person@example.com", "123456", anonymous.client as never))
-      .rejects.toThrow("We could not verify that code. Check it or request a new one.");
+    expect(fake.signInWithOtp).not.toHaveBeenCalled();
+  });
+
+  it("verifies the custom six-digit code without replacing the anonymous session", async () => {
+    const fake = fakeClient({ functionResponse: {
+      data: { verified: true, grantExpiresAt: "2026-09-23T00:20:00.000Z" },
+      error: null,
+    } });
+
+    await expect(verifyCustomEmailOtp(CHALLENGE_ID, "012345", fake.client as never))
+      .resolves.toEqual({ verified: true, grantExpiresAt: "2026-09-23T00:20:00.000Z" });
+
+    expect(fake.invoke).toHaveBeenCalledWith("verify-email-otp", {
+      body: { challengeId: CHALLENGE_ID, code: "012345" },
+    });
+    expect(fake.verifyOtp).not.toHaveBeenCalled();
   });
 
   it("reuses an existing anonymous session without signing in again", async () => {
@@ -251,14 +269,15 @@ describe("Supabase quiz service", () => {
 
   it("submits only approved contact fields and owned attribution through the RPC", async () => {
     const fake = fakeClient();
-    await expect(submitLeadContact(context, {
+    await expect(submitCustomVerifiedLeadContact(context, CHALLENGE_ID, {
       firstName: " Mara ", lastName: " Santos ", businessName: " Mara Consulting ", email: "MARA@EXAMPLE.COM", consent: true,
     }, fake.client as never)).resolves.toEqual({ status: "accepted", leadId: LEAD_ID, quizSessionId: QUIZ_SESSION_ID });
 
-    expect(fake.rpc).toHaveBeenCalledWith("begin_verified_qualified_quiz", {
+    expect(fake.rpc).toHaveBeenCalledWith("begin_custom_verified_qualified_quiz", {
       p_visitor_id: VISITOR_ID,
       p_portfolio_session_id: PORTFOLIO_SESSION_ID,
       p_quiz_session_id: QUIZ_SESSION_ID,
+      p_challenge_id: CHALLENGE_ID,
       p_audience_key: "service_businesses",
       p_first_name: "Mara",
       p_last_name: "Santos",
@@ -285,14 +304,14 @@ describe("Supabase quiz service", () => {
     const contact = {
       firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "mara@example.com", consent: true as const,
     };
-    await expect(submitLeadContact(context, contact, fake.client as never)).resolves.toEqual({
+    await expect(submitCustomVerifiedLeadContact(context, CHALLENGE_ID, contact, fake.client as never)).resolves.toEqual({
       status: "business_scope_required",
       quizSessionId: QUIZ_SESSION_ID,
       existingBusinessName: "Mara Consulting",
     });
 
-    await submitLeadContact(context, { ...contact, businessScope: "same_business" }, fake.client as never);
-    expect(fake.rpc).toHaveBeenLastCalledWith("begin_verified_qualified_quiz", expect.objectContaining({
+    await submitCustomVerifiedLeadContact(context, CHALLENGE_ID, { ...contact, businessScope: "same_business" }, fake.client as never);
+    expect(fake.rpc).toHaveBeenLastCalledWith("begin_custom_verified_qualified_quiz", expect.objectContaining({
       p_business_scope: "same_business",
     }));
   });
@@ -336,7 +355,7 @@ describe("Supabase quiz service", () => {
     const fake = fakeClient({
       rpcResponse: { data: null, error: { message: "mara@example.com sb_secret_should_not_leak" } },
     });
-    await expect(submitLeadContact(context, {
+    await expect(submitCustomVerifiedLeadContact(context, CHALLENGE_ID, {
       firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "mara@example.com", consent: true,
     }, fake.client as never)).rejects.toThrow("We could not save your details. Please try again.");
   });

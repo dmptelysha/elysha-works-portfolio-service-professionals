@@ -51,7 +51,11 @@ function createFakeQuizService() {
   let answers: Record<string, readonly string[]> = {};
   let identity = { firstName: "Mara", businessName: "Mara Consulting" };
   const createOwnedQuizContext = vi.fn(async (audienceKey: typeof ownedContext.audienceKey) => ({ ...ownedContext, audienceKey }));
-  const submitLeadContact = vi.fn(async (_context: OwnedQuizContext, contact: LeadContactInput): Promise<LeadContactSubmissionResult> => {
+  const submitLeadContact = vi.fn(async (
+    _context: OwnedQuizContext,
+    _challengeId: string,
+    contact: LeadContactInput,
+  ): Promise<LeadContactSubmissionResult> => {
     identity = { firstName: contact.firstName, businessName: contact.businessName };
     return { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId };
   });
@@ -71,22 +75,17 @@ function createFakeQuizService() {
     };
   });
   const requestEmailOtp = vi.fn(async (email: string) => ({
+    id: "70000000-0000-4000-8000-000000000001",
     email: email.trim().toLowerCase(),
-    requestedAt: "2026-09-23T00:00:00.000Z",
+    expiresAt: "2026-09-23T00:10:00.000Z",
     resendAvailableAt: "2026-09-23T00:01:00.000Z",
+    verified: false,
+    grantExpiresAt: null,
   }));
   const verifyEmailOtp = vi.fn(async () => ({
-    access_token: "test-access-token",
-    refresh_token: "test-refresh-token",
-    expires_in: 3600,
-    token_type: "bearer",
-    user: {
-      id: ownedContext.ownerUserId,
-      email: "mara@example.com",
-      is_anonymous: false,
-      email_confirmed_at: "2026-09-23T00:00:00.000Z",
-    },
-  } as never));
+    verified: true as const,
+    grantExpiresAt: "2026-09-23T00:20:00.000Z",
+  }));
   return { requestEmailOtp, verifyEmailOtp, createOwnedQuizContext, submitLeadContact, saveOwnedQuizProgress, previewProposal, issueProposal };
 }
 
@@ -279,7 +278,7 @@ describe("local portfolio quiz", () => {
   it("asks a verified returning identity whether this is the same or another business", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
-    service.submitLeadContact.mockImplementation(async (_context, contact) => contact.businessScope
+    service.submitLeadContact.mockImplementation(async (_context, _challengeId, contact) => contact.businessScope
       ? { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId }
       : { status: "business_scope_required" as const, quizSessionId: ownedContext.quizSessionId, existingBusinessName: "Mara Consulting" });
     render(<QuizExperience service={service} />);
@@ -299,7 +298,7 @@ describe("local portfolio quiz", () => {
   it("lets a verified returning identity organize a different business separately", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
-    service.submitLeadContact.mockImplementation(async (_context, contact) => contact.businessScope
+    service.submitLeadContact.mockImplementation(async (_context, _challengeId, contact) => contact.businessScope
       ? { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId }
       : { status: "business_scope_required" as const, quizSessionId: ownedContext.quizSessionId, existingBusinessName: "Mara Consulting" });
     render(<QuizExperience service={service} />);
