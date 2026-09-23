@@ -241,6 +241,7 @@
 .resume-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
 .proposal-delivery-dialog { width: min(100%, 44rem); }
 .proposal-delivery-dialog .quiz-primary { min-width: min(100%, 14rem); }
+.proposal-delivery-progress { width: 2rem; height: 2rem; border: 2px solid rgba(255,211,105,.25); border-top-color: var(--portfolio-gold); border-radius: 50%; animation: quiz-spin .8s linear infinite; }
 
 .quiz-result { width: min(100%, 86rem); }
 .result-hero { padding: clamp(1rem, 4vw, 4rem) 0 clamp(4rem, 8vw, 7rem); text-align: center; }

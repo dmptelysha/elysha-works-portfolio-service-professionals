@@ -42,6 +42,13 @@ function getBrowserStorage() {
   }
 }
 
+function maskDeliveryEmail(email: string | null) {
+  if (!email) return "the verified email you provided";
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return "the verified email you provided";
+  return `${local.slice(0, 1).toLowerCase()}***@${domain.toLowerCase()}`;
+}
+
 interface QuizExperienceProps {
   service?: QuizService;
 }
@@ -53,7 +60,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [issueError, setIssueError] = useState<string | null>(null);
-  const [proposalDialog, setProposalDialog] = useState<"success" | "error" | null>(null);
+  const [proposalDialog, setProposalDialog] = useState<"sending" | "success" | "error" | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaError, setCaptchaError] = useState(false);
   const [captchaAttempt, setCaptchaAttempt] = useState(0);
@@ -64,6 +71,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const contextPromiseRef = useRef<Promise<OwnedQuizContext> | null>(null);
   const autoIssueAttemptedRef = useRef(false);
   const emailVerifiedRef = useRef(false);
+  const deliveryEmailRef = useRef<string | null>(null);
   const proposalDialogRef = useRef<HTMLElement>(null);
   const proposalDialogButtonRef = useRef<HTMLButtonElement>(null);
   const resumeDialogRef = useRef<HTMLElement>(null);
@@ -210,6 +218,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     setProposalDialog(null);
     autoIssueAttemptedRef.current = false;
     emailVerifiedRef.current = false;
+    deliveryEmailRef.current = null;
     setSetupError(null);
     setSetupBusy(false);
     dispatch({ type: "START_OVER" });
@@ -224,6 +233,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     setProposalDialog(null);
     autoIssueAttemptedRef.current = false;
     emailVerifiedRef.current = false;
+    deliveryEmailRef.current = null;
     setSetupError(null);
     setSetupBusy(false);
     dispatch({ type: "SELECT_AUDIENCE", audienceKey });
@@ -289,6 +299,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     if (!state.audienceKey || !state.roadmapSelection || issuing) return;
     setIssuing(true);
     setIssueError(null);
+    setProposalDialog("sending");
     try {
       const context = await ensureOwnedContext(state.audienceKey);
       const issued = await service.issueProposal(context, state.roadmapSelection);
@@ -318,9 +329,9 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
 
   useEffect(() => {
     if (!proposalDialog) return;
-    proposalDialogButtonRef.current?.focus();
+    (proposalDialogButtonRef.current ?? proposalDialogRef.current)?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && proposalDialog !== "sending") {
         event.preventDefault();
         setProposalDialog(null);
         return;
@@ -361,6 +372,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
 
         {hydrated && state.screen === "contact" ? (
           <LeadContactStep onSubmit={async (contact) => {
+            deliveryEmailRef.current = contact.email.trim().toLowerCase();
             const challenge = await service.requestEmailOtp(contact.email, captchaToken ?? undefined);
             dispatch({ type: "OTP_REQUESTED", contact, challenge });
           }} securityError={captchaError} securityReady={securityReady} />
@@ -565,20 +577,28 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
             role="dialog"
             aria-modal="true"
             aria-labelledby="proposal-delivery-title"
+            aria-busy={proposalDialog === "sending"}
+            tabIndex={-1}
           >
             <p className="quiz-kicker">{proposalDialog === "success" ? "Proposal delivered" : "Email delivery"}</p>
             <h2 id="proposal-delivery-title">
-              {proposalDialog === "success"
+              {proposalDialog === "sending"
+                ? "Preparing and sending your proposal..."
+                : proposalDialog === "success"
                 ? "Success! Your proposal is ready."
                 : "Your roadmap is ready, but the email was not sent."}
             </h2>
             <p>
-              {proposalDialog === "success"
-                ? "We’ve also sent the protected proposal and access details to the email you provided. It will remain available for 72 hours."
+              {proposalDialog === "sending"
+                ? "Keep this page open while we confirm delivery. Your 72-hour access window starts only after the email is accepted."
+                : proposalDialog === "success"
+                ? `We sent the protected proposal and access details to ${maskDeliveryEmail(deliveryEmailRef.current)}. It will remain available for 72 hours.`
                 : "Your roadmap remains available here. Retry sending the protected proposal and access details."}
             </p>
             <div className="resume-actions">
-              {proposalDialog === "error" ? (
+              {proposalDialog === "sending" ? (
+                <span className="proposal-delivery-progress" aria-hidden="true" />
+              ) : proposalDialog === "error" ? (
                 <button
                   ref={proposalDialogButtonRef}
                   className="quiz-primary"
@@ -589,14 +609,17 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
                   {issuing ? "Sending email…" : "Retry sending email"}
                 </button>
               ) : (
-                <button
-                  ref={proposalDialogButtonRef}
-                  className="quiz-primary"
-                  onClick={() => setProposalDialog(null)}
-                  type="button"
-                >
-                  View My Roadmap
-                </button>
+                <>
+                  <button
+                    ref={proposalDialogButtonRef}
+                    className="quiz-primary"
+                    onClick={() => setProposalDialog(null)}
+                    type="button"
+                  >
+                    View My Roadmap
+                  </button>
+                  <a className="quiz-secondary" href="/booking/">Book a Discovery Call</a>
+                </>
               )}
               {proposalDialog === "error" ? (
                 <button className="quiz-secondary" onClick={() => setProposalDialog(null)} type="button">

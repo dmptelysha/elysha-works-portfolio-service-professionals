@@ -354,10 +354,36 @@ describe("local portfolio quiz", () => {
     expect(screen.queryByRole("button", { name: /create my 3-day proposal/i })).not.toBeInTheDocument();
 
     const successDialog = await screen.findByRole("dialog", { name: /your proposal is ready/i });
-    expect(within(successDialog).getByText(/sent.*email you provided/i)).toBeInTheDocument();
+    expect(within(successDialog).getByText(/sent.*m\*\*\*@example\.com/i)).toBeInTheDocument();
     expect(within(successDialog).getByText(/available for 72 hours/i)).toBeInTheDocument();
     await user.click(within(successDialog).getByRole("button", { name: /view my roadmap/i }));
     expect(screen.queryByRole("dialog", { name: /your proposal is ready/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps an undismissable sending dialog open until durable delivery succeeds", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    const issue = service.issueProposal.getMockImplementation()!;
+    let resolveIssue!: (value: Awaited<ReturnType<typeof issue>>) => void;
+    service.issueProposal.mockImplementationOnce(() => new Promise((resolve) => { resolveIssue = resolve; }));
+    render(<QuizExperience service={service} />);
+
+    await completeServiceBusinessAssessment(user);
+
+    const sendingDialog = await screen.findByRole("dialog", { name: /preparing and sending your proposal/i });
+    expect(within(sendingDialog).getByText(/keep this page open/i)).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog", { name: /preparing and sending your proposal/i })).toBeInTheDocument();
+
+    const issued = await issue(ownedContext, defaultRoadmapSelection(calculateRecommendation({
+      audienceKey: "service_businesses",
+      answers: Object.fromEntries(QUIZ_DEFINITIONS.service_businesses.questions.map((question) => [question.key, [question.options[0].key]])),
+    })));
+    await act(async () => resolveIssue(issued));
+
+    const successDialog = await screen.findByRole("dialog", { name: /your proposal is ready/i });
+    expect(within(successDialog).getByText(/m\*\*\*@example\.com/i)).toBeInTheDocument();
+    expect(within(successDialog).getByRole("link", { name: /book a discovery call/i })).toHaveAttribute("href", "/booking/");
   });
 
   it("keeps the roadmap visible and allows a failed automatic email to be retried", async () => {
@@ -378,6 +404,7 @@ describe("local portfolio quiz", () => {
 
     expect(await screen.findByRole("dialog", { name: /your proposal is ready/i })).toBeInTheDocument();
     expect(service.issueProposal).toHaveBeenCalledTimes(2);
+    expect(service.issueProposal.mock.calls[1]).toEqual(service.issueProposal.mock.calls[0]);
   });
 
   it("disables duplicate contact submissions while the owned RPC is pending", async () => {
@@ -454,7 +481,9 @@ describe("local portfolio quiz", () => {
       /related work/i,
       /turn the roadmap into a practical scope/i,
     ]) expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /book a discovery call/i })).toHaveAttribute("href", "/booking/");
+    for (const bookingLink of screen.getAllByRole("link", { name: /book a discovery call/i })) {
+      expect(bookingLink).toHaveAttribute("href", "/booking/");
+    }
     expect(screen.getByRole("navigation", { name: /quiz footer/i })).toBeInTheDocument();
     expect(window.location.href).toBe(initialUrl);
     expect(fetchSpy).not.toHaveBeenCalled();
