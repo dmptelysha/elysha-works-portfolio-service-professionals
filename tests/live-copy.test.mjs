@@ -76,6 +76,21 @@ test("the static booking route uses a plain anchor instead of Next route prefetc
   assert.match(finalCta, /<a className="portfolio-text-link" href=\{finalCta\.secondaryHref\}>/);
 });
 
+test("direct booking prefill stays gated behind the external one-time handoff contract", () => {
+  const contractPath = fromRoot("docs/contracts/quiz-booking-handoff.md");
+  assert.ok(existsSync(contractPath), "missing secure booking handoff contract");
+  const contract = readFileSync(contractPath, "utf8");
+
+  assert.match(contract, /opaque.*256-bit/is);
+  assert.match(contract, /SHA-256.*hash/is);
+  assert.match(contract, /10-minute.*TTL/is);
+  assert.match(contract, /atomic.*single-use/is);
+  assert.match(contract, /replay.*reject/is);
+  assert.match(contract, /no PII.*URL/is);
+  assert.match(contract, /safe.*form.*fallback/is);
+  assert.match(contract, /POST \/v1\/handoffs\/consume/);
+});
+
 test("the authored homepage styles are available", () => {
   for (const file of ["public/hero-roadmap.css", "src/styles/portfolio.css"]) {
     assert.ok(existsSync(fromRoot(file)), `missing ${file}`);

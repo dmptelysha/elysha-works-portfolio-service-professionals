@@ -1354,6 +1354,8 @@ Indexes: `visitor_id`; `source_portfolio_session_id`; unique partial `source_qui
 
 Purpose: a strategy-call booking linked to its lead and original journey without becoming a calendar platform.
 
+The quiz and protected proposal currently link to the existing `/booking/` form. Direct-to-date selection is intentionally **not enabled** in this repository. It depends on the separately deployed booking backend implementing the opaque, 256-bit, single-use handoff contract in `docs/contracts/quiz-booking-handoff.md`, including a server-stored SHA-256 hash, 10-minute TTL, atomic consume, replay rejection, no PII in the URL, and a safe form fallback. Until that consumer passes its own contract tests, the existing form remains the secure production behavior.
+
 | Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
 |---|---|---:|---|---|---|
 | `id` | `UUID` | Yes | `gen_random_uuid()` | Primary key | Booking ID |
