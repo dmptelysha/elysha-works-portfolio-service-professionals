@@ -13,7 +13,7 @@ export function isAllowedOrigin(origin: string | null): boolean {
 export function corsHeaders(origin: string | null): Record<string, string> {
   const headers: Record<string, string> = {
     "Access-Control-Allow-Headers":
-      "authorization, apikey, content-type, x-client-info, x-make-automation-secret",
+      "authorization, apikey, content-type, x-client-info, x-make-automation-secret, traceparent, tracestate, baggage",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     Vary: "Origin",
   };
