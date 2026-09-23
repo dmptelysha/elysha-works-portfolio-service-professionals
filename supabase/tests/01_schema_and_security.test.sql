@@ -53,6 +53,8 @@ select has_column('public', 'leads', 'proposal_follow_up_claim_id');
 select has_column('public', 'leads', 'proposal_follow_up_claimed_at');
 select has_column('public', 'leads', 'proposal_follow_up_stopped_at');
 select has_column('public', 'leads', 'cold_at');
+select has_column('public', 'leads', 'auth_user_id');
+select has_column('public', 'leads', 'email_verified_at');
 
 select has_function('public', 'is_portfolio_admin');
 select has_function('public', 'submit_lead');
@@ -69,6 +71,7 @@ select has_function('public', 'claim_due_proposal_work');
 select has_function('public', 'acknowledge_proposal_work');
 select has_function('public', 'stop_proposal_followups');
 select has_function('public', 'record_trusted_proposal_event');
+select has_function('public', 'begin_verified_qualified_quiz');
 
 select ok((select relrowsecurity from pg_class where oid = 'public.site_visitors'::regclass), 'site_visitors RLS enabled');
 select ok((select relrowsecurity from pg_class where oid = 'public.portfolio_sessions'::regclass), 'portfolio_sessions RLS enabled');
@@ -91,6 +94,7 @@ select has_index('public', 'quiz_definitions', 'quiz_definitions_audience_active
 select has_index('public', 'quiz_sessions', 'quiz_sessions_proposal_reference_uidx');
 select has_index('public', 'quiz_sessions', 'quiz_sessions_active_proposal_expiry_idx');
 select has_index('public', 'leads', 'leads_due_proposal_follow_up_idx');
+select has_index('public', 'leads', 'leads_auth_user_updated_idx');
 
 select * from finish();
 rollback;

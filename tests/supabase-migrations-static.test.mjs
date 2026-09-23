@@ -18,6 +18,7 @@ const expectedMigrations = [
   '202609220002_qualify_proposal_reference_update.sql',
   '202609220003_grant_edge_function_table_access.sql',
   '202609220004_add_repeat_assessment_business_scope.sql',
+  '202609230001_add_verified_lead_identity.sql',
 ];
 
 const phaseOneTables = [
@@ -114,6 +115,23 @@ test('repeat-assessment migration is additive and privacy-scopes email recogniti
   assert.match(sql, /leads_visitor_email_updated_idx/i);
   assert.match(sql, /revoke\s+execute\s+on\s+function\s+public\.begin_qualified_quiz\s*\([^;]+from[^;]*authenticated/is);
   assert.match(sql, /grant\s+execute\s+on\s+function\s+public\.begin_qualified_quiz_v2\s*\([^;]+to\s+authenticated/is);
+});
+
+test('verified lead migration derives identity from Auth and remains additive', () => {
+  const sql = read('supabase/migrations/202609230001_add_verified_lead_identity.sql');
+  assert.doesNotMatch(sql, /drop\s+(?:table|schema|function)\b|truncate\b|delete\s+from\b/i);
+  assert.match(sql, /add\s+column\s+auth_user_id\s+uuid/i);
+  assert.match(sql, /add\s+column\s+email_verified_at\s+timestamptz/i);
+  assert.match(sql, /leads_auth_user_id_fkey/i);
+  assert.match(sql, /leads_auth_user_updated_idx/i);
+  assert.match(sql, /function\s+public\.begin_verified_qualified_quiz\s*\(/i);
+  assert.match(sql, /from\s+auth\.users/i);
+  assert.match(sql, /email_confirmed_at/i);
+  assert.match(sql, /auth\.jwt\(\)\s*->>\s*'is_anonymous'/i);
+  assert.match(sql, /set\s+search_path\s*=\s*''/i);
+  assert.match(sql, /revoke\s+execute\s+on\s+function\s+public\.begin_verified_qualified_quiz\s*\([^;]+from\s+public,\s*anon,\s*authenticated/is);
+  assert.match(sql, /grant\s+execute\s+on\s+function\s+public\.begin_verified_qualified_quiz\s*\([^;]+to\s+authenticated/is);
+  assert.doesNotMatch(sql, /revoke\s+execute\s+on\s+function\s+public\.begin_qualified_quiz_v2/i);
 });
 
 test('migrations create exactly the Phase 1 public tables', () => {

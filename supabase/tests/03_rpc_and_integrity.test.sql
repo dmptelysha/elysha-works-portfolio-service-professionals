@@ -4,7 +4,15 @@ select no_plan();
 insert into auth.users (id, aud, role, email, created_at, updated_at)
 values
   ('11000000-0000-0000-0000-000000000001','authenticated','authenticated','rpc1@example.test',now(),now()),
-  ('11000000-0000-0000-0000-000000000002','authenticated','authenticated','rpc2@example.test',now(),now());
+  ('11000000-0000-0000-0000-000000000002','authenticated','authenticated','rpc2@example.test',now(),now()),
+  ('11000000-0000-0000-0000-000000000003','authenticated','authenticated','verified@example.test',now(),now()),
+  ('11000000-0000-0000-0000-000000000004','authenticated','authenticated','other-verified@example.test',now(),now());
+update auth.users
+set email_confirmed_at = now()
+where id in (
+  '11000000-0000-0000-0000-000000000003',
+  '11000000-0000-0000-0000-000000000004'
+);
 insert into public.quiz_definitions (id,audience_key,version,active,questions,scoring_rules)
 values ('21000000-0000-0000-0000-000000000001','rpc_audience',1,true,'[{"key":"q1"}]','{}');
 insert into public.site_visitors (id,owner_user_id,landing_path)
@@ -94,6 +102,63 @@ select set_config('request.jwt.claims', '{"sub":"11000000-0000-0000-0000-0000000
 select throws_ok(
   $$select * from public.begin_qualified_quiz('31000000-0000-0000-0000-000000000001','41000000-0000-0000-0000-000000000001','51000000-0000-0000-0000-000000000001','rpc_audience','Other','Other Business','other@example.test',true,'proposal_followup_v1')$$,
   '42501', null, 'RPC rejects another owner identifiers'
+);
+
+reset role;
+insert into public.site_visitors (id,owner_user_id,landing_path)
+values
+  ('31000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000003','/'),
+  ('31000000-0000-0000-0000-000000000004','11000000-0000-0000-0000-000000000004','/');
+insert into public.portfolio_sessions (id,visitor_id,owner_user_id,landing_path)
+values
+  ('41000000-0000-0000-0000-000000000004','31000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000003','/'),
+  ('41000000-0000-0000-0000-000000000005','31000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000003','/'),
+  ('41000000-0000-0000-0000-000000000006','31000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000003','/'),
+  ('41000000-0000-0000-0000-000000000007','31000000-0000-0000-0000-000000000004','11000000-0000-0000-0000-000000000004','/');
+insert into public.quiz_sessions (id,visitor_id,owner_user_id,portfolio_session_id,question_set_id,audience_key,question_set_version)
+values
+  ('51000000-0000-0000-0000-000000000004','31000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000003','41000000-0000-0000-0000-000000000004','21000000-0000-0000-0000-000000000001','rpc_audience',1),
+  ('51000000-0000-0000-0000-000000000005','31000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000003','41000000-0000-0000-0000-000000000005','21000000-0000-0000-0000-000000000001','rpc_audience',1),
+  ('51000000-0000-0000-0000-000000000006','31000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000003','41000000-0000-0000-0000-000000000006','21000000-0000-0000-0000-000000000001','rpc_audience',1),
+  ('51000000-0000-0000-0000-000000000007','31000000-0000-0000-0000-000000000004','11000000-0000-0000-0000-000000000004','41000000-0000-0000-0000-000000000007','21000000-0000-0000-0000-000000000001','rpc_audience',1);
+
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"11000000-0000-0000-0000-000000000003","role":"authenticated","is_anonymous":true}', true);
+select throws_ok(
+  $$select * from public.begin_verified_qualified_quiz('31000000-0000-0000-0000-000000000003','41000000-0000-0000-0000-000000000004','51000000-0000-0000-0000-000000000004','rpc_audience','Elysha','Corpuz','Elysha Works',true,'proposal_followup_v1',null)$$,
+  '42501', null, 'anonymous authenticated user cannot create a verified lead'
+);
+
+select set_config('request.jwt.claims', '{"sub":"11000000-0000-0000-0000-000000000003","role":"authenticated","is_anonymous":false}', true);
+select results_eq(
+  $$select submission_status, lead_id is not null from public.begin_verified_qualified_quiz('31000000-0000-0000-0000-000000000003','41000000-0000-0000-0000-000000000004','51000000-0000-0000-0000-000000000004','rpc_audience','Elysha','Corpuz','Elysha Works',true,'proposal_followup_v1',null)$$,
+  $$values ('accepted'::text, true)$$,
+  'verified owner creates a qualified lead'
+);
+select results_eq(
+  $$select email, auth_user_id, email_verified_at is not null, last_name from public.leads where source_quiz_session_id = '51000000-0000-0000-0000-000000000004'$$,
+  $$values ('verified@example.test'::text, '11000000-0000-0000-0000-000000000003'::uuid, true, 'Corpuz'::text)$$,
+  'verified lead identity is derived from Auth'
+);
+select results_eq(
+  $$select submission_status, lead_id is null, existing_business_name from public.begin_verified_qualified_quiz('31000000-0000-0000-0000-000000000003','41000000-0000-0000-0000-000000000005','51000000-0000-0000-0000-000000000005','rpc_audience','Elysha','Corpuz','Elysha Works',true,'proposal_followup_v1',null)$$,
+  $$values ('business_scope_required'::text, true, 'Elysha Works'::text)$$,
+  'repeat verified identity requires a business-scope decision'
+);
+select results_eq(
+  $$select submission_status, lead_id = (select lead_id from public.quiz_sessions where id = '51000000-0000-0000-0000-000000000004') from public.begin_verified_qualified_quiz('31000000-0000-0000-0000-000000000003','41000000-0000-0000-0000-000000000005','51000000-0000-0000-0000-000000000005','rpc_audience','Elysha','Corpuz','Elysha Works',true,'proposal_followup_v1','same_business')$$,
+  $$values ('accepted'::text, true)$$,
+  'same-business replay reuses the verified stable lead'
+);
+select results_eq(
+  $$select submission_status, lead_id is not null from public.begin_verified_qualified_quiz('31000000-0000-0000-0000-000000000003','41000000-0000-0000-0000-000000000006','51000000-0000-0000-0000-000000000006','rpc_audience','Elysha','Corpuz','Second Business',true,'proposal_followup_v1','another_business')$$,
+  $$values ('accepted'::text, true)$$,
+  'another-business choice creates a separate verified lead'
+);
+select set_config('request.jwt.claims', '{"sub":"11000000-0000-0000-0000-000000000004","role":"authenticated","is_anonymous":false}', true);
+select throws_ok(
+  $$select * from public.begin_verified_qualified_quiz('31000000-0000-0000-0000-000000000003','41000000-0000-0000-0000-000000000006','51000000-0000-0000-0000-000000000006','rpc_audience','Other','Person','Other Business',true,'proposal_followup_v1',null)$$,
+  '42501', null, 'verified RPC rejects another owner identifiers'
 );
 
 reset role;
