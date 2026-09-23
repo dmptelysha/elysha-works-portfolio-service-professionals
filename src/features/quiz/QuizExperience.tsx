@@ -66,12 +66,12 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupBusy, setSetupBusy] = useState(false);
+  const [deliveryEmail, setDeliveryEmail] = useState<string | null>(null);
   const createdAtRef = useRef(new Date().toISOString());
   const ownedContextRef = useRef<OwnedQuizContext | null>(null);
   const contextPromiseRef = useRef<Promise<OwnedQuizContext> | null>(null);
   const autoIssueAttemptedRef = useRef(false);
   const emailVerifiedRef = useRef(false);
-  const deliveryEmailRef = useRef<string | null>(null);
   const proposalDialogRef = useRef<HTMLElement>(null);
   const proposalDialogButtonRef = useRef<HTMLButtonElement>(null);
   const resumeDialogRef = useRef<HTMLElement>(null);
@@ -218,7 +218,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     setProposalDialog(null);
     autoIssueAttemptedRef.current = false;
     emailVerifiedRef.current = false;
-    deliveryEmailRef.current = null;
+    setDeliveryEmail(null);
     setSetupError(null);
     setSetupBusy(false);
     dispatch({ type: "START_OVER" });
@@ -233,7 +233,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     setProposalDialog(null);
     autoIssueAttemptedRef.current = false;
     emailVerifiedRef.current = false;
-    deliveryEmailRef.current = null;
+    setDeliveryEmail(null);
     setSetupError(null);
     setSetupBusy(false);
     dispatch({ type: "SELECT_AUDIENCE", audienceKey });
@@ -372,7 +372,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
 
         {hydrated && state.screen === "contact" ? (
           <LeadContactStep onSubmit={async (contact) => {
-            deliveryEmailRef.current = contact.email.trim().toLowerCase();
+            setDeliveryEmail(contact.email.trim().toLowerCase());
             const challenge = await service.requestEmailOtp(contact.email, captchaToken ?? undefined);
             dispatch({ type: "OTP_REQUESTED", contact, challenge });
           }} securityError={captchaError} securityReady={securityReady} />
@@ -592,7 +592,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
               {proposalDialog === "sending"
                 ? "Keep this page open while we confirm delivery. Your 72-hour access window starts only after the email is accepted."
                 : proposalDialog === "success"
-                ? `We sent the protected proposal and access details to ${maskDeliveryEmail(deliveryEmailRef.current)}. It will remain available for 72 hours.`
+                ? `We sent the protected proposal and access details to ${maskDeliveryEmail(deliveryEmail)}. It will remain available for 72 hours.`
                 : "Your roadmap remains available here. Retry sending the protected proposal and access details."}
             </p>
             <div className="resume-actions">

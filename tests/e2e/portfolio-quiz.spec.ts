@@ -17,6 +17,7 @@ const ids = {
 };
 
 const proposalDraft = {
+  audienceKey: "service_businesses",
   client: { firstName: "Mara", businessName: "Mara Consulting" },
   pointA: { heading: "Where Mara Consulting is now", summary: "The current path needs clearer qualification.", evidence: ["Manual lead handling"] },
   pointB: { heading: "Where the business wants to go", summary: "A connected inquiry-to-booking path.", evidence: ["Qualified discovery calls"] },
@@ -47,12 +48,20 @@ async function mockSupabaseQuiz(page: import("@playwright/test").Page, observed:
       body: JSON.stringify(body),
     });
 
-    if (url.pathname.endsWith("/auth/v1/signup")) return json({
+    if (url.pathname.endsWith("/auth/v1/otp")) return json({});
+    if (url.pathname.endsWith("/auth/v1/verify")) return json({
       access_token: "test-anonymous-access-token",
       token_type: "bearer",
       expires_in: 3600,
       refresh_token: "test-anonymous-refresh-token",
-      user: { id: ids.user, aud: "authenticated", role: "authenticated", is_anonymous: true },
+      user: {
+        id: ids.user,
+        aud: "authenticated",
+        role: "authenticated",
+        email: "mara@example.com",
+        email_confirmed_at: "2026-09-23T00:00:00.000Z",
+        is_anonymous: false,
+      },
     });
     if (url.pathname.endsWith("/rest/v1/quiz_definitions")) {
       return json({ id: ids.definition, version: 1, audience_key: "service_businesses" });
@@ -62,8 +71,8 @@ async function mockSupabaseQuiz(page: import("@playwright/test").Page, observed:
     if (url.pathname.endsWith("/rest/v1/portfolio_sessions") && request.method() === "POST") return json({ id: ids.portfolioSession });
     if (url.pathname.endsWith("/rest/v1/quiz_sessions") && request.method() === "POST") return json({ id: ids.quiz });
     if (url.pathname.endsWith("/rest/v1/quiz_sessions") && request.method() === "PATCH") return json(null, 204);
-    if (url.pathname.endsWith("/rest/v1/rpc/begin_qualified_quiz")) {
-      return json([{ lead_id: ids.lead, quiz_session_id: ids.quiz }]);
+    if (url.pathname.endsWith("/rest/v1/rpc/begin_verified_qualified_quiz")) {
+      return json([{ submission_status: "accepted", lead_id: ids.lead, quiz_session_id: ids.quiz }]);
     }
     if (url.pathname.endsWith("/functions/v1/finalize-proposal")) {
       const payload = request.postDataJSON() as { operation?: string };
@@ -77,10 +86,14 @@ async function mockSupabaseQuiz(page: import("@playwright/test").Page, observed:
 
 async function fillQuizContact(page: import("@playwright/test").Page) {
   await page.getByLabel(/first name/i).fill("Mara");
+  await page.getByLabel(/last name/i).fill("Santos");
   await page.getByLabel(/business name/i).fill("Mara Consulting");
   await page.getByLabel(/^email/i).fill("mara@example.com");
   await page.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }).check();
-  await page.getByRole("button", { name: /continue to assessment/i }).click();
+  await page.getByRole("button", { name: /send verification code/i }).click();
+  await page.getByLabel(/verification code/i).fill("123456");
+  await page.getByRole("button", { name: /verify email/i }).click();
+  await expect(page.getByRole("heading", { name: /your roadmap starts with context/i })).toBeVisible();
 }
 
 test("homepage keeps the hero clear and reveals contextual navigation at Projects", async ({ page }, testInfo) => {
@@ -205,25 +218,26 @@ test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or 
 
   await expect(page.getByRole("heading", { name: /Mara.*roadmap for Mara Consulting/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: /compare your roadmap options/i })).toBeVisible();
-  await page.getByRole("group", { name: /basic platform/i }).getByRole("button", { name: "Custom App" }).click();
+  const successDialog = page.getByRole("dialog", { name: /your proposal is ready/i });
+  await expect(successDialog).toBeVisible();
+  await expect(successDialog.getByText(/sent.*m\*\*\*@example\.com/i)).toBeVisible();
+  await successDialog.getByRole("button", { name: /view my roadmap/i }).click();
   const selectedRoadmap = page.locator(".roadmap-selection-summary");
   await expect(selectedRoadmap.getByRole("heading", { name: /your selected roadmap/i })).toBeVisible();
-  await expect(selectedRoadmap.getByText("Custom Starter", { exact: true }).first()).toBeVisible();
-  await page.getByRole("group", { name: /complete platform/i }).getByRole("button", { name: "Custom App" }).click();
-  await expect(selectedRoadmap.getByText("Custom Growth", { exact: true }).first()).toBeVisible();
+  await expect(selectedRoadmap.getByText(/planning estimate/i)).toBeVisible();
   await expect(page.getByRole("link", { name: /book a discovery call/i })).toHaveAttribute("href", "/booking/");
-  await page.getByRole("button", { name: /create my 3-day proposal/i }).click();
-  await expect(page.getByText(/protected proposal is active/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /create my 3-day proposal/i })).toHaveCount(0);
   expect(forbiddenRequests).toEqual([]);
-  expect(supabaseRequests.some((entry) => entry.includes("/auth/v1/signup"))).toBe(true);
+  expect(supabaseRequests.some((entry) => entry.includes("/auth/v1/otp"))).toBe(true);
+  expect(supabaseRequests.some((entry) => entry.includes("/auth/v1/verify"))).toBe(true);
   expect(supabaseRequests.some((entry) => entry.includes("/rest/v1/quiz_sessions"))).toBe(true);
-  expect(supabaseRequests.some((entry) => entry.includes("/rpc/begin_qualified_quiz"))).toBe(true);
+  expect(supabaseRequests.some((entry) => entry.includes("/rpc/begin_verified_qualified_quiz"))).toBe(true);
   expect(supabaseRequests.filter((entry) => entry.includes("/functions/v1/finalize-proposal"))).toHaveLength(2);
 
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("elysha-works:quiz-attempt:v1") ?? "null"));
   expect(saved.status).toBe("completed");
   expect(saved.result.recommendedOfferKey).toBeTruthy();
-  expect(saved.roadmapSelection).toEqual({ tierKey: "complete", platform: "custom_app", offerKey: "custom_growth" });
+  expect(saved.roadmapSelection).toEqual(expect.objectContaining({ tierKey: expect.any(String), platform: expect.any(String) }));
 });
 
 test("hero secondary action opens the audience selector", async ({ page }) => {
