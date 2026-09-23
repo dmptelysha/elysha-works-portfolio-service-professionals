@@ -16,6 +16,7 @@ import {
   QUESTION_SET_VERSION,
   type SavedQuizAttempt,
 } from "@/features/quiz/types";
+import { quizV2Answers } from "./quiz-v2-fixtures";
 
 class MemoryStorage implements Storage {
   private values = new Map<string, string>();
@@ -35,38 +36,30 @@ class ThrowingStorage extends MemoryStorage {
 
 const NOW = Date.UTC(2026, 8, 22, 0, 0, 0);
 const attempt = (overrides: Partial<SavedQuizAttempt> = {}): SavedQuizAttempt => ({
-  storageVersion: 3,
+  storageVersion: 4,
   cortexVersion: CORTEX_VERSION,
   questionSetVersion: QUESTION_SET_VERSION,
   catalogVersion: CATALOG_VERSION,
   status: "in_progress",
   audienceKey: "coaches_educators",
-  answers: { q1_goal: ["coach_goal_enroll_students"] },
+  answers: { q1_business_model: ["coach_model_course"] },
   currentQuestionIndex: 1,
   result: null,
   roadmapSelection: null,
+  location: null,
   createdAt: new Date(NOW - 60_000).toISOString(),
   updatedAt: new Date(NOW).toISOString(),
   expiresAt: new Date(NOW + QUIZ_TTL_MS).toISOString(),
   ...overrides,
 });
 
-const completeAnswers = {
-  q1_goal: ["coach_goal_enroll_students"],
-  q2_setup: ["coach_setup_unclear_website"],
-  q3_blocker: ["coach_blocker_questions_no_booking"],
-  q4_capabilities: ["coach_capability_booking"],
-  q5_complexity: ["coach_complexity_one_offer"],
-  q6_readiness: ["readiness_ready_now"],
-  q7_platform: ["platform_recommend"],
-  q8_support: ["support_client_assets"],
-} as const;
+const completeAnswers = quizV2Answers("coaches_educators");
 
 const completedAttempt = (overrides: Partial<SavedQuizAttempt> = {}): SavedQuizAttempt => {
   const result = calculateRecommendation({ audienceKey: "coaches_educators", answers: completeAnswers });
   return attempt({
     status: "completed",
-    currentQuestionIndex: 7,
+    currentQuestionIndex: 10,
     answers: completeAnswers,
     result,
     roadmapSelection: defaultRoadmapSelection(result),
@@ -112,9 +105,9 @@ describe("quiz local persistence", () => {
     const cases: Array<[string, string, string]> = [
       ["expired", JSON.stringify(attempt({ expiresAt: new Date(NOW - 1).toISOString() })), "expired"],
       ["corrupt", "{not-json", "corrupt_json"],
-      ["missing", JSON.stringify({ storageVersion: 3 }), "invalid_shape"],
+      ["missing", JSON.stringify({ storageVersion: 4 }), "invalid_shape"],
       ["audience", JSON.stringify({ ...attempt(), audienceKey: "unknown" }), "invalid_shape"],
-      ["storage version", JSON.stringify({ ...attempt(), storageVersion: 4 }), "version_mismatch"],
+      ["storage version", JSON.stringify({ ...attempt(), storageVersion: 5 }), "version_mismatch"],
       ["cortex version", JSON.stringify({ ...attempt(), cortexVersion: "future" }), "version_mismatch"],
       ["question version", JSON.stringify({ ...attempt(), questionSetVersion: "future" }), "version_mismatch"],
       ["catalog version", JSON.stringify({ ...attempt(), catalogVersion: "future" }), "version_mismatch"],
@@ -148,7 +141,7 @@ describe("quiz local persistence", () => {
   it("rejects unknown questions, invalid options, and malformed completed snapshots", () => {
     for (const value of [
       { ...attempt(), answers: { unexpected_question: ["anything"] } },
-      { ...attempt(), answers: { q1_goal: ["not_an_approved_option"] } },
+      { ...attempt(), answers: { q1_business_model: ["not_an_approved_option"] } },
       { ...attempt(), status: "completed", result: {} },
     ]) {
       const storage = new MemoryStorage();

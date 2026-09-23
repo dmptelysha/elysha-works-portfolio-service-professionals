@@ -1,8 +1,8 @@
 import { QUIZ_DEFINITIONS } from "./questions.ts";
 import type { AudienceKey, PointABSummary, QuizAnswers } from "./types.ts";
 
-const POINT_A_KEYS = ["q2_setup", "q3_blocker"] as const;
-const POINT_B_KEYS = ["q1_goal", "q4_capabilities"] as const;
+const POINT_A_KEYS = ["q3_current_journey", "q4_bottlenecks", "q5_demand_health"] as const;
+const POINT_B_KEYS = ["q2_goal", "q6_customer_requirements"] as const;
 
 function resolveEvidence(
   audienceKey: AudienceKey,
@@ -33,19 +33,19 @@ export function buildPointABSummary(
   if (!normalizedBusinessName) throw new Error("Business name is required");
   const pointAEvidence = resolveEvidence(audienceKey, answers, POINT_A_KEYS);
   const pointBEvidence = resolveEvidence(audienceKey, answers, POINT_B_KEYS);
-  if (pointAEvidence.length !== 2 || pointBEvidence.length < 2) {
+  if (pointAEvidence.length < 3 || pointBEvidence.length < 2) {
     throw new Error("Point A and Point B require complete approved answers");
   }
 
   return Object.freeze({
     pointA: Object.freeze({
       heading: `Where ${normalizedBusinessName} is now`,
-      summary: `${normalizedBusinessName} is working from a current setup with a clear operational or conversion blocker.`,
+      summary: `${normalizedBusinessName} currently relies on ${pointAEvidence[0].replace(/\.$/, "").toLowerCase()}. The assessment identified ${pointAEvidence[1].replace(/\.$/, "").toLowerCase()} as the first constraint to address.`,
       evidence: Object.freeze(pointAEvidence),
     }),
     pointB: Object.freeze({
       heading: "Where the business wants to go",
-      summary: "The target is a clearer customer journey supported by the capabilities selected in the assessment.",
+      summary: `The target is to ${pointBEvidence[0].replace(/\.$/, "").toLowerCase()}, supported by a customer journey that can ${pointBEvidence.slice(1, 3).map((item) => item.replace(/\.$/, "").toLowerCase()).join(" and ")}.`,
       evidence: Object.freeze(pointBEvidence),
     }),
   });

@@ -5,13 +5,14 @@ import {
   CORTEX_VERSION,
   QUESTION_SET_VERSION,
   type AudienceKey,
+  type BusinessLocation,
   type CortexResult,
   type RoadmapSelection,
   type SavedQuizAttempt,
 } from "./types";
 
 export const QUIZ_STORAGE_KEY = "elysha-works:quiz-attempt:v1";
-export const QUIZ_STORAGE_VERSION = 3 as const;
+export const QUIZ_STORAGE_VERSION = 4 as const;
 export const QUIZ_TTL_MS = 72 * 60 * 60 * 1000;
 
 export type LoadQuizAttemptResult =
@@ -62,9 +63,18 @@ function isRoadmapSelection(value: unknown): value is RoadmapSelection {
   return isRecord(value) && isOneOf(value.tierKey, TIERS) && isOneOf(value.platform, PLATFORMS) && isString(value.offerKey);
 }
 
+function isBusinessLocation(value: unknown): value is BusinessLocation {
+  return isRecord(value) && isString(value.businessCountry) && value.businessCountry.length > 0 &&
+    isString(value.countryCode) && /^[A-Z]{2}$/u.test(value.countryCode) &&
+    isString(value.displayCurrency) && /^[A-Z]{3}$/u.test(value.displayCurrency) &&
+    isString(value.currencySymbol) && value.currencySymbol.length > 0 &&
+    (value.fxRate === null || (isFiniteNumber(value.fxRate) && value.fxRate > 0)) &&
+    (value.fxRateTimestamp === null || (isString(value.fxRateTimestamp) && Number.isFinite(Date.parse(value.fxRateTimestamp))));
+}
+
 function normalizeStoredRecord(value: Record<string, unknown>, now: number) {
   const normalized: Record<string, unknown> = { ...value };
-  if (value.storageVersion === 2) {
+  if (value.storageVersion === 2 || value.storageVersion === 3) {
     normalized.storageVersion = QUIZ_STORAGE_VERSION;
     const existingExpiry = isString(value.expiresAt) ? Date.parse(value.expiresAt) : Number.NaN;
     if (Number.isFinite(existingExpiry)) {
@@ -72,6 +82,7 @@ function normalizeStoredRecord(value: Record<string, unknown>, now: number) {
     }
   }
   normalized.roadmapSelection = isRoadmapSelection(value.roadmapSelection) ? value.roadmapSelection : null;
+  normalized.location = isBusinessLocation(value.location) ? value.location : null;
   return normalized;
 }
 
@@ -183,6 +194,7 @@ function isSavedAttempt(value: unknown): value is SavedQuizAttempt {
     Number(value.currentQuestionIndex) >= 0 &&
     Number(value.currentQuestionIndex) <= (definition ? definition.questions.length - 1 : 0) &&
     resultValid &&
+    (value.location === null || isBusinessLocation(value.location)) &&
     (value.roadmapSelection === null || isRoadmapSelection(value.roadmapSelection)) &&
     typeof value.createdAt === "string" &&
     Number.isFinite(Date.parse(value.createdAt)) &&
@@ -225,14 +237,14 @@ export function loadQuizAttempt(
     removeInvalidAttempt();
     return { status: "discarded", reason: "invalid_shape" };
   }
-  if (![2, QUIZ_STORAGE_VERSION].includes(Number(parsed.storageVersion)) ||
+  if (![2, 3, QUIZ_STORAGE_VERSION].includes(Number(parsed.storageVersion)) ||
       parsed.cortexVersion !== CORTEX_VERSION ||
       parsed.questionSetVersion !== QUESTION_SET_VERSION ||
       parsed.catalogVersion !== CATALOG_VERSION) {
     removeInvalidAttempt();
     return { status: "discarded", reason: "version_mismatch" };
   }
-  if (parsed.storageVersion === 2 && parsed.status !== "completed") {
+  if ([2, 3].includes(Number(parsed.storageVersion)) && parsed.status !== "completed") {
     removeInvalidAttempt();
     return { status: "discarded", reason: "invalid_shape" };
   }
@@ -276,6 +288,7 @@ export function saveQuizAttempt(
       currentQuestionIndex: attempt.currentQuestionIndex,
       result: attempt.result,
       roadmapSelection: attempt.roadmapSelection,
+      location: attempt.location,
       createdAt: attempt.createdAt,
       updatedAt: attempt.updatedAt,
       expiresAt: attempt.expiresAt,

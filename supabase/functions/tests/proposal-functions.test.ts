@@ -209,6 +209,7 @@ function ownedProposalInput(): OwnedProposalInput {
     proposalReference: null,
     proposalExpiresAt: null,
     selectedRoadmapSnapshot: null,
+    location: null,
   };
 }
 

@@ -7,7 +7,9 @@ import { Turnstile } from "@marsidev/react-turnstile";
 import { SITE_CONTENT } from "@/data/site-content";
 
 import { AudienceSelector } from "./AudienceSelector";
+import { BusinessLocationStep } from "./BusinessLocationStep";
 import { calculateRecommendation } from "./cortex";
+import { fallbackLocation, type CountryOption } from "./countries";
 import { LeadContactStep } from "./LeadContactStep";
 import {
   QUIZ_STORAGE_VERSION,
@@ -71,6 +73,8 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupBusy, setSetupBusy] = useState(false);
   const [deliveryEmail, setDeliveryEmail] = useState<string | null>(null);
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const createdAtRef = useRef(new Date().toISOString());
   const ownedContextRef = useRef<OwnedQuizContext | null>(null);
   const contextPromiseRef = useRef<Promise<OwnedQuizContext> | null>(null);
@@ -161,6 +165,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
       currentQuestionIndex: state.currentQuestionIndex,
       result: state.result,
       roadmapSelection: state.roadmapSelection,
+      location: state.location,
       createdAt: createdAtRef.current,
       updatedAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + QUIZ_TTL_MS).toISOString(),
@@ -183,12 +188,13 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
         answers: state.answers,
         currentStep: state.currentQuestionIndex + 1,
         lastCompletedStep: answered ? state.currentQuestionIndex + 1 : state.currentQuestionIndex,
+        location: state.location,
       }).then(() => setSyncMessage(null)).catch(() => {
         setSyncMessage("Cloud save is delayed. Your 3-day device copy is still available.");
       });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [hydrated, service, state.answers, state.audienceKey, state.currentQuestionIndex, state.screen]);
+  }, [hydrated, service, state.answers, state.audienceKey, state.currentQuestionIndex, state.location, state.screen]);
 
   useEffect(() => {
     if (state.screen !== "calculating" || !state.audienceKey) return;
@@ -197,7 +203,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
       try {
         const context = await ensureOwnedContext(state.audienceKey!);
         const [result, proposal] = await Promise.all([
-          Promise.resolve(calculateRecommendation({ audienceKey: state.audienceKey!, answers: state.answers })),
+          Promise.resolve(calculateRecommendation({ audienceKey: state.audienceKey!, answers: state.answers, location: state.location ?? undefined })),
           service.previewProposal(context),
         ]);
         if (!cancelled) dispatch({ type: "CALCULATION_SUCCESS", result, proposal });
@@ -209,7 +215,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
       }
     })();
     return () => { cancelled = true; };
-  }, [ensureOwnedContext, service, state.answers, state.audienceKey, state.screen]);
+  }, [ensureOwnedContext, service, state.answers, state.audienceKey, state.location, state.screen]);
 
   const startOver = () => {
     const storage = getBrowserStorage();
@@ -227,6 +233,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     setSetupBusy(false);
     setSecurityAction("anonymous_quiz_start");
     setContextReady(false);
+    setLocationError(null);
     dispatch({ type: "START_OVER" });
   };
 
@@ -295,12 +302,30 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     setDeliveryEmail(null);
     setSetupError(null);
     setContextReady(false);
+    setLocationError(null);
     dispatch({ type: "SELECT_AUDIENCE", audienceKey });
     if (captchaReady) void bootstrapOwnedContext(audienceKey, captchaToken ?? undefined);
   };
 
   const definition = state.audienceKey ? QUIZ_DEFINITIONS[state.audienceKey] : null;
   const question = definition?.questions[state.currentQuestionIndex];
+  const selectLocation = async (country: CountryOption) => {
+    setLocationBusy(true);
+    setLocationError(null);
+    try {
+      const location = await service.getCurrencyQuote(country);
+      if (state.audienceKey) {
+        const context = await ensureOwnedContext(state.audienceKey);
+        await service.saveOwnedQuizProgress(context, { answers: state.answers, currentStep: 0, lastCompletedStep: 0, location });
+      }
+      dispatch({ type: "SELECT_LOCATION", location });
+    } catch {
+      dispatch({ type: "SELECT_LOCATION", location: fallbackLocation(country) });
+      setLocationError("Live conversion was unavailable, so your roadmap will use the approved USD source prices.");
+    } finally {
+      setLocationBusy(false);
+    }
+  };
   const finishVerifiedSetup = async (
     businessScope?: "same_business" | "another_business",
     submittedContact?: LeadContactInput,
@@ -352,6 +377,7 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
         answers: state.answers,
         currentStep: state.currentQuestionIndex + 1,
         lastCompletedStep: state.currentQuestionIndex + 1,
+        location: state.location,
       });
       setSyncMessage(null);
       dispatch({ type: "NEXT" });
@@ -491,12 +517,16 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
           </section>
         ) : null}
 
+        {hydrated && state.screen === "location" ? (
+          <BusinessLocationStep busy={locationBusy} error={locationError} onContinue={selectLocation} />
+        ) : null}
+
         {hydrated && state.screen === "intro" && definition ? (
           <section className="quiz-stage quiz-intro" aria-labelledby="quiz-intro-title">
             <p className="quiz-kicker">{definition.label}</p>
             <h1 id="quiz-intro-title">Your roadmap starts with context.</h1>
             <p className="quiz-lede">
-              Eight focused questions will help identify the clearest system, platform route, and planning investment for your business.
+              Eleven focused questions will identify the clearest system, platform route, and planning investment for your business.
             </p>
             <div className="quiz-intro-notes">
               <span>About 2 minutes</span>

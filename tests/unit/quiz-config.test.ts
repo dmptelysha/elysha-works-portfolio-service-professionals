@@ -14,7 +14,7 @@ describe("local quiz configuration", () => {
   const allQuestions = definitions.flatMap((definition) => definition.questions);
   const allOptions = allQuestions.flatMap((question) => question.options);
 
-  it("contains the three approved eight-question audience paths", () => {
+  it("contains the three approved eleven-question diagnostic paths", () => {
     expect(Object.keys(QUIZ_DEFINITIONS)).toEqual([
       "coaches_educators",
       "service_businesses",
@@ -22,31 +22,42 @@ describe("local quiz configuration", () => {
     ]);
 
     for (const definition of definitions) {
-      expect(definition.questions).toHaveLength(8);
-      expect(definition.version).toBe("cortex-local-v0.1");
+      expect(definition.questions).toHaveLength(11);
+      expect(definition.version).toBe("business-systems-cortex-2026.09-v2");
       expect(definition.questions.map((question) => question.key)).toEqual([
-        "q1_goal",
-        "q2_setup",
-        "q3_blocker",
-        "q4_capabilities",
-        "q5_complexity",
-        "q6_readiness",
-        "q7_platform",
-        "q8_support",
+        "q1_business_model",
+        "q2_goal",
+        "q3_current_journey",
+        "q4_bottlenecks",
+        "q5_demand_health",
+        "q6_customer_requirements",
+        "q7_post_conversion",
+        "q8_scope",
+        "q9_timeline",
+        "q10_platform",
+        "q11_addons",
       ]);
-      expect(definition.questions[3].selection).toBe("multiple");
+      expect(definition.questions[3]).toMatchObject({ selection: "multiple", maxSelections: 2 });
+      expect(definition.questions[5].selection).toBe("multiple");
+      expect(definition.questions[6].selection).toBe("multiple");
       expect(definition.questions[7].selection).toBe("multiple");
-      expect(definition.questions[5].scope).toBe("universal");
-      expect(definition.questions[6].scope).toBe("universal");
-      expect(definition.questions[7].scope).toBe("universal");
+      expect(definition.questions[10].selection).toBe("multiple");
+      expect(definition.questions[4].scope).toBe("universal");
+      expect(definition.questions[8].scope).toBe("universal");
+      expect(definition.questions[9].scope).toBe("universal");
+      expect(definition.questions[10].scope).toBe("audience");
     }
   });
 
-  it("uses all 95 unique reviewed option keys and only approved signals", () => {
+  it("uses unique reviewed option keys and only approved signals", () => {
     const optionKeys = new Set(allOptions.map((option) => option.key));
     const approvedTags = new Set(APPROVED_SIGNAL_TAGS);
 
-    expect(optionKeys.size).toBe(95);
+    expect(optionKeys.size).toBeGreaterThan(200);
+    for (const definition of definitions) {
+      const audienceOptionKeys = definition.questions.flatMap((question) => question.options.map((item) => item.key));
+      expect(new Set(audienceOptionKeys).size).toBe(audienceOptionKeys.length);
+    }
     for (const option of allOptions) {
       expect(option.key).toMatch(/^[a-z0-9_]+$/);
       for (const signal of option.signals) {
@@ -68,6 +79,15 @@ describe("local quiz configuration", () => {
     ]);
     expect(ADDON_CATALOG).toHaveLength(21);
     expect(new Set(ADDON_CATALOG.map((addon) => addon.addonKey)).size).toBe(21);
+    expect(PACKAGE_CATALOG.map((offer) => [offer.offerKey, offer.pageOrScreenLimit, offer.automationLimit, offer.paymentSetupLimit])).toEqual([
+      ["platform_launch", 5, 3, 1],
+      ["platform_growth", 8, 7, 2],
+      ["platform_scale", 12, 12, 3],
+      ["custom_starter", 6, 3, 1],
+      ["custom_foundation", 10, 7, 2],
+      ["custom_growth", 15, 12, 3],
+      ["custom_complete", null, null, null],
+    ]);
   });
 
   it("maps three public tiers to the seven approved catalog records", () => {

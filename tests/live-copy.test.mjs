@@ -235,8 +235,8 @@ test("the Make OTP runbook preserves encrypted, authenticated, idempotent delive
   assert.match(guide, /sequential processing/is);
   assert.match(guide, /confidential.*data/is);
   assert.match(guide, /incomplete executions.*disabled/is);
-  assert.match(guide, /delivery_id.*created_at.*status/is);
-  assert.match(guide, /Data Store schema contains only `delivery_id`, `created_at`, and `status`/i);
+  assert.match(guide, /deliveryId.*created_at.*status/is);
+  assert.match(guide, /Data Store record key is `deliveryId`; its record fields contain only `created_at` and `status`/i);
   assert.match(guide, /pending.*never resent automatically/is);
   assert.match(guide, /generic failure.*without request data/is);
   assert.match(guide, /MAKE_OTP_ENCRYPTION_KEY.*MAKE_OTP_KEY_VERSION.*versioned transport key/is);

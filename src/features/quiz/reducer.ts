@@ -2,6 +2,7 @@ import { QUIZ_DEFINITIONS } from "./questions";
 import { defaultRoadmapSelection, resolveRoadmapSelection } from "./roadmap-options";
 import type {
   AudienceKey,
+  BusinessLocation,
   ClientIdentity,
   CortexResult,
   CustomEmailOtpChallenge,
@@ -19,6 +20,7 @@ export type QuizScreen =
   | "contact"
   | "verify_email"
   | "business_scope"
+  | "location"
   | "intro"
   | "question"
   | "calculating"
@@ -32,6 +34,7 @@ export interface QuizState {
   currentQuestionIndex: number;
   result: CortexResult | null;
   roadmapSelection: RoadmapSelection | null;
+  location: BusinessLocation | null;
   contact: LeadIdentityInput | null;
   otpChallenge: CustomEmailOtpChallenge | null;
   emailVerified: boolean;
@@ -55,6 +58,7 @@ export type QuizAction =
   | { type: "CHANGE_EMAIL" }
   | { type: "BUSINESS_SCOPE_REQUIRED"; existingBusinessName: string; contact: LeadContactInput }
   | { type: "CONTACT_ACCEPTED"; contact: LeadContactInput }
+  | { type: "SELECT_LOCATION"; location: BusinessLocation }
   | { type: "CONTINUE_INTRO" }
   | { type: "ANSWER_SINGLE"; questionKey: string; optionKey: string }
   | { type: "TOGGLE_MULTIPLE"; questionKey: string; optionKey: string }
@@ -74,6 +78,7 @@ export function createInitialQuizState(): QuizState {
     currentQuestionIndex: 0,
     result: null,
     roadmapSelection: null,
+    location: null,
     contact: null,
     otpChallenge: null,
     emailVerified: false,
@@ -103,6 +108,7 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         currentQuestionIndex: attempt.currentQuestionIndex,
         result: attempt.result,
         roadmapSelection: attempt.roadmapSelection,
+        location: attempt.location,
         contact: null,
         otpChallenge: null,
         emailVerified: false,
@@ -181,15 +187,18 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
       if (!firstName || !lastName || !businessName || !email || !action.contact.consent) return state;
       return {
         ...state,
-        screen: "intro",
+        screen: "location",
         contact: null,
         otpChallenge: null,
         clientIdentity: { firstName, businessName },
         existingBusinessName: null,
       };
     }
+    case "SELECT_LOCATION":
+      if (state.screen !== "location") return state;
+      return { ...state, screen: "intro", location: action.location };
     case "CONTINUE_INTRO":
-      if (!state.audienceKey || !state.clientIdentity) return state;
+      if (!state.audienceKey || !state.clientIdentity || !state.location) return state;
       return { ...state, screen: "question" };
     case "ANSWER_SINGLE":
       return {
@@ -199,6 +208,13 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
       };
     case "TOGGLE_MULTIPLE": {
       const existing = state.answers[action.questionKey] ?? [];
+      const question = state.audienceKey
+        ? QUIZ_DEFINITIONS[state.audienceKey].questions.find((item) => item.key === action.questionKey)
+        : undefined;
+      const adding = !existing.includes(action.optionKey);
+      if (adding && question?.maxSelections && existing.length >= question.maxSelections) {
+        return { ...state, validationMessage: `Choose up to ${question.maxSelections} options.` };
+      }
       const selected = existing.includes(action.optionKey)
         ? existing.filter((key) => key !== action.optionKey)
         : [...existing, action.optionKey];

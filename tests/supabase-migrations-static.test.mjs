@@ -20,6 +20,7 @@ const expectedMigrations = [
   '202609220004_add_repeat_assessment_business_scope.sql',
   '202609230001_add_verified_lead_identity.sql',
   '202609230002_add_custom_email_otp.sql',
+  '202609230003_add_assessment_location_and_roadmap_metadata.sql',
 ];
 
 const phaseOneTables = [

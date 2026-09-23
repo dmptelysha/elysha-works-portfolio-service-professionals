@@ -189,18 +189,29 @@ Same-device recognition is not guaranteed after browser data is cleared, in priv
 
 ### 3.5 Result and Protected Proposal Interface
 
-The immediate result and protected proposal use this client-facing order:
+The immediate result and protected proposal use this client-facing 21-section order:
 
-1. **Client and business** — the submitted first name and business name.
-2. **Point A — Where the business is now** — approved answer labels and a concise summary of the current setup and blockers.
-3. **Point B — What the business wants to achieve** — the primary goal and required capabilities.
-4. **Recommended path from Point A to Point B** — solution, platform, tier, and answer-based reason.
-5. **Recommended package** — stable offer key, approved price, inclusions, relevant add-ons, scope-review items, and recurring-cost disclosures.
-6. **Basic vs Advanced vs Complete** — three comparison cards with feasible platforms, starting investment, outcome, and the concrete advantage of moving up a level.
-7. **How Complete can exceed the requirement** — only relevant, supportable advantages; Basic remains a viable solution.
-8. **Relevant work** — audience-matched projects.
-9. **Discovery call** — an optional CTA to confirm scope and discuss the recommendation.
-10. **Expiration** — the exact proposal expiry timestamp.
+1. Business snapshot and client identity.
+2. Point A and Point B in one responsive row.
+3. Recommended path.
+4. Core business problem.
+5. Missing system or operational gap.
+6. Recommended customer journey.
+7. Recommended platform with reasons and alternatives.
+8. Recommended package with capacity-based reasons.
+9. Proposed pages or application screens.
+10. Proposed automations.
+11. Payment options and included setup count.
+12. Domain and professional-email responsibility.
+13. USD source investment plus indicative local equivalent when available.
+14. Included package scope.
+15. Optional enhancements and the relevant Complete advantage.
+16. Ongoing third-party costs paid directly by the client.
+17. Client requirements and assets.
+18. Responsibilities and ownership table.
+19. Elysha Works project payment schedule: 50% deposit and 50% before launch/handover.
+20. Clear path from Point A to Point B.
+21. Audience-matched related work, followed by the discovery-call CTA and proposal disclaimer.
 
 Pricing note:
 
@@ -270,7 +281,72 @@ Include a restrained **Book a strategy call** link to the existing `/booking/` f
 
 ## 4. Audience-Specific Quiz Flow
 
-All paths measure the same six dimensions so the Cortex remains consistent:
+### 4.0 Canonical Business Systems Assessment V2 — approved September 23, 2026
+
+This section is the implementation source for the live quiz and supersedes the historical eight-question copy retained below for migration context. The runtime source of truth is `supabase/functions/_shared/quiz-engine/questions.ts`; all three audiences use **11 questions** in the same decision architecture:
+
+| Question | Decision purpose | Package effect |
+|---|---|---|
+| Q1 Business model | Identifies how the business currently sells or delivers | Technical scope |
+| Q2 Desired outcome / Point B | Defines the outcome the client wants | Technical scope |
+| Q3 Current journey / Point A | Maps the current customer path | Technical scope |
+| Q4 Primary bottlenecks | Select up to two breakdowns | Technical scope |
+| Q5 Demand health | Diagnoses whether awareness or conversion is the immediate issue | Copy only; never lowers or inflates package |
+| Q6 Customer requirements | Defines what customers must be able to do | Technical scope |
+| Q7 Post-conversion requirements | Defines what happens after booking, enrollment, or order | Technical scope |
+| Q8 Operational scope | Identifies breadth, roles, integrations, and hard requirements | Technical scope and platform guardrails |
+| Q9 Timeline | Records readiness | Lead readiness only; no price inflation |
+| Q10 Platform preference | Records Systeme.io, HighLevel, Custom App, other, or unsure | Soft preference only |
+| Q11 Audience add-ons | Captures optional implementation help | Included, priced from catalog, or scope review |
+
+#### Coaches and educators
+
+- **Q1 models:** one-to-one coaching/consulting, group or cohort, online course, membership/community, workshop/live training, or a combination.
+- **Q2 Point B:** qualified calls, student enrollment, offer sales, better delivery, retention, or a scalable education system.
+- **Q3 Point A:** social/DM, unclear website, weak funnel, manual booking/checkout, disconnected platforms, or an existing structured system that needs improvement.
+- **Q4 bottlenecks (maximum two):** lead volume, conversion, follow-up, payment/enrollment friction, onboarding, access, retention, or disconnected tools.
+- **Q6 customer requirements:** learn, apply, book, pay/enroll, choose a payment plan, receive follow-up, onboard, access course/resources/community, or use a portal.
+- **Q7 after conversion:** confirmation, payment-plan setup, welcome, intake, scheduling, course/resources/community access, progress, assignments, certificates, or renewal.
+- **Q8 scope:** multiple offers, access levels, subscriptions, cohorts, instructors, progress, community, assessments, behavior-based follow-up, migration, or integrations.
+- **Q11 add-ons:** copy, application, webinar funnel, advanced booking, payment plan, course/migration, membership, cohort, onboarding/reactivation, assessments, resources, Zoom/calendar, data migration, or none.
+
+#### Service-based businesses
+
+- **Q1 models:** appointment, consultation, project, retainer, field service, or multiple services/staff/locations.
+- **Q2 Point B:** inquiries, bookings, fewer no-shows, organized delivery, repeat business/reactivation, or a scalable client system.
+- **Q3 Point A:** social/phone/DM, website plus manual communication, booking plus manual follow-up, form plus manual steps, disconnected tools, or an existing structured system.
+- **Q4 bottlenecks (maximum two):** offer clarity, booking conversion, qualification, admin, payment, scattered client data, status visibility, or retention.
+- **Q6 customer requirements:** learn, inquire, qualify, book, pay, receive reminders, complete intake, track next steps, access resources, or use a portal.
+- **Q7 after conversion:** intake, payment, estimate/proposal, contract, reminders, documents, staff assignment, status, follow-up, review request, rebooking, recurring reminders, or portal access.
+- **Q8 scope:** multiple services, team members, locations, lead assignment, appointment types, resources, documents/contracts, payments, pipelines, access levels, recurring clients, integrations, or compliance.
+- **Q11 add-ons:** copy, booking, staff/resource scheduling, estimate, contract, payment, intake, reminders, rebooking, reviews, reactivation, migration, portal, reporting, or none.
+
+#### Custom-order businesses
+
+- **Q1 models:** personalized, made-to-order, quote-based, event packages, wholesale/B2B, or several order types.
+- **Q2 Point B:** inquiries, easier customization, fewer errors, organized quote-to-delivery operations, more completed orders, or scalable order management.
+- **Q3 Point A:** manual messages, form plus messages, online order plus manual customization, store plus split operations, disconnected tools, or an existing structured system.
+- **Q4 bottlenecks (maximum two):** option confusion, incomplete requirements, slow quotes, payment confirmation, scattered details, approvals, production visibility, customer updates, or inventory.
+- **Q6 customer requirements:** browse, customize, upload, request quote/order, pay deposit/full amount, approve, receive updates, track, or reorder.
+- **Q7 after conversion:** details/uploads, quote, deposit, proof, approval, revisions, production, inventory, balance, pickup/delivery, updates, tracking, or reorder history.
+- **Q8 scope:** options/add-ons, dynamic pricing, deposits/balances, proofs, revisions, production stages, inventory, employees, permissions, delivery calculations, branches, wholesale, reports, integrations, or portal.
+- **Q11 add-ons:** copy/images/catalog, product options, conditional pricing, quote, payments, uploads, approvals/revisions, production board, portal, delivery, delivery-fee calculation, history, inventory, roles, integrations, migration, or none.
+
+#### Universal Q5, Q9, and Q10 choices
+
+- **Demand health:** steady demand with drop-off, inconsistent inquiries, referral/social-led, traffic with low action, or early awareness.
+- **Timeline:** ready now, within 30 days, within one to two months, or researching.
+- **Platform preference:** recommend the best option, Systeme.io, HighLevel, Custom App, another existing platform, or unsure.
+
+The Cortex uses Q1–Q4 and Q6–Q8 for technical scope. Q5 and Q9 are diagnostic only. Q10 is a soft preference. Q11 is resolved against package inclusions before any add-on price is applied. Inventory, dynamic pricing/delivery calculations, specialized permissions, or a connected proof/revision/approval/production workflow force the Custom App route and disable unsupported platform variants with an explanation.
+
+The assessment begins with verified identity, then a searchable business-country selector. USD is the source currency. A server-side quote may display an indicative local equivalent with currency and timestamp metadata; if the quote is unavailable, the interface safely displays USD without blocking the assessment.
+
+#### Historical V1 question copy — superseded
+
+The remaining Q1–Q8 text in this section documents the previous release only. It is not the implementation source for new sessions and must not be used to calculate V2 proposals.
+
+Historical V1 measured the following six dimensions:
 
 1. Primary goal.
 2. Current setup.
@@ -479,6 +555,16 @@ Systeme.io and HighLevel retain the same one-time build price when the tier and 
 #### Tier inclusion boundaries
 
 Every tier must deliver a functional core outcome. Higher tiers add breadth, automation, capacity, and operational depth; they must not manufacture a broken Basic option merely to force an upgrade.
+
+| Stable offer | Pages/screens | Automations | Payment setups |
+|---|---:|---:|---:|
+| `platform_launch` | 5 | 3 | 1 |
+| `platform_growth` | 8 | 7 | 2 |
+| `platform_scale` | 12 | 12 | 3 |
+| `custom_starter` | 6 | 3 | 1 |
+| `custom_foundation` | 10 | 7 | 2 |
+| `custom_growth` | 15 | 12 | 3 |
+| `custom_complete` | Confirmed during discovery | Confirmed during discovery | Confirmed during discovery |
 
 | Tier and route | Approved inclusion summary |
 |---|---|
@@ -896,7 +982,7 @@ estimated_recurring_costs[]
 
 ### 6.8 Approved local Cortex version and aggregation rules
 
-The approved engine version remains `cortex-local-v0.1` so existing deterministic scoring, tests, and historical snapshots keep a stable identifier. For the connected proposal release, the same reviewed questions, answer options, complete scoring metadata, feasibility rules, and version keys are seeded as three active version-1 `quiz_definitions` with `server_verified: true`. The browser and Edge Function use the same portable engine; the Edge Function is authoritative for proposal drafts, prices, and issuance.
+New sessions use `business-systems-cortex-2026.09-v2`, question set `business-systems-assessment-2026.09-v2`, catalog `business-systems-catalog-2026.09-v2`, and roadmap schema `premium-roadmap-2026.09-v1`. Historical snapshots retain their original version keys and are never silently recalculated. The browser and Edge Function use the same portable engine; the Edge Function remains authoritative for proposal drafts, prices, and issuance.
 
 Each visible answer option has a stable key and one or more signal tags. The interface never derives business logic by parsing display copy. Signal tags add integer vectors to the diagnostic, solution, and platform-fit dimensions defined in Section 6.2.
 

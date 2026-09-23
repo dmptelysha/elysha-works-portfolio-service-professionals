@@ -106,10 +106,11 @@ Visitor-callable security-definer functions validate `auth.uid()`, ownership of 
 
 Existing restricted functions include lead/booking/analytics/linking operations. The connected flow uses `begin_custom_verified_qualified_quiz`; it requires the owning anonymous JWT and a valid custom verification grant, consumes that grant atomically, derives the canonical email from the private challenge, returns a minimal same/another-business decision, reuses the stable lead for the same business, and creates a separate lead for another business. Legacy quiz-start functions are not verification authorities for the new client. Trusted proposal state functions are service-role-only, and the former browser-wide result persistence grant is revoked.
 
-Six Edge Functions form the external boundary:
+Seven Edge Functions form the external boundary:
 
 | Function | Contract |
 |---|---|
+| `currency-quote` | Public browser-safe country/currency quote lookup; returns validated USD or a current USD conversion snapshot and exposes no provider secret |
 | `request-email-otp` | Owner-JWT plus Turnstile; rate-limits, creates the digest-only challenge, and sends an authenticated encrypted delivery envelope to inactive Make infrastructure |
 | `verify-email-otp` | Owner-JWT; atomically compares the submitted six-digit code against the stored HMAC digest and returns only a short-lived grant expiry |
 | `finalize-proposal` | Owner-JWT `preview` returns a server-calculated sanitized draft; `issue` reruns Cortex/catalog rules, validates selection, stores snapshots, issues reference/access, calls Make, and activates the exact 72-hour window only after successful email acknowledgement |
@@ -120,6 +121,7 @@ Six Edge Functions form the external boundary:
 Deploy functions only after the migrations are approved and applied to the exact verified project:
 
 ```powershell
+npx supabase@latest functions deploy currency-quote --project-ref <verified-project-ref>
 npx supabase@latest functions deploy request-email-otp --project-ref <verified-project-ref>
 npx supabase@latest functions deploy verify-email-otp --project-ref <verified-project-ref>
 npx supabase@latest functions deploy finalize-proposal --project-ref <verified-project-ref>
@@ -143,13 +145,15 @@ Make uses two scenarios. Scenario A receives one signed idempotent immediate-del
 
 Roadmap and protected-proposal views render the **complete approved inclusions** for the selected package/platform; they do not truncate the catalog for presentation. Make receives only the sanitized proposal summaries and access data required for delivery.
 
+Assessment V2 also stores the selected business country plus the currency code, symbol, conversion rate, and rate timestamp used for the displayed local estimate. The package catalog remains authoritative in USD. Local currency is clearly labeled as an estimate; if a live quote cannot be validated, the assessment continues safely in USD instead of blocking the visitor or inventing a conversion.
+
 Direct booking prefill is gated by the booking handoff external consumer defined in `docs/contracts/quiz-booking-handoff.md`. Until that backend is deployed and contract-tested, production uses the safe `/booking/` form fallback.
 
 No PDF is generated. Make does not receive database authority, the Supabase service-role key, or permission to decide eligibility.
 
 ## Seed scope
 
-`supabase/seed.sql` is idempotent and contains only approved configuration. It must never create visitors, sessions, leads, bookings, analytics activity, clients, fake projects, invented testimonials, or assumed business claims. The approved version-1 quiz definitions reuse the existing reviewed questions, answer options, and complete Cortex scoring/feasibility metadata; no incomplete or invented question set is permitted.
+`supabase/seed.sql` is idempotent and contains only approved configuration. It must never create visitors, sessions, leads, bookings, analytics activity, clients, fake projects, invented testimonials, or assumed business claims. The application and proposal Edge Function share the reviewed V2 question/Cortex source under `supabase/functions/_shared/quiz-engine`; database quiz-definition metadata records the active engine, question-set, catalog, and roadmap versions used for auditability.
 
 ## Safe remote deployment gate
 

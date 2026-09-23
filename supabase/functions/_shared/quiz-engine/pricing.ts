@@ -1,7 +1,8 @@
 import { ADDON_BY_KEY, PACKAGE_BY_KEY } from "./catalog.ts";
+import { QUIZ_DEFINITIONS } from "./questions.ts";
 import type { PricedAddon, ScopeReviewItem, SelectedSupportItem } from "./types.ts";
 
-const SUPPORT_ADDON_KEYS: Readonly<Record<string, string | null>> = {
+const LEGACY_SUPPORT_ADDON_KEYS: Readonly<Record<string, string | null>> = {
   support_conversion_copywriting: "conversion_copywriting",
   support_image_sourcing: "image_sourcing_selection",
   support_image_editing: "image_editing_optimization",
@@ -20,6 +21,17 @@ const SUPPORT_ADDON_KEYS: Readonly<Record<string, string | null>> = {
   support_migration: "content_data_migration",
   support_client_assets: null,
 };
+
+const SUPPORT_ADDON_KEYS: Readonly<Record<string, string | null>> = Object.freeze({
+  ...LEGACY_SUPPORT_ADDON_KEYS,
+  ...Object.fromEntries(
+    Object.values(QUIZ_DEFINITIONS).flatMap((definition) =>
+      definition.questions.flatMap((question) =>
+        question.options.map((item) => [item.key, item.addonKey ?? null] as const),
+      ),
+    ),
+  ),
+});
 
 function isIncluded(addonKey: string, offerKey: string) {
   const offer = PACKAGE_BY_KEY.get(offerKey);

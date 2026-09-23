@@ -37,6 +37,18 @@ const readinessNames: Record<ReadinessLevel, string> = {
   researching: "Researching for later",
 };
 
+const platformNames = {
+  systeme_io: "Systeme.io",
+  gohighlevel: "HighLevel",
+  custom_app: "Custom App",
+} as const;
+
+function ResultList({ items }: { items: readonly string[] }) {
+  return items.length ? (
+    <ul className="result-simple-list">{items.map((item) => <li key={item}>{item}</li>)}</ul>
+  ) : <p>No additional item is required in the recommended first version.</p>;
+}
+
 export function QuizResult({
   result,
   proposal,
@@ -90,6 +102,44 @@ export function QuizResult({
             </strong>
           </section>
 
+          <section className="result-card" aria-labelledby="problem-title">
+            <p className="result-number">04 · Core problem</p>
+            <h2 id="problem-title">What is slowing the business down</h2>
+            <p>{proposal.problem.summary}</p>
+            <strong>{proposal.problem.primary}</strong>
+            {proposal.problem.secondary ? <p>{proposal.problem.secondary}</p> : null}
+          </section>
+
+          <section className="result-card result-card--gold" aria-labelledby="missing-system-title">
+            <p className="result-number">05 · Missing system</p>
+            <h2 id="missing-system-title">The operational gap to close</h2>
+            <p>{proposal.missingSystem}</p>
+          </section>
+
+          <section className="result-card result-card--wide" aria-labelledby="journey-title">
+            <p className="result-number">06 · Customer journey</p>
+            <h2 id="journey-title">The recommended path from first visit to delivery</h2>
+            <ol className="result-journey">{proposal.customerJourney.map((item) => <li key={item}>{item}</li>)}</ol>
+          </section>
+
+          <section className="result-card" aria-labelledby="platform-title">
+            <p className="result-number">07 · Platform</p>
+            <h2 id="platform-title">Why {platformNames[proposal.platform.recommended]}</h2>
+            <ResultList items={proposal.platform.reasons} />
+            <details className="result-details">
+              <summary>Why not the other platforms?</summary>
+              {Object.entries(proposal.platform.alternatives).map(([platform, reason]) => (
+                <p key={platform}><strong>{platformNames[platform as keyof typeof platformNames]}:</strong> {reason}</p>
+              ))}
+            </details>
+          </section>
+
+          <section className="result-card" aria-labelledby="package-title">
+            <p className="result-number">08 · Recommended package</p>
+            <h2 id="package-title">{proposal.package.offerName}</h2>
+            <ResultList items={proposal.package.reasons} />
+          </section>
+
           <div className="result-card result-card--wide result-card--comparison">
             <RoadmapComparison result={result} selection={selection} onSelect={onSelect} />
           </div>
@@ -98,10 +148,51 @@ export function QuizResult({
             <RoadmapSelectionSummary result={result} selection={selection} />
           </div>
 
+          <section className="result-card" aria-labelledby="pages-title">
+            <p className="result-number">09 · Pages and screens</p>
+            <h2 id="pages-title">What the system includes</h2>
+            <ResultList items={proposal.pages} />
+          </section>
+
+          <section className="result-card" aria-labelledby="automations-title">
+            <p className="result-number">10 · Automations</p>
+            <h2 id="automations-title">What happens without manual chasing</h2>
+            <ResultList items={proposal.automations} />
+          </section>
+
+          <section className="result-card" aria-labelledby="payments-title">
+            <p className="result-number">11 · Payment options</p>
+            <h2 id="payments-title">Recommended collection setup</h2>
+            <ResultList items={proposal.payment.options} />
+            <p>{proposal.payment.includedSetupCount} payment setup{proposal.payment.includedSetupCount === 1 ? "" : "s"} included in this package.</p>
+          </section>
+
+          <section className="result-card" aria-labelledby="domain-title">
+            <p className="result-number">12 · Domain and email</p>
+            <h2 id="domain-title">Accounts stay under your ownership</h2>
+            <ResultList items={[proposal.domainAndEmail.domainOwnership, proposal.domainAndEmail.domainSetup, proposal.domainAndEmail.businessEmail]} />
+          </section>
+
+          <section className="result-card result-card--gold" aria-labelledby="investment-title">
+            <p className="result-number">13 · Investment</p>
+            <h2 id="investment-title">Project investment</h2>
+            <strong className="result-price">${proposal.investment.estimatedTotalUsd.toLocaleString("en-US")} USD</strong>
+            {proposal.investment.localTotal !== null && proposal.investment.currency !== "USD" ? (
+              <p>Approximately {proposal.investment.symbol}{proposal.investment.localTotal.toLocaleString("en-US")} {proposal.investment.currency}. USD remains the source price; conversion is indicative.</p>
+            ) : <p>Displayed in the approved USD source currency.</p>}
+          </section>
+
+          <section className="result-card" aria-labelledby="scope-title">
+            <p className="result-number">14 · Included scope</p>
+            <h2 id="scope-title">Included in the recommended package</h2>
+            <ResultList items={proposal.includedScope} />
+          </section>
+
           <section className="result-card result-card--wide" aria-labelledby="complete-advantage-title">
-            <p className="result-number">06 · Relevant expansion</p>
+            <p className="result-number">15 · Optional enhancements</p>
             <h2 id="complete-advantage-title">How Complete can exceed the requirement</h2>
             <p>{completeTier?.promise}</p>
+            <ResultList items={proposal.optionalEnhancements} />
             {completeVariant ? (
               <ul className="result-simple-list">
                 {completeVariant.offer.includedFeatures.map((feature) => <li key={feature}>{feature}</li>)}
@@ -109,17 +200,59 @@ export function QuizResult({
             ) : null}
           </section>
 
+          <section className="result-card" aria-labelledby="costs-title">
+            <p className="result-number">16 · Ongoing costs</p>
+            <h2 id="costs-title">Third-party accounts paid directly by you</h2>
+            <ResultList items={proposal.ongoingCosts} />
+          </section>
+
+          <section className="result-card" aria-labelledby="requirements-title">
+            <p className="result-number">17 · What we need from you</p>
+            <h2 id="requirements-title">Client requirements</h2>
+            <ResultList items={proposal.clientRequirements} />
+          </section>
+
+          <section className="result-card result-card--wide" aria-labelledby="ownership-title">
+            <p className="result-number">18 · Responsibilities and ownership</p>
+            <h2 id="ownership-title">Who handles what</h2>
+            <div className="result-table-wrap">
+              <table className="result-table">
+                <thead><tr><th>Item</th><th>Elysha Works</th><th>Client</th></tr></thead>
+                <tbody>{proposal.ownership.map((row) => (
+                  <tr key={row.item}><th scope="row">{row.item}</th><td>{row.elyshaWorks}</td><td>{row.client}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="result-card" aria-labelledby="schedule-title">
+            <p className="result-number">19 · Project payment</p>
+            <h2 id="schedule-title">50% to begin, 50% before launch</h2>
+            <p>The deposit reserves the project and starts the approved scope. The balance is due after review and before final handover or launch.</p>
+          </section>
+
+          <section className="result-card result-card--gold" aria-labelledby="path-title">
+            <p className="result-number">20 · Path to Point B</p>
+            <h2 id="path-title">How the recommended system closes the gap</h2>
+            <dl className="snapshot-list">
+              <div><dt>Today</dt><dd>{proposal.pathToPointB.today}</dd></div>
+              <div><dt>With the system</dt><dd>{proposal.pathToPointB.withSystem}</dd></div>
+              <div><dt>Target</dt><dd>{proposal.pathToPointB.target}</dd></div>
+            </dl>
+          </section>
+
           <section className="result-card result-card--wide" aria-labelledby="work-title">
-            <p className="result-number">07 · Relevant work</p>
+            <p className="result-number">21 · Related work</p>
             <h2 id="work-title">Related work</h2>
             <RelatedWorkCards audienceKey={result.audienceKey} />
           </section>
 
           <section className="result-card result-card--next result-card--wide" aria-labelledby="next-title">
-            <p className="result-number">08 · Discovery call</p>
+            <p className="result-number">Next step · Discovery call</p>
             <h2 id="next-title">Turn the roadmap into a practical scope</h2>
             <p>Discuss the recommendation, confirm the final scope, and decide whether the next step is a fit.</p>
             <a className="quiz-primary" href="/booking/">Book a Discovery Call <span aria-hidden="true">→</span></a>
+            <p className="result-disclaimer">{proposal.disclaimer}</p>
           </section>
         </div>
 

@@ -1,312 +1,203 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateRecommendation, SCORING_RULES, validateAnswers } from "@/features/quiz/cortex";
+import { calculateRecommendation, validateAnswers } from "@/features/quiz/cortex";
 import type { AudienceKey, CortexInput, QuizAnswers } from "@/features/quiz/types";
 
-const complete = (
+function assessment(
   audienceKey: AudienceKey,
   answers: Record<string, string | string[]>,
-): CortexInput => ({
-  audienceKey,
-  answers: Object.fromEntries(
-    Object.entries(answers).map(([key, value]) => [key, Array.isArray(value) ? value : [value]]),
-  ) as QuizAnswers,
+  countryCode = "US",
+): CortexInput {
+  return {
+    audienceKey,
+    answers: Object.fromEntries(Object.entries(answers).map(([key, value]) => [key, Array.isArray(value) ? value : [value]])) as QuizAnswers,
+    location: {
+      businessCountry: countryCode === "PH" ? "Philippines" : "United States",
+      countryCode,
+      displayCurrency: countryCode === "PH" ? "PHP" : "USD",
+      currencySymbol: countryCode === "PH" ? "₱" : "$",
+      fxRate: countryCode === "PH" ? 58 : 1,
+      fxRateTimestamp: "2026-09-23T00:00:00.000Z",
+    },
+  } as CortexInput;
+}
+
+const universal = {
+  q5_demand_health: "demand_steady_some_dropoff",
+  q9_timeline: "timeline_within_30_days",
+  q10_platform: "platform_recommend",
+};
+
+const coachCourse = assessment("coaches_educators", {
+  q1_business_model: "coach_model_course",
+  q2_goal: "coach_goal_sell_offers",
+  q3_current_journey: "coach_journey_weak_funnel",
+  q4_bottlenecks: ["coach_blocker_payment", "coach_blocker_follow_up"],
+  ...universal,
+  q6_customer_requirements: ["coach_customer_learn_offer", "coach_customer_pay_enroll", "coach_customer_follow_up", "coach_customer_course_access"],
+  q7_post_conversion: ["coach_after_confirmation", "coach_after_welcome", "coach_after_course"],
+  q8_scope: ["coach_scope_subscriptions"],
+  q11_addons: ["coach_addon_none"],
 });
 
-const coachProgram = complete("coaches_educators", {
-  q1_goal: "coach_goal_enroll_students",
-  q2_setup: "coach_setup_unclear_website",
-  q3_blocker: "coach_blocker_questions_no_booking",
-  q4_capabilities: [
-    "coach_capability_enrollment_payment",
-    "coach_capability_email_follow_up",
-    "coach_capability_student_onboarding",
-  ],
-  q5_complexity: "coach_complexity_program_delivery",
-  q6_readiness: "readiness_within_30_days",
-  q7_platform: "platform_recommend",
-  q8_support: ["support_client_assets"],
-});
-
-const serviceBooking = complete("service_businesses", {
-  q1_goal: "service_goal_book_appointments",
-  q2_setup: "service_setup_disconnected_booking",
-  q3_blocker: "service_blocker_manual_intake_follow_up",
-  q4_capabilities: [
-    "service_capability_booking",
-    "service_capability_reminders",
-    "service_capability_crm",
-  ],
-  q5_complexity: "service_complexity_multiple_services",
-  q6_readiness: "readiness_ready_now",
-  q7_platform: "platform_recommend",
-  q8_support: ["support_client_assets"],
-});
-
-describe("cortex-local-v0.1 validation and aggregation", () => {
-  it("publishes complete server-portable scoring metadata", () => {
-    expect(SCORING_RULES).toMatchObject({
-      engineVersion: "cortex-local-v0.1",
-      questionSetVersion: "portfolio-qualifier-v0.1",
-      catalogVersion: "portfolio-catalog-v0.1",
-      perQuestionDimensionCap: 3,
-      qualifyingSolutionScore: 4,
-      feasibilityConstraints: {
-        hardCustomSignals: ["inventory", "multiple_roles"],
-        pairedCustomSignals: ["portal", "dashboard"],
-      },
-      offerThresholds: {
-        platformGrowthComplexity: 5,
-        platformScaleComplexity: 10,
-        customFoundationComplexity: 5,
-        customGrowthComplexity: 9,
-        customCompleteComplexity: 13,
-      },
-    });
-    expect(Object.keys(SCORING_RULES.signalWeights)).toHaveLength(22);
-    expect(Object.keys(SCORING_RULES.tieBreaks)).toEqual(["websiteVsFunnel", "automationVsCrm", "platform"]);
-    expect(Object.keys(SCORING_RULES.addonDisposition)).toEqual(["included", "priced", "scopeReview"]);
-  });
-
-  it("validates complete answers and reports missing required questions", () => {
-    expect(validateAnswers(coachProgram)).toEqual({ valid: true, missingQuestionKeys: [] });
-    expect(validateAnswers({ ...coachProgram, answers: { q1_goal: coachProgram.answers.q1_goal } })).toEqual({
+describe("business systems assessment validation", () => {
+  it("requires every diagnostic question and accepts complete answers", () => {
+    expect(validateAnswers(coachCourse)).toEqual({ valid: true, missingQuestionKeys: [] });
+    expect(validateAnswers({ ...coachCourse, answers: { q1_business_model: coachCourse.answers.q1_business_model } })).toEqual({
       valid: false,
       missingQuestionKeys: [
-        "q2_setup",
-        "q3_blocker",
-        "q4_capabilities",
-        "q5_complexity",
-        "q6_readiness",
-        "q7_platform",
-        "q8_support",
+        "q2_goal", "q3_current_journey", "q4_bottlenecks", "q5_demand_health",
+        "q6_customer_requirements", "q7_post_conversion", "q8_scope", "q9_timeline",
+        "q10_platform", "q11_addons",
       ],
     });
   });
 
-  it("rejects unknown option keys instead of silently scoring them", () => {
-    expect(() =>
-      calculateRecommendation({
-        ...coachProgram,
-        answers: { ...coachProgram.answers, q1_goal: ["unknown_option"] },
-      }),
-    ).toThrow(/unknown option key/i);
-  });
-
-  it("caps each dimension per question at three while preserving critical flags", () => {
-    const input = complete("custom_order_businesses", {
-      q1_goal: "order_goal_organize_operations",
-      q2_setup: "order_setup_disconnected_tools",
-      q3_blocker: "order_blocker_production_updates",
-      q4_capabilities: [
-        "order_capability_catalog",
-        "order_capability_customization",
-        "order_capability_request",
-        "order_capability_checkout",
-        "order_capability_updates",
-        "order_capability_dashboard",
-        "order_capability_crm",
-        "order_capability_inventory",
-      ],
-      q5_complexity: "order_complexity_roles_inventory",
-      q6_readiness: "readiness_ready_now",
-      q7_platform: "platform_recommend",
-      q8_support: ["support_inventory", "support_dashboard", "support_order_management"],
-    });
-    const result = calculateRecommendation(input);
-    const q4 = result.explanationTrace.find((entry) => entry.questionKey === "q4_capabilities");
-
-    expect(q4).toBeDefined();
-    if (!q4) throw new Error("Missing Q4 explanation trace");
-    for (const key of Object.keys(q4.after.diagnostic) as (keyof typeof q4.after.diagnostic)[]) {
-      expect(q4.after.diagnostic[key] - q4.before.diagnostic[key]).toBeLessThanOrEqual(3);
-    }
-    for (const key of Object.keys(q4.after.solutions) as (keyof typeof q4.after.solutions)[]) {
-      expect(q4.after.solutions[key] - q4.before.solutions[key]).toBeLessThanOrEqual(3);
-    }
-    for (const key of Object.keys(q4.after.platforms) as (keyof typeof q4.after.platforms)[]) {
-      expect(q4.after.platforms[key] - q4.before.platforms[key]).toBeLessThanOrEqual(3);
-    }
-    expect(q4.flags).toContain("inventory");
-    expect(result.scores.customApp).toBeLessThanOrEqual(18);
+  it("rejects more than two primary bottlenecks", () => {
+    expect(() => calculateRecommendation({
+      ...coachCourse,
+      answers: { ...coachCourse.answers, q4_bottlenecks: ["coach_blocker_payment", "coach_blocker_follow_up", "coach_blocker_onboarding"] },
+    })).toThrow(/up to 2/i);
   });
 });
 
-describe("cortex-local-v0.1 locked outcomes", () => {
-  it("routes a program enrollment journey to Systeme.io Platform Growth", () => {
-    const result = calculateRecommendation(coachProgram);
-    expect(result.primarySolutionType).toBe("funnel");
-    expect(result.recommendedSolutionTitle).toBe("Enrollment Funnel");
+describe("approved platform and package scenarios", () => {
+  it("A: recommends Systeme.io for a focused course, checkout, follow-up, and course-access journey", () => {
+    const result = calculateRecommendation(coachCourse);
     expect(result.recommendedPlatform).toBe("systeme_io");
-    expect(result.recommendedOfferKey).toBe("platform_growth");
-    expect(result.recommendedOfferName).toBe("Growth System");
-    expect(result.recommendedOfferIncludedFeatures.length).toBeGreaterThan(0);
-    expect(result.audienceLabel).toBe("Book and Enroll");
-    expect(result.readinessLevel).toBe("within_30_days");
-    expect(result.basePriceUsd).toBe(2500);
+    expect(["platform_launch", "platform_growth"]).toContain(result.recommendedOfferKey);
+    expect(result.recommendedPages).toEqual(expect.arrayContaining(["Program / Sales Page", "Enrollment / Checkout", "Course / Resources"]));
   });
 
-  it("routes a service booking journey to a GoHighLevel lead-to-client system", () => {
-    const result = calculateRecommendation(serviceBooking);
-    expect(result.recommendedSolutionTitle).toBe("Lead-to-Client System");
+  it("B: recommends HighLevel Advanced for application, booking, CRM, reminders, and onboarding", () => {
+    const result = calculateRecommendation(assessment("coaches_educators", {
+      q1_business_model: "coach_model_one_to_one",
+      q2_goal: "coach_goal_book_calls",
+      q3_current_journey: "coach_journey_social_dm",
+      q4_bottlenecks: ["coach_blocker_conversion", "coach_blocker_follow_up"],
+      ...universal,
+      q6_customer_requirements: ["coach_customer_apply", "coach_customer_book", "coach_customer_follow_up", "coach_customer_onboarding"],
+      q7_post_conversion: ["coach_after_welcome", "coach_after_intake", "coach_after_scheduling"],
+      q8_scope: ["coach_scope_integrations"],
+      q11_addons: ["coach_addon_application", "coach_addon_booking"],
+    }));
     expect(result.recommendedPlatform).toBe("gohighlevel");
-    expect(["platform_growth", "platform_scale"]).toContain(result.recommendedOfferKey);
+    expect(result.recommendedOfferKey).toBe("platform_growth");
   });
 
-  it("uses Website for a credibility-led website/funnel tie", () => {
-    const result = calculateRecommendation(
-      complete("service_businesses", {
-        q1_goal: "service_goal_qualified_inquiries",
-        q2_setup: "service_setup_basic_website_manual",
-        q3_blocker: "service_blocker_unclear_offer",
-        q4_capabilities: ["service_capability_website"],
-        q5_complexity: "service_complexity_one_service",
-        q6_readiness: "readiness_ready_now",
-        q7_platform: "platform_recommend",
-        q8_support: ["support_client_assets"],
-      }),
-    );
-    expect(result.primarySolutionType).toBe("website");
-    expect(result.recommendedSolutionTitle).toBe("Conversion Website");
-    expect(result.recommendedOfferKey).toBe("platform_launch");
+  it("C: recommends HighLevel Complete for multi-staff service delivery without specialized permissions", () => {
+    const result = calculateRecommendation(assessment("service_businesses", {
+      q1_business_model: "service_model_multiple",
+      q2_goal: "service_goal_scale",
+      q3_current_journey: "service_journey_disconnected",
+      q4_bottlenecks: ["service_blocker_booking", "service_blocker_admin"],
+      ...universal,
+      q6_customer_requirements: ["service_customer_qualify", "service_customer_book", "service_customer_pay", "service_customer_reminders", "service_customer_intake"],
+      q7_post_conversion: ["service_after_payment", "service_after_reminders", "service_after_assignment", "service_after_status"],
+      q8_scope: ["service_scope_multiple_services", "service_scope_team", "service_scope_assignment", "service_scope_payments", "service_scope_pipelines"],
+      q11_addons: ["service_addon_staff", "service_addon_intake"],
+    }));
+    expect(result.recommendedPlatform).toBe("gohighlevel");
+    expect(result.recommendedOfferKey).toBe("platform_scale");
   });
 
-  it("uses Custom Growth for a portal, dashboard, and connected workflows", () => {
-    const result = calculateRecommendation(
-      complete("service_businesses", {
-        q1_goal: "service_goal_book_appointments",
-        q2_setup: "service_setup_social_calls_dm",
-        q3_blocker: "service_blocker_tracking_status",
-        q4_capabilities: ["service_capability_portal_dashboard", "service_capability_crm", "service_capability_onboarding"],
-        q5_complexity: "service_complexity_multiple_services",
-        q6_readiness: "readiness_within_1_2_months",
-        q7_platform: "platform_recommend",
-        q8_support: ["support_dashboard", "support_portal"],
-      }),
-    );
-    expect(result.primarySolutionType).toBe("custom_app");
-    expect(result.recommendedSolutionTitle).toBe("Custom Operations System");
-    expect(result.recommendedOfferKey).toBe("custom_growth");
-  });
-
-  it("uses Complete Custom System for roles, inventory, approvals, and production", () => {
-    const result = calculateRecommendation(
-      complete("custom_order_businesses", {
-        q1_goal: "order_goal_organize_operations",
-        q2_setup: "order_setup_disconnected_tools",
-        q3_blocker: "order_blocker_production_updates",
-        q4_capabilities: ["order_capability_inventory", "order_capability_dashboard", "order_capability_updates"],
-        q5_complexity: "order_complexity_roles_inventory",
-        q6_readiness: "readiness_ready_now",
-        q7_platform: "platform_custom_app",
-        q8_support: ["support_inventory", "support_order_management"],
-      }),
-    );
-    expect(result.recommendedSolutionTitle).toBe("Custom Order Management App");
-    expect(result.recommendedBuildRoute).toBe("custom");
+  it("D: recommends Complete Custom Scope for production, approvals, roles, and inventory", () => {
+    const result = calculateRecommendation(assessment("custom_order_businesses", {
+      q1_business_model: "order_model_made_to_order",
+      q2_goal: "order_goal_operations",
+      q3_current_journey: "order_journey_disconnected",
+      q4_bottlenecks: ["order_blocker_approvals", "order_blocker_inventory"],
+      ...universal,
+      q6_customer_requirements: ["order_customer_customize", "order_customer_quote", "order_customer_deposit", "order_customer_approve", "order_customer_updates", "order_customer_track"],
+      q7_post_conversion: ["order_after_quote", "order_after_deposit", "order_after_proof", "order_after_approval", "order_after_production", "order_after_inventory"],
+      q8_scope: ["order_scope_options", "order_scope_dynamic_pricing", "order_scope_proof", "order_scope_revisions", "order_scope_production", "order_scope_inventory", "order_scope_employees", "order_scope_permissions"],
+      q11_addons: ["order_addon_production", "order_addon_inventory", "order_addon_roles"],
+    }));
+    expect(result.recommendedPlatform).toBe("custom_app");
     expect(result.recommendedOfferKey).toBe("custom_complete");
     expect(result.basePriceUsd).toBe(10000);
   });
 
-  it("does not let a Custom App preference force a custom route", () => {
-    const input = {
-      ...coachProgram,
-      answers: { ...coachProgram.answers, q7_platform: ["platform_custom_app"] },
-    };
-    const result = calculateRecommendation(input);
-    expect(result.recommendedBuildRoute).toBe("platform");
-    expect(result.recommendedOfferKey).toBe("platform_growth");
+  it("E: keeps a Philippine manual GCash QR flow simple and explicitly manual", () => {
+    const result = calculateRecommendation(assessment("service_businesses", {
+      q1_business_model: "service_model_project",
+      q2_goal: "service_goal_inquiries",
+      q3_current_journey: "service_journey_website_manual",
+      q4_bottlenecks: ["service_blocker_payment"],
+      ...universal,
+      q6_customer_requirements: ["service_customer_inquiry", "service_customer_pay"],
+      q7_post_conversion: ["service_after_payment"],
+      q8_scope: ["service_scope_payments"],
+      q11_addons: ["service_addon_payment"],
+    }, "PH"));
+    expect(result.recommendedPaymentOptions.join(" ")).toMatch(/GCash.*manual payment verification/i);
+    expect(result.recommendedPaymentOptions.join(" ")).not.toMatch(/Xendit/i);
   });
 
-  it("keeps researching readiness without lowering the appropriate package", () => {
-    const normal = calculateRecommendation(serviceBooking);
-    const researching = calculateRecommendation({
-      ...serviceBooking,
-      answers: { ...serviceBooking.answers, q6_readiness: ["readiness_researching"] },
+  it("F: recommends Xendit when a Philippine custom workflow requires automatic local confirmation", () => {
+    const result = calculateRecommendation(assessment("custom_order_businesses", {
+      q1_business_model: "order_model_made_to_order",
+      q2_goal: "order_goal_completion",
+      q3_current_journey: "order_journey_online_manual_custom",
+      q4_bottlenecks: ["order_blocker_payment"],
+      ...universal,
+      q6_customer_requirements: ["order_customer_deposit", "order_customer_updates"],
+      q7_post_conversion: ["order_after_deposit", "order_after_balance", "order_after_updates"],
+      q8_scope: ["order_scope_balances", "order_scope_integrations"],
+      q11_addons: ["order_addon_payment", "order_addon_integrations"],
+    }, "PH"));
+    expect(result.recommendedPaymentOptions.join(" ")).toMatch(/Xendit/i);
+    expect(result.requiredIntegrations).toContain("Automated local payment confirmation");
+  });
+
+  it("G: overrides Systeme.io when inventory, dynamic pricing, permissions, and dashboards are required", () => {
+    const result = calculateRecommendation(assessment("custom_order_businesses", {
+      q1_business_model: "order_model_several",
+      q2_goal: "order_goal_scale",
+      q3_current_journey: "order_journey_disconnected",
+      q4_bottlenecks: ["order_blocker_production", "order_blocker_inventory"],
+      ...universal,
+      q10_platform: "platform_systeme",
+      q6_customer_requirements: ["order_customer_customize", "order_customer_track"],
+      q7_post_conversion: ["order_after_production", "order_after_inventory"],
+      q8_scope: ["order_scope_dynamic_pricing", "order_scope_inventory", "order_scope_permissions", "order_scope_reports"],
+      q11_addons: ["order_addon_inventory", "order_addon_production"],
+    }));
+    expect(result.recommendedPlatform).toBe("custom_app");
+    expect(result.alternativePlatformReasons.systeme_io).toMatch(/cannot safely support/i);
+  });
+
+  it("H: does not let a Custom App preference inflate a simple service booking journey", () => {
+    const result = calculateRecommendation(assessment("service_businesses", {
+      q1_business_model: "service_model_appointment",
+      q2_goal: "service_goal_bookings",
+      q3_current_journey: "service_journey_social_phone",
+      q4_bottlenecks: ["service_blocker_booking"],
+      ...universal,
+      q10_platform: "platform_custom_app",
+      q6_customer_requirements: ["service_customer_learn", "service_customer_book", "service_customer_reminders"],
+      q7_post_conversion: ["service_after_reminders"],
+      q8_scope: ["service_scope_appointment_types"],
+      q11_addons: ["service_addon_none"],
+    }));
+    expect(result.recommendedPlatform).toBe("gohighlevel");
+    expect(result.recommendedOfferKey).toBe("platform_launch");
+    expect(result.alternativePlatformReasons.custom_app).toMatch(/more custom infrastructure than this journey needs/i);
+  });
+
+  it("keeps timeline and demand health diagnostic-only", () => {
+    const ready = calculateRecommendation(coachCourse);
+    const later = calculateRecommendation({
+      ...coachCourse,
+      answers: { ...coachCourse.answers, q5_demand_health: ["demand_early_awareness"], q9_timeline: ["timeline_researching"] },
     });
-    expect(researching.readinessLevel).toBe("researching");
-    expect(researching.recommendedOfferKey).toBe(normal.recommendedOfferKey);
+    expect(later.recommendedPlatform).toBe(ready.recommendedPlatform);
+    expect(later.recommendedOfferKey).toBe(ready.recommendedOfferKey);
+    expect(later.basePriceUsd).toBe(ready.basePriceUsd);
+    expect(later.diagnosisSummary).toMatch(/traffic|awareness/i);
   });
 
-  it("does not label a much higher score as supporting when a custom guardrail overrides the primary", () => {
-    const result = calculateRecommendation(
-      complete("service_businesses", {
-        q1_goal: "service_goal_book_appointments",
-        q2_setup: "service_setup_disconnected_booking",
-        q3_blocker: "service_blocker_inquiries_no_booking",
-        q4_capabilities: ["service_capability_booking"],
-        q5_complexity: "service_complexity_custom_operations",
-        q6_readiness: "readiness_ready_now",
-        q7_platform: "platform_recommend",
-        q8_support: ["support_client_assets"],
-      }),
-    );
-
-    expect(result.primarySolutionType).toBe("custom_app");
-    expect(result.scores.funnel - result.scores.customApp).toBeGreaterThan(2);
-    expect(result.supportingSolutionTypes).not.toContain("funnel");
-    expect(result.decisionTrace[0].reason).toMatch(/score-based primary was (?:funnel|automation).*custom-route guardrail/i);
-    expect(result.decisionTrace[0].outcome).toBe("custom_app");
-  });
-
-  it("records ordered decision rules and an explicit confidence state", () => {
-    const result = calculateRecommendation(coachProgram);
-    expect(result.decisionTrace.map((entry) => entry.ruleKey)).toEqual([
-      "primary_solution",
-      "build_route",
-      "platform",
-      "base_offer",
-      "pricing",
-    ]);
-    expect(result.confidenceLevel).toBe("standard");
-    expect(result.confidenceMessage).toMatch(/qualifying-score/i);
-  });
-});
-
-describe("cortex-local-v0.1 pricing", () => {
-  it("partitions selected support exactly once and consumes package inclusions", () => {
-    const result = calculateRecommendation({
-      ...coachProgram,
-      answers: {
-        ...coachProgram.answers,
-        q8_support: [
-          "support_conversion_copywriting",
-          "support_checkout",
-          "support_integration",
-          "support_migration",
-        ],
-      },
-    });
-    const included = new Set(result.includedCapabilities);
-    const priced = new Set(result.pricedAddons.map((item) => item.addonKey));
-    const review = new Set(result.scopeReviewItems.map((item) => item.key));
-
-    expect(priced.has("conversion_copywriting")).toBe(true);
-    expect(included.has("checkout_payment_integration")).toBe(true);
-    expect(included.has("standard_third_party_integration")).toBe(true);
-    expect(review.has("content_data_migration")).toBe(true);
-    for (const key of result.selectedAddons) {
-      expect(Number(included.has(key)) + Number(priced.has(key)) + Number(review.has(key))).toBe(1);
-    }
-    expect(result.adjustmentTotalUsd).toBe(0);
-    expect(result.estimatedProjectInvestmentUsd).toBe(
-      result.basePriceUsd + result.addonTotalUsd,
-    );
-  });
-
-  it("discloses SMS and recurring platform costs without silently pricing SMS", () => {
-    const result = calculateRecommendation({
-      ...serviceBooking,
-      answers: { ...serviceBooking.answers, q8_support: ["support_follow_up"] },
-    });
-    expect(result.estimatedRecurringCosts.join(" ")).toMatch(/subscription/i);
-    expect(result.scopeReviewItems.map((item) => item.key)).toContain("sms_automation_setup");
-    expect(result.pricedAddons.map((item) => item.addonKey)).not.toContain("sms_automation_setup");
-  });
-
-  it("is deterministic for identical inputs", () => {
-    const first = calculateRecommendation(coachProgram);
-    const second = calculateRecommendation(coachProgram);
-    expect(first).toEqual(second);
+  it("is deterministic for identical stored answers and location metadata", () => {
+    expect(calculateRecommendation(coachCourse)).toEqual(calculateRecommendation(coachCourse));
   });
 });

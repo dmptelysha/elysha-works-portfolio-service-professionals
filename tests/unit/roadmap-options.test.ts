@@ -2,33 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { calculateRecommendation } from "@/features/quiz/cortex";
 import { buildRoadmapTiers, defaultRoadmapSelection, resolveRoadmapSelection } from "@/features/quiz/roadmap-options";
-import type { CortexInput, QuizAnswers } from "@/features/quiz/types";
+import { quizV2Input } from "./quiz-v2-fixtures";
 
-const input = (audienceKey: CortexInput["audienceKey"], answers: Record<string, string | string[]>): CortexInput => ({
-  audienceKey,
-  answers: Object.fromEntries(Object.entries(answers).map(([key, value]) => [key, Array.isArray(value) ? value : [value]])) as QuizAnswers,
-});
+const coachProgram = quizV2Input("coaches_educators");
 
-const coachProgram = input("coaches_educators", {
-  q1_goal: "coach_goal_enroll_students",
-  q2_setup: "coach_setup_unclear_website",
-  q3_blocker: "coach_blocker_questions_no_booking",
-  q4_capabilities: ["coach_capability_enrollment_payment", "coach_capability_email_follow_up", "coach_capability_student_onboarding"],
-  q5_complexity: "coach_complexity_program_delivery",
-  q6_readiness: "readiness_within_30_days",
-  q7_platform: "platform_recommend",
-  q8_support: ["support_client_assets"],
-});
-
-const inventoryBusiness = input("custom_order_businesses", {
-  q1_goal: "order_goal_organize_operations",
-  q2_setup: "order_setup_disconnected_tools",
-  q3_blocker: "order_blocker_production_updates",
-  q4_capabilities: ["order_capability_inventory", "order_capability_dashboard", "order_capability_updates"],
-  q5_complexity: "order_complexity_roles_inventory",
-  q6_readiness: "readiness_ready_now",
-  q7_platform: "platform_custom_app",
-  q8_support: ["support_inventory", "support_order_management"],
+const inventoryBusiness = quizV2Input("custom_order_businesses", {
+  q7_post_conversion: ["order_after_approval", "order_after_revisions", "order_after_production", "order_after_inventory"],
+  q8_scope: ["order_scope_inventory", "order_scope_production", "order_scope_permissions", "order_scope_dynamic_pricing"],
 });
 
 describe("roadmap options", () => {

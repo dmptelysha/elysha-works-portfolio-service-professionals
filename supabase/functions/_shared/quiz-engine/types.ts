@@ -1,6 +1,7 @@
-export const CORTEX_VERSION = "cortex-local-v0.1" as const;
-export const QUESTION_SET_VERSION = "portfolio-qualifier-v0.1" as const;
-export const CATALOG_VERSION = "portfolio-catalog-v0.1" as const;
+export const CORTEX_VERSION = "business-systems-cortex-2026.09-v2" as const;
+export const QUESTION_SET_VERSION = "business-systems-assessment-2026.09-v2" as const;
+export const CATALOG_VERSION = "business-systems-catalog-2026.09-v2" as const;
+export const ROADMAP_VERSION = "premium-roadmap-2026.09-v1" as const;
 
 export type AudienceKey =
   | "coaches_educators"
@@ -40,6 +41,30 @@ export type ReadinessLevel =
 export type PlatformKey = "systeme_io" | "gohighlevel" | "custom_app";
 export type BuildRoute = "platform" | "custom";
 export type PublicTierKey = "basic" | "advanced" | "complete";
+
+export interface BusinessLocation {
+  businessCountry: string;
+  countryCode: string;
+  displayCurrency: string;
+  currencySymbol: string;
+  fxRate: number | null;
+  fxRateTimestamp: string | null;
+}
+
+export interface AssessmentProfile {
+  businessModel: string;
+  desiredOutcome: string;
+  currentJourney: string;
+  primaryBottlenecks: readonly string[];
+  demandHealth: string;
+  customerRequirements: readonly string[];
+  postConversionRequirements: readonly string[];
+  scopeRequirements: readonly string[];
+  timeline: string;
+  leadReadiness: ReadinessLevel;
+  platformPreference: string;
+  requestedAddons: readonly string[];
+}
 export type RoadmapFeasibility =
   | { available: true }
   | { available: false; reason: string };
@@ -104,6 +129,7 @@ export interface QuestionDefinition {
   prompt: string;
   helpText?: string;
   selection: SelectionMode;
+  maxSelections?: number;
   scope: QuestionScope;
   required: boolean;
   options: readonly QuizOption[];
@@ -132,6 +158,9 @@ export interface PackageDefinition {
   includedCapabilityKeys: readonly string[];
   includedFeatures: readonly string[];
   integrationAllowance: number;
+  pageOrScreenLimit: number | null;
+  automationLimit: number | null;
+  paymentSetupLimit: number | null;
   supportDays: number;
   revisionRounds: number;
   startingPrice?: boolean;
@@ -239,6 +268,7 @@ export interface RoadmapTier {
 export interface CortexInput {
   audienceKey: AudienceKey;
   answers: QuizAnswers;
+  location?: BusinessLocation;
 }
 
 export interface ValidationResult {
@@ -282,6 +312,34 @@ export interface CortexResult {
   decisionTrace: readonly DecisionTraceEntry[];
   confidenceLevel: RecommendationConfidence;
   confidenceMessage: string;
+  roadmapVersion: typeof ROADMAP_VERSION;
+  location: BusinessLocation;
+  assessmentProfile: AssessmentProfile;
+  pointASummary: string;
+  problemSummary: string;
+  solutionSummary: string;
+  pointBSummary: string;
+  primaryBottleneck: string;
+  secondaryBottleneck: string | null;
+  recommendedCustomerJourney: readonly string[];
+  recommendedPages: readonly string[];
+  recommendedAutomations: readonly string[];
+  recommendedPaymentOptions: readonly string[];
+  includedPaymentSetupCount: number;
+  requiredIntegrations: readonly string[];
+  optionalEnhancements: readonly string[];
+  clientRequirements: readonly string[];
+  thirdPartyCosts: readonly string[];
+  platformReasons: readonly string[];
+  alternativePlatformReasons: Readonly<Record<PlatformKey, string>>;
+  packageReasons: readonly string[];
+  displayCurrency: string;
+  currencySymbol: string;
+  displayPriceLocal: number | null;
+  fxRate: number | null;
+  fxRateTimestamp: string | null;
+  projectDepositLocal: number | null;
+  projectBalanceLocal: number | null;
 }
 
 export interface ProposalRecommendationView {
@@ -301,6 +359,45 @@ export interface ProposalContentViewModel {
   client: { firstName: string; businessName: string };
   pointA: PointABSummary["pointA"];
   pointB: PointABSummary["pointB"];
+  problem: { primary: string; secondary: string | null; summary: string };
+  missingSystem: string;
+  customerJourney: readonly string[];
+  platform: {
+    recommended: PlatformKey;
+    reasons: readonly string[];
+    alternatives: Readonly<Record<PlatformKey, string>>;
+  };
+  package: { offerName: string; reasons: readonly string[] };
+  pages: readonly string[];
+  automations: readonly string[];
+  payment: { options: readonly string[]; includedSetupCount: number };
+  domainAndEmail: {
+    domainOwnership: string;
+    domainSetup: string;
+    businessEmail: string;
+  };
+  investment: {
+    basePriceUsd: number;
+    estimatedTotalUsd: number;
+    currency: string;
+    symbol: string;
+    localTotal: number | null;
+    fxRate: number | null;
+    fxRateTimestamp: string | null;
+  };
+  includedScope: readonly string[];
+  optionalEnhancements: readonly string[];
+  ongoingCosts: readonly string[];
+  clientRequirements: readonly string[];
+  ownership: readonly { item: string; elyshaWorks: string; client: string }[];
+  paymentSchedule: {
+    depositPercent: 50;
+    balancePercent: 50;
+    depositAmount: number | null;
+    balanceAmount: number | null;
+  };
+  pathToPointB: { today: string; withSystem: string; target: string };
+  disclaimer: string;
   recommendation: ProposalRecommendationView;
   selection: RoadmapSelection;
   tiers: readonly RoadmapTier[];
@@ -317,7 +414,7 @@ export interface ProposalViewModel extends ProposalContentViewModel {
 export type QuizStatus = "in_progress" | "completed";
 
 export interface SavedQuizAttempt {
-  storageVersion: 3;
+    storageVersion: 4;
   cortexVersion: typeof CORTEX_VERSION;
   questionSetVersion: typeof QUESTION_SET_VERSION;
   catalogVersion: typeof CATALOG_VERSION;
@@ -326,7 +423,8 @@ export interface SavedQuizAttempt {
   answers: QuizAnswers;
   currentQuestionIndex: number;
   result: CortexResult | null;
-  roadmapSelection: RoadmapSelection | null;
+    roadmapSelection: RoadmapSelection | null;
+    location: BusinessLocation | null;
   createdAt: string;
   updatedAt: string;
   expiresAt: string;

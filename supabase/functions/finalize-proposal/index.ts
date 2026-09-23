@@ -13,6 +13,7 @@ import {
 } from "../_shared/quiz-engine/roadmap-options.ts";
 import type {
   AudienceKey,
+  BusinessLocation,
   PlatformKey,
   PublicTierKey,
   QuizAnswers,
@@ -69,6 +70,7 @@ export interface OwnedProposalInput {
   proposalReference: string | null;
   proposalExpiresAt: string | null;
   selectedRoadmapSnapshot: Record<string, unknown> | null;
+  location: BusinessLocation | null;
 }
 
 export interface FinalizeProposalDependencies {
@@ -173,6 +175,7 @@ export function createFinalizeProposalHandler(
       const result = calculateRecommendation({
         audienceKey: owned.audienceKey,
         answers: owned.answers,
+        location: owned.location ?? undefined,
       });
 
       if (body.operation === "preview") {
@@ -335,7 +338,7 @@ function defaultDependencies(): FinalizeProposalDependencies {
       }
       const quiz = await userClient.from("quiz_sessions")
         .select(
-          "id,owner_user_id,question_set_id,lead_id,audience_key,answers,status",
+          "id,owner_user_id,question_set_id,lead_id,audience_key,answers,status,business_country,country_code,display_currency,currency_symbol,fx_rate,fx_rate_timestamp",
         )
         .eq("id", quizSessionId).single();
       if (
@@ -372,6 +375,16 @@ function defaultDependencies(): FinalizeProposalDependencies {
         proposalReference: proposal.data.proposal_reference,
         proposalExpiresAt: proposal.data.proposal_expires_at,
         selectedRoadmapSnapshot: proposal.data.selected_roadmap_snapshot,
+        location: quiz.data.business_country && quiz.data.country_code && quiz.data.display_currency && quiz.data.currency_symbol
+          ? {
+            businessCountry: quiz.data.business_country,
+            countryCode: quiz.data.country_code,
+            displayCurrency: quiz.data.display_currency,
+            currencySymbol: quiz.data.currency_symbol,
+            fxRate: quiz.data.fx_rate === null ? null : Number(quiz.data.fx_rate),
+            fxRateTimestamp: quiz.data.fx_rate_timestamp,
+          }
+          : null,
       };
     },
     assertApprovedConfiguration: async (questionSetId) => {
@@ -393,8 +406,8 @@ function defaultDependencies(): FinalizeProposalDependencies {
       const scoring = definition.data.scoring_rules as Record<string, unknown>;
       if (
         scoring.server_verified !== true ||
-        scoring.engine_version !== "cortex-local-v0.1" ||
-        scoring.catalog_version !== "portfolio-catalog-v0.1"
+        scoring.engine_version !== "business-systems-cortex-2026.09-v2" ||
+        scoring.catalog_version !== "business-systems-catalog-2026.09-v2"
       ) throw new Error("configuration version mismatch");
       const packageRows = new Map(
         (packages.data ?? []).map((row) => [row.offer_key, row]),

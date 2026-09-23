@@ -4,6 +4,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 import type {
   AudienceKey,
+  BusinessLocation,
   CustomEmailOtpChallenge,
   CustomEmailOtpVerification,
   LeadContactInput,
@@ -28,9 +29,11 @@ export interface QuizProgressInput {
   answers: QuizAnswers;
   currentStep: number;
   lastCompletedStep: number;
+  location?: BusinessLocation | null;
 }
 
 export interface QuizService {
+  getCurrencyQuote: typeof getCurrencyQuote;
   requestEmailOtp: typeof requestCustomEmailOtp;
   verifyEmailOtp: typeof verifyCustomEmailOtp;
   createOwnedQuizContext: typeof createOwnedQuizContext;
@@ -38,6 +41,24 @@ export interface QuizService {
   saveOwnedQuizProgress: typeof saveOwnedQuizProgress;
   previewProposal: typeof previewProposal;
   issueProposal: typeof issueProposal;
+}
+
+export async function getCurrencyQuote(
+  country: { name: string; code: string; currency: string; symbol: string },
+  client?: SupabaseClient,
+): Promise<BusinessLocation> {
+  const response = await clientOrDefault(client).functions.invoke("currency-quote", {
+    body: { countryCode: country.code, countryName: country.name, currency: country.currency, symbol: country.symbol },
+  });
+  const data = response.data as Record<string, unknown> | null;
+  if (
+    response.error || !data ||
+    typeof data.businessCountry !== "string" || typeof data.countryCode !== "string" ||
+    typeof data.displayCurrency !== "string" || typeof data.currencySymbol !== "string" ||
+    typeof data.fxRate !== "number" || !Number.isFinite(data.fxRate) || data.fxRate <= 0 ||
+    (data.fxRateTimestamp !== null && (typeof data.fxRateTimestamp !== "string" || !Number.isFinite(Date.parse(data.fxRateTimestamp))))
+  ) throw safeServiceError();
+  return data as unknown as BusinessLocation;
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -292,6 +313,14 @@ export async function saveOwnedQuizProgress(
       answers: progress.answers,
       current_step: progress.currentStep,
       last_completed_step: progress.lastCompletedStep,
+      ...(progress.location ? {
+        business_country: progress.location.businessCountry,
+        country_code: progress.location.countryCode,
+        display_currency: progress.location.displayCurrency,
+        currency_symbol: progress.location.currencySymbol,
+        fx_rate: progress.location.fxRate,
+        fx_rate_timestamp: progress.location.fxRateTimestamp,
+      } : {}),
     })
     .eq("id", requireUuid(context.quizSessionId))
     .eq("owner_user_id", requireUuid(context.ownerUserId));
@@ -326,6 +355,7 @@ export async function issueProposal(
 }
 
 export const defaultQuizService: QuizService = {
+  getCurrencyQuote,
   requestEmailOtp: requestCustomEmailOtp,
   verifyEmailOtp: verifyCustomEmailOtp,
   createOwnedQuizContext,

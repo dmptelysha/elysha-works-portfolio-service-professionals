@@ -2,9 +2,22 @@ import { PACKAGE_BY_KEY } from "./catalog.ts";
 import { resolveOfferPricing } from "./pricing.ts";
 import { QUIZ_DEFINITIONS } from "./questions.ts";
 import {
+  answerKeys,
+  buildAssessmentProfile,
+  buildAutomations,
+  buildClientRequirements,
+  buildPages,
+  buildPaymentGuidance,
+  buildPlatformReasons,
+  buildThirdPartyCosts,
+  normalizeLocation,
+  paymentSetupLimit,
+} from "./roadmap-builders.ts";
+import {
   CATALOG_VERSION,
   CORTEX_VERSION,
   QUESTION_SET_VERSION,
+  ROADMAP_VERSION,
   type BuildRoute,
   type CortexInput,
   type CortexResult,
@@ -127,6 +140,9 @@ function assertAndNormalize(input: CortexInput) {
     if (question.selection === "single" && selectedKeys.length !== 1) {
       throw new Error(`Question ${question.key} requires exactly one option`);
     }
+    if (question.maxSelections && selectedKeys.length > question.maxSelections) {
+      throw new Error(`Question ${question.key} allows up to ${question.maxSelections} selections`);
+    }
     const allowed = new Map(question.options.map((item) => [item.key, item]));
     normalized.set(
       question.key,
@@ -161,7 +177,7 @@ function aggregate(input: CortexInput) {
     const signals = selected.flatMap((item) => item.signals);
     signals.forEach((signal) => flags.add(signal));
 
-    if (["q1_goal", "q2_setup", "q3_blocker", "q4_capabilities", "q5_complexity", "q8_support"].includes(question.key)) {
+    if (["q1_business_model", "q2_goal", "q3_current_journey", "q4_bottlenecks", "q6_customer_requirements", "q7_post_conversion", "q8_scope"].includes(question.key)) {
       const diagnosticDelta = [0, 0, 0];
       const solutionDelta = [0, 0, 0, 0, 0];
       const platformDelta = [0, 0, 0];
@@ -182,8 +198,8 @@ function aggregate(input: CortexInput) {
       [platforms.systeme, platforms.ghl, platforms.customBuild] = platformTarget;
     }
 
-    if (question.key === "q6_readiness") readiness = selected[0].readiness ?? "researching";
-    if (question.key === "q7_platform") {
+    if (question.key === "q9_timeline") readiness = selected[0].readiness ?? "researching";
+    if (question.key === "q10_platform") {
       const preference = selected[0].platformPreference;
       if (preference === "systeme_io") platforms.systeme += 2;
       if (preference === "gohighlevel") platforms.ghl += 2;
@@ -237,18 +253,43 @@ function choosePrimarySolution(scores: SolutionScores, flags: Set<SignalTag>) {
   return ranked[0].key;
 }
 
-function chooseRoute(scores: SolutionScores, platforms: PlatformScores, flags: Set<SignalTag>): BuildRoute {
-  if (flags.has("inventory") || flags.has("multiple_roles")) return "custom";
-  const hasCustomSignal = [...flags].some((signal) => GENUINE_CUSTOM_SIGNALS.has(signal));
-  if (!hasCustomSignal) return "platform";
-  if (flags.has("portal") && flags.has("dashboard")) return "custom";
-  const highestSolution = Math.max(scores.website, scores.funnel, scores.automation, scores.crm, scores.customApp);
-  const customLeadsPlatforms = platforms.customBuild >= Math.max(platforms.systeme, platforms.ghl) + 2;
-  return scores.customApp >= highestSolution || customLeadsPlatforms ? "custom" : "platform";
+function customRequirementReasons(input: CortexInput): string[] {
+  const keys = answerKeys(input.answers);
+  const reasons: string[] = [];
+  if (["order_scope_inventory", "order_after_inventory", "order_blocker_inventory", "order_addon_inventory"].some((key) => keys.has(key))) {
+    reasons.push("Inventory or raw-material tracking requires persistent operational records.");
+  }
+  if (["order_scope_dynamic_pricing", "order_addon_pricing", "order_scope_delivery_calculation", "order_addon_delivery_fee"].some((key) => keys.has(key))) {
+    reasons.push("Dynamic pricing or delivery calculations require custom business rules.");
+  }
+  if (["order_scope_permissions", "order_addon_roles", "service_scope_compliance"].some((key) => keys.has(key))) {
+    reasons.push("Specialized staff permissions require purpose-built access controls.");
+  }
+  if (
+    keys.has("order_scope_production") &&
+    ["order_scope_proof", "order_scope_revisions", "order_after_approval", "order_after_revisions"].some((key) => keys.has(key))
+  ) {
+    reasons.push("Connected proof, revision, approval, and production states require a specialized operational workflow.");
+  }
+  return reasons;
 }
 
-function choosePlatform(route: BuildRoute, platforms: PlatformScores, flags: Set<SignalTag>): PlatformKey {
+function chooseRoute(input: CortexInput): BuildRoute {
+  return customRequirementReasons(input).length ? "custom" : "platform";
+}
+
+function choosePlatform(input: CortexInput, route: BuildRoute, platforms: PlatformScores, flags: Set<SignalTag>): PlatformKey {
   if (route === "custom") return "custom_app";
+  const keys = answerKeys(input.answers);
+  const preferred = keys.has("platform_systeme") ? "systeme_io" : keys.has("platform_highlevel") ? "gohighlevel" : null;
+  const highLevelJourney = input.audienceKey === "service_businesses" || (
+    keys.has("coach_customer_apply") && keys.has("coach_customer_book") &&
+    (keys.has("coach_customer_follow_up") || keys.has("coach_after_intake"))
+  );
+  if (highLevelJourney) return "gohighlevel";
+  if (input.audienceKey === "coaches_educators") return preferred ?? "systeme_io";
+  if (input.audienceKey === "custom_order_businesses") return preferred ?? "gohighlevel";
+  if (preferred) return preferred;
   if (platforms.systeme > platforms.ghl) return "systeme_io";
   if (platforms.ghl > platforms.systeme) return "gohighlevel";
   const systemeSignals = ["enrollment", "course_delivery", "checkout"] as const;
@@ -258,15 +299,31 @@ function choosePlatform(route: BuildRoute, platforms: PlatformScores, flags: Set
   return systemeFit > ghlFit ? "systeme_io" : "gohighlevel";
 }
 
-function chooseOffer(route: BuildRoute, complexity: number, flags: Set<SignalTag>) {
+function chooseOffer(
+  input: CortexInput,
+  route: BuildRoute,
+  pages: readonly string[],
+  automations: readonly string[],
+  flags: Set<SignalTag>,
+) {
+  const keys = answerKeys(input.answers);
   if (route === "platform") {
-    if (complexity >= 10 || flags.has("multiple_offers")) return "platform_scale";
-    if (complexity >= 5 || flags.has("pipeline") || flags.has("onboarding") || flags.has("enrollment")) return "platform_growth";
+    const complete = pages.length > 8 || automations.length > 7 || flags.has("multiple_offers") ||
+      ["service_scope_team", "service_scope_assignment", "service_scope_pipelines"].filter((key) => keys.has(key)).length >= 2;
+    if (complete) return "platform_scale";
+    const advanced = pages.length > 5 || automations.length > 3 ||
+      (["pipeline", "onboarding", "enrollment"] as const).some((signal) => flags.has(signal)) ||
+      keys.has("coach_customer_apply") || keys.has("service_customer_qualify");
+    if (advanced) return "platform_growth";
     return "platform_launch";
   }
-  if (flags.has("inventory") || flags.has("multiple_roles") || complexity >= 13) return "custom_complete";
-  if (flags.has("portal") || flags.has("dashboard") || complexity >= 9) return "custom_growth";
-  if (complexity >= 5) return "custom_foundation";
+  const hardCount = customRequirementReasons(input).length;
+  const completeArchitecture = hardCount >= 3 || (
+    keys.has("order_scope_inventory") && keys.has("order_scope_production") && keys.has("order_scope_permissions")
+  );
+  if (completeArchitecture || pages.length > 15) return "custom_complete";
+  if (pages.length > 10 || flags.has("portal") || flags.has("dashboard") || flags.has("multiple_roles")) return "custom_growth";
+  if (pages.length > 6 || flags.has("approvals") || flags.has("order_tracking")) return "custom_foundation";
   return "custom_starter";
 }
 
@@ -295,24 +352,26 @@ function solutionTitle(primary: SolutionType, input: CortexInput, flags: Set<Sig
 
 export function calculateRecommendation(input: CortexInput): CortexResult {
   const aggregated = aggregate(input);
-  const route = chooseRoute(aggregated.solutions, aggregated.platforms, aggregated.flags);
+  const route = chooseRoute(input);
   let primary = choosePrimarySolution(aggregated.solutions, aggregated.flags);
   const highestSolutionScore = Math.max(
     ...SOLUTIONS.map((solution) => solutionValue(aggregated.solutions, solution)),
   );
   const lowConfidence = highestSolutionScore < 4;
   if (lowConfidence) {
-    const q1Scores = aggregated.trace.find((entry) => entry.questionKey === "q1_goal")?.after.solutions;
+    const q1Scores = aggregated.trace.find((entry) => entry.questionKey === "q2_goal")?.after.solutions;
     if (q1Scores) primary = choosePrimarySolution(q1Scores, aggregated.flags);
   }
   const scoredPrimary = primary;
   if (route === "custom") primary = "custom_app";
   const customRouteOverrodePrimary = route === "custom" && scoredPrimary !== "custom_app";
-  const platform = choosePlatform(route, aggregated.platforms, aggregated.flags);
-  const offerKey = chooseOffer(route, aggregated.diagnostic.systemComplexity, aggregated.flags);
+  const platform = choosePlatform(input, route, aggregated.platforms, aggregated.flags);
+  const recommendedPages = buildPages(input.audienceKey, input.answers);
+  const recommendedAutomations = buildAutomations(input.audienceKey, input.answers);
+  const offerKey = chooseOffer(input, route, recommendedPages, recommendedAutomations, aggregated.flags);
   const offer = PACKAGE_BY_KEY.get(offerKey);
   if (!offer) throw new Error(`Unknown offer key ${offerKey}`);
-  const selectedSupportOptionKeys = aggregated.normalized.get("q8_support")?.map((option) => option.key) ?? [];
+  const selectedSupportOptionKeys = aggregated.normalized.get("q11_addons")?.map((option) => option.key) ?? [];
   const pricing = resolveOfferPricing(offerKey, selectedSupportOptionKeys);
   const primaryScore = solutionValue(aggregated.solutions, primary);
   const supportingSolutionTypes = SOLUTIONS.filter(
@@ -322,6 +381,23 @@ export function calculateRecommendation(input: CortexInput): CortexResult {
       Math.abs(primaryScore - solutionValue(aggregated.solutions, solution)) <= 2,
   );
   const selectedSignalLabels = [...aggregated.flags].filter((signal) => !["simple_scope", "no_system_effect"].includes(signal));
+  const location = normalizeLocation(input.location);
+  const assessmentProfile = buildAssessmentProfile(input.audienceKey, input.answers, aggregated.readiness);
+  const hardCustomReasons = customRequirementReasons(input);
+  const payment = buildPaymentGuidance(input.audienceKey, input.answers, location, platform);
+  const platformExplanation = buildPlatformReasons(input.audienceKey, input.answers, platform, hardCustomReasons);
+  const totalUsd = offer.basePriceUsd + pricing.addonTotalUsd;
+  const displayPriceLocal = location.fxRate ? Math.round(totalUsd * location.fxRate) : null;
+  const demandCaution = (input.answers.q5_demand_health ?? []).includes("demand_early_awareness")
+    ? " Traffic and awareness are still developing, so the system should improve conversion without being presented as a substitute for consistent visibility."
+    : "";
+  const primaryBottleneck = assessmentProfile.primaryBottlenecks[0] ?? "The current customer journey relies on avoidable manual steps.";
+  const secondaryBottleneck = assessmentProfile.primaryBottlenecks[1] ?? null;
+  const packageReasons = [
+    `${recommendedPages.length} planned customer-facing pages or application screens`,
+    `${recommendedAutomations.length} relevant confirmations, reminders, or follow-up workflows`,
+    route === "custom" ? "Specialized operational requirements that need a purpose-built application" : "A connected customer journey supported by the selected platform",
+  ];
   const decisionTrace: DecisionTraceEntry[] = [
     {
       ruleKey: "primary_solution",
@@ -373,7 +449,7 @@ export function calculateRecommendation(input: CortexInput): CortexResult {
     primarySolutionType: primary,
     supportingSolutionTypes,
     recommendedSolutionTitle: solutionTitle(primary, input, aggregated.flags),
-    diagnosisSummary: `Your answers point to ${selectedSignalLabels.slice(0, 3).join(", ").replaceAll("_", " ") || "a focused first step"} as the clearest priorities.`,
+    diagnosisSummary: `Your answers point to ${selectedSignalLabels.slice(0, 3).join(", ").replaceAll("_", " ") || "a focused first step"} as the clearest priorities.${demandCaution}`,
     recommendationReason: `${offer.name} matches the required workflow and current system complexity without using readiness to reduce the scope.`,
     technicalConstraintSignals: [...aggregated.flags].filter((signal) => GENUINE_CUSTOM_SIGNALS.has(signal)),
     selectedSupportOptionKeys,
@@ -388,7 +464,7 @@ export function calculateRecommendation(input: CortexInput): CortexResult {
     basePriceUsd: offer.basePriceUsd,
     addonTotalUsd: pricing.addonTotalUsd,
     adjustmentTotalUsd: 0,
-    estimatedProjectInvestmentUsd: offer.basePriceUsd + pricing.addonTotalUsd,
+    estimatedProjectInvestmentUsd: totalUsd,
     estimatedRecurringCosts: pricing.estimatedRecurringCosts,
     explanationTrace: aggregated.trace,
     decisionTrace,
@@ -396,5 +472,35 @@ export function calculateRecommendation(input: CortexInput): CortexResult {
     confidenceMessage: lowConfidence
       ? "Low-confidence planning recommendation: no solution reached the qualifying score, so this direction follows your primary goal and should be confirmed in a strategy call."
       : "The recommendation met the approved qualifying-score and route rules.",
+    roadmapVersion: ROADMAP_VERSION,
+    location,
+    assessmentProfile,
+    pointASummary: `${assessmentProfile.currentJourney} ${assessmentProfile.demandHealth}`,
+    problemSummary: secondaryBottleneck
+      ? `${primaryBottleneck} A second issue is that ${secondaryBottleneck.charAt(0).toLowerCase()}${secondaryBottleneck.slice(1)}`
+      : primaryBottleneck,
+    solutionSummary: `The business needs a connected ${recommendedPages.join(" → ")} journey supported by ${recommendedAutomations.length ? "the relevant confirmations and follow-up" : "a clear handoff between each step"}.`,
+    pointBSummary: assessmentProfile.desiredOutcome,
+    primaryBottleneck,
+    secondaryBottleneck,
+    recommendedCustomerJourney: recommendedPages,
+    recommendedPages,
+    recommendedAutomations,
+    recommendedPaymentOptions: payment.options,
+    includedPaymentSetupCount: paymentSetupLimit(offerKey),
+    requiredIntegrations: payment.integrations,
+    optionalEnhancements: assessmentProfile.requestedAddons.map((item) => `${item} — optional; final inclusion or price is confirmed during discovery.`),
+    clientRequirements: buildClientRequirements(input.audienceKey, input.answers),
+    thirdPartyCosts: buildThirdPartyCosts(platform, input.answers),
+    platformReasons: platformExplanation.reasons,
+    alternativePlatformReasons: platformExplanation.alternatives,
+    packageReasons,
+    displayCurrency: location.displayCurrency,
+    currencySymbol: location.currencySymbol,
+    displayPriceLocal,
+    fxRate: location.fxRate,
+    fxRateTimestamp: location.fxRateTimestamp,
+    projectDepositLocal: displayPriceLocal === null ? null : Math.round(displayPriceLocal / 2),
+    projectBalanceLocal: displayPriceLocal === null ? null : Math.round(displayPriceLocal / 2),
   };
 }

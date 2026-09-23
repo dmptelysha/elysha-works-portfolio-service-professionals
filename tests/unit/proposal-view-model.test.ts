@@ -10,11 +10,9 @@ import {
 } from "@/features/quiz/proposal-view";
 import { defaultRoadmapSelection } from "@/features/quiz/roadmap-options";
 import type {
-  AudienceKey,
-  CortexInput,
   LeadContactInput,
-  QuizAnswers,
 } from "@/features/quiz/types";
+import { quizV2Input } from "./quiz-v2-fixtures";
 
 const contact: LeadContactInput = {
   firstName: "Ely",
@@ -24,63 +22,24 @@ const contact: LeadContactInput = {
   consent: true,
 };
 
-function complete(
-  audienceKey: AudienceKey,
-  answers: Record<string, string | string[]>,
-): CortexInput {
-  return {
-    audienceKey,
-    answers: Object.fromEntries(
-      Object.entries(answers).map(([key, value]) => [key, Array.isArray(value) ? value : [value]]),
-    ) as QuizAnswers,
-  };
-}
-
 const fixtures = [
   {
     name: "coaches and educators",
-    input: complete("coaches_educators", {
-      q1_goal: "coach_goal_enroll_students",
-      q2_setup: "coach_setup_unclear_website",
-      q3_blocker: "coach_blocker_questions_no_booking",
-      q4_capabilities: ["coach_capability_enrollment_payment", "coach_capability_student_onboarding"],
-      q5_complexity: "coach_complexity_program_delivery",
-      q6_readiness: "readiness_within_30_days",
-      q7_platform: "platform_recommend",
-      q8_support: ["support_client_assets"],
-    }),
-    pointA: ["Through a website, but the path is unclear.", "People ask questions but do not book or enroll."],
-    pointB: ["Enroll more students in a course or program.", "Enrollment and payment.", "Student onboarding or portal."],
+    input: quizV2Input("coaches_educators"),
+    pointA: ["Through a website, but the next step is unclear.", "People are interested but do not book or enroll.", "Follow-up is manual or inconsistent.", "We receive steady inquiries or leads but lose some before conversion."],
+    pointB: ["Enroll more students.", "Pay or enroll online.", "Access a course or resource library."],
   },
   {
     name: "service businesses",
-    input: complete("service_businesses", {
-      q1_goal: "service_goal_book_appointments",
-      q2_setup: "service_setup_disconnected_booking",
-      q3_blocker: "service_blocker_manual_intake_follow_up",
-      q4_capabilities: ["service_capability_booking", "service_capability_reminders"],
-      q5_complexity: "service_complexity_multiple_services",
-      q6_readiness: "readiness_ready_now",
-      q7_platform: "platform_recommend",
-      q8_support: ["support_client_assets"],
-    }),
-    pointA: ["A booking tool that is not connected to the rest of the workflow.", "Intake, reminders, and follow-up take too much time."],
-    pointB: ["Book more appointments or consultations.", "Appointment booking.", "Automated reminders and follow-up."],
+    input: quizV2Input("service_businesses"),
+    pointA: ["A booking tool followed by manual follow-up.", "Inquiries do not consistently become bookings.", "Intake, reminders, and follow-up take too much time.", "We receive steady inquiries or leads but lose some before conversion."],
+    pointB: ["Book more appointments or consultations.", "Book an appointment or consultation.", "Receive automatic reminders."],
   },
   {
     name: "custom-order businesses",
-    input: complete("custom_order_businesses", {
-      q1_goal: "order_goal_organize_operations",
-      q2_setup: "order_setup_disconnected_tools",
-      q3_blocker: "order_blocker_production_updates",
-      q4_capabilities: ["order_capability_updates", "order_capability_inventory"],
-      q5_complexity: "order_complexity_roles_inventory",
-      q6_readiness: "readiness_ready_now",
-      q7_platform: "platform_recommend",
-      q8_support: ["support_inventory", "support_order_management"],
-    }),
-    pointA: ["Through several disconnected tools or spreadsheets.", "Production status, delivery, and customer updates are difficult to track."],
-    pointB: ["Organize orders, payments, and customer updates.", "Automated confirmation and updates.", "Inventory or production tracking."],
+    input: quizV2Input("custom_order_businesses"),
+    pointA: ["We use several disconnected tools or spreadsheets.", "Production status is difficult to monitor.", "Customers frequently ask for order updates.", "We receive inquiries, but they are inconsistent."],
+    pointB: ["Organize quotes, deposits, production, and customer updates.", "Choose customization options.", "Receive automatic status updates."],
   },
 ] as const;
 
@@ -121,7 +80,7 @@ describe("proposal view model", () => {
   it("rejects answer keys that do not belong to the approved definition", () => {
     const input = fixtures[0].input;
     const result = calculateRecommendation(input);
-    const tampered = { ...input.answers, q2_setup: ["browser_supplied_label"] };
+    const tampered = { ...input.answers, q3_current_journey: ["browser_supplied_label"] };
 
     expect(() => buildProposalDraft(contact, tampered, result, defaultRoadmapSelection(result))).toThrow(/unknown option key/i);
   });

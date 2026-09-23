@@ -99,7 +99,15 @@ function createFakeQuizService() {
     verified: true as const,
     grantExpiresAt: "2026-09-23T00:20:00.000Z",
   }));
-  return { requestEmailOtp, verifyEmailOtp, createOwnedQuizContext, submitLeadContact, saveOwnedQuizProgress, previewProposal, issueProposal };
+  const getCurrencyQuote = vi.fn(async () => ({
+    businessCountry: "Philippines",
+    countryCode: "PH",
+    displayCurrency: "PHP",
+    currencySymbol: "PHP",
+    fxRate: 58,
+    fxRateTimestamp: "2026-09-23T00:00:00.000Z",
+  }));
+  return { getCurrencyQuote, requestEmailOtp, verifyEmailOtp, createOwnedQuizContext, submitLeadContact, saveOwnedQuizProgress, previewProposal, issueProposal };
 }
 
 async function fillContactStep(
@@ -122,6 +130,14 @@ async function completeContactStep(
   await user.type(await screen.findByLabelText(/verification code/i), "123456");
   await user.click(screen.getByRole("button", { name: /verify code/i }));
   await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
+  await screen.findByRole("heading", { name: /where does your business operate/i });
+  await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
+  await screen.findByRole("heading", { name: /your roadmap starts with context/i });
+}
+
+async function completeLocationStep(user: ReturnType<typeof userEvent.setup>) {
+  await screen.findByRole("heading", { name: /where does your business operate/i });
+  await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
   await screen.findByRole("heading", { name: /your roadmap starts with context/i });
 }
 
@@ -133,7 +149,7 @@ async function completeServiceBusinessAssessment(user: ReturnType<typeof userEve
   const definition = QUIZ_DEFINITIONS.service_businesses;
   for (const [index, question] of definition.questions.entries()) {
     await user.click(screen.getByRole(question.selection === "single" ? "radio" : "button", { name: question.options[0].label }));
-    await user.click(screen.getByRole("button", { name: index === 7 ? /see my roadmap/i : /continue/i }));
+    await user.click(screen.getByRole("button", { name: index === definition.questions.length - 1 ? /see my roadmap/i : /continue/i }));
   }
 }
 
@@ -329,7 +345,7 @@ describe("local portfolio quiz", () => {
     expect(service.submitLeadContact).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
     expect(service.submitLeadContact).toHaveBeenCalledOnce();
-    expect(await screen.findByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
+    await completeLocationStep(user);
   });
 
   it("unblocks contact submission on Turnstile success and safely blocks again on expiry or error", async () => {
@@ -459,7 +475,7 @@ describe("local portfolio quiz", () => {
     await waitFor(() => expect(service.submitLeadContact).toHaveBeenLastCalledWith(
       expect.anything(), "70000000-0000-4000-8000-000000000001", expect.objectContaining({ businessScope: "same_business" }),
     ));
-    expect(await screen.findByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
+    await completeLocationStep(user);
   });
 
   it("lets a verified returning identity organize a different business separately", async () => {
@@ -513,7 +529,7 @@ describe("local portfolio quiz", () => {
     const definition = QUIZ_DEFINITIONS.service_businesses;
     for (const [index, question] of definition.questions.entries()) {
       await user.click(screen.getByRole(question.selection === "single" ? "radio" : "button", { name: question.options[0].label }));
-      await user.click(screen.getByRole("button", { name: index === 7 ? /see my roadmap/i : /continue/i }));
+      await user.click(screen.getByRole("button", { name: index === definition.questions.length - 1 ? /see my roadmap/i : /continue/i }));
     }
 
     await waitFor(() => expect(service.previewProposal).toHaveBeenCalledWith(expect.objectContaining({ quizSessionId: ownedContext.quizSessionId })));
@@ -604,10 +620,10 @@ describe("local portfolio quiz", () => {
     expect(continueButton).toHaveTextContent(/preparing assessment/i);
     await waitFor(() => expect(service.submitLeadContact).toHaveBeenCalledOnce());
     finishSubmission();
-    expect(await screen.findByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
+    await completeLocationStep(user);
   });
 
-  it("completes all eight questions without navigation or network calls", async () => {
+  it("completes all eleven questions without navigation or page reloads", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const initialUrl = window.location.href;
@@ -625,12 +641,12 @@ describe("local portfolio quiz", () => {
 
     const definition = QUIZ_DEFINITIONS.service_businesses;
     for (const [index, question] of definition.questions.entries()) {
-      expect(screen.getByText(`Question ${index + 1} of 8`)).toBeInTheDocument();
+      expect(screen.getByText(`Question ${index + 1} of 11`)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: question.prompt })).toBeInTheDocument();
       const option = screen.getByRole(question.selection === "single" ? "radio" : "button", { name: question.options[0].label });
       await user.click(option);
       if (question.selection === "single") expect(option).toHaveAttribute("aria-checked", "true");
-      await user.click(screen.getByRole("button", { name: index === 7 ? /see my roadmap/i : /continue/i }));
+      await user.click(screen.getByRole("button", { name: index === definition.questions.length - 1 ? /see my roadmap/i : /continue/i }));
     }
 
     expect(await screen.findByRole("heading", { name: /Mara.*Mara Consulting/i })).toBeInTheDocument();
@@ -705,16 +721,17 @@ describe("local portfolio quiz", () => {
     const user = userEvent.setup();
     const now = Date.now();
     const attempt: SavedQuizAttempt = {
-      storageVersion: 3,
+      storageVersion: 4,
       cortexVersion: CORTEX_VERSION,
       questionSetVersion: QUESTION_SET_VERSION,
       catalogVersion: CATALOG_VERSION,
       status: "in_progress",
       audienceKey: "coaches_educators",
-      answers: { q1_goal: ["coach_goal_book_calls"] },
+      answers: { q1_business_model: ["coach_model_course"] },
       currentQuestionIndex: 1,
       result: null,
       roadmapSelection: null,
+      location: null,
       createdAt: new Date(now - 60_000).toISOString(),
       updatedAt: new Date(now - 30_000).toISOString(),
       expiresAt: new Date(now + QUIZ_TTL_MS).toISOString(),
@@ -735,7 +752,7 @@ describe("local portfolio quiz", () => {
     expect(screen.getByRole("heading", { name: /where should we send your proposal/i })).toBeInTheDocument();
     await completeContactStep(user);
     await user.click(screen.getByRole("button", { name: /start my assessment/i }));
-    expect(screen.getByText("Question 2 of 8")).toBeInTheDocument();
+    expect(screen.getByText("Question 2 of 11")).toBeInTheDocument();
 
     unmount();
     render(<QuizExperience service={createFakeQuizService()} />);
@@ -754,7 +771,7 @@ describe("local portfolio quiz", () => {
     const definition = QUIZ_DEFINITIONS.custom_order_businesses;
     for (const [index, question] of definition.questions.entries()) {
       await user.click(screen.getByRole(question.selection === "single" ? "radio" : "button", { name: question.options[0].label }));
-      await user.click(screen.getByRole("button", { name: index === 7 ? /see my roadmap/i : /continue/i }));
+      await user.click(screen.getByRole("button", { name: index === definition.questions.length - 1 ? /see my roadmap/i : /continue/i }));
     }
     expect(await screen.findByRole("heading", { name: /Mara.*La Jaysiedel Cakes/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /where La Jaysiedel Cakes is now/i })).toBeInTheDocument();

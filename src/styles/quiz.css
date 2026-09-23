@@ -150,6 +150,13 @@
 .quiz-intro-notes { display: flex; flex-wrap: wrap; justify-content: center; gap: .75rem; margin: 2.25rem 0; }
 .quiz-intro-notes span { padding: .55rem .75rem; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; color: #d8d6cf; font-size: .76rem; }
 
+.quiz-location { width: min(100%, 58rem); }
+.quiz-location form { display: grid; gap: .75rem; width: min(100%, 42rem); margin-top: 2rem; }
+.quiz-location label { color: var(--portfolio-text); font-size: .78rem; font-weight: 700; }
+.quiz-location input { min-height: 3.8rem; padding: .85rem 1rem; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.035); color: var(--portfolio-text); font: inherit; outline: none; }
+.quiz-location input:focus { border-color: var(--portfolio-gold); box-shadow: 0 0 0 3px rgba(255,211,105,.1); }
+.quiz-location .quiz-primary { justify-self: start; margin-top: .5rem; }
+
 .quiz-contact { width: min(100%, 76rem); }
 .quiz-contact > h1 {
   max-width: none;
@@ -345,6 +352,16 @@
 .result-check-list li { break-inside: avoid; position: relative; padding: .55rem 0 .55rem 1.6rem; }
 .result-check-list li::before { content: "✓"; position: absolute; left: 0; color: var(--portfolio-gold); }
 .result-simple-list { display: grid; gap: .75rem; margin: 2rem 0 0; padding-left: 1.2rem; }
+.result-journey { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1px; margin: 2rem 0 0; padding: 1px; background: rgba(255,255,255,.14); list-style-position: inside; }
+.result-journey li { padding: 1.25rem; background: #0b0c0b; }
+.result-details { margin-top: 2rem; border-top: 1px solid rgba(255,255,255,.14); padding-top: 1rem; }
+.result-details summary { color: var(--portfolio-gold); cursor: pointer; font-weight: 700; }
+.result-details p { color: var(--portfolio-muted); line-height: 1.55; }
+.result-table-wrap { overflow-x: auto; margin-top: 2rem; }
+.result-table { width: 100%; border-collapse: collapse; min-width: 48rem; }
+.result-table th, .result-table td { padding: 1rem; border: 1px solid rgba(255,255,255,.14); color: var(--portfolio-muted); text-align: left; vertical-align: top; line-height: 1.5; }
+.result-table thead th, .result-table tbody th { color: var(--portfolio-text); }
+.result-disclaimer { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid rgba(255,255,255,.14); font-size: .78rem; }
 .result-confidence-note { padding-top: 1rem; border-top: 1px solid rgba(255,255,255,.13); }
 .decision-trace { display: grid; gap: .9rem; margin: 1.5rem 0 0; padding: 0; list-style: none; counter-reset: decisions; }
 .decision-trace li { display: grid; gap: .25rem; padding-left: 2rem; position: relative; counter-increment: decisions; }
