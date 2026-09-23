@@ -41,6 +41,24 @@ test("the portfolio blueprint remains the documented source of truth", () => {
   assert.doesNotMatch(blueprint, /Email My PDF Roadmap/i);
 });
 
+test("the authoritative docs describe the verified proposal workflow", () => {
+  const docs = [
+    readFileSync(fromRoot("docs/portfolio-blueprint.md"), "utf8"),
+    readFileSync(fromRoot("docs/supabase-database.md"), "utf8"),
+  ].join("\n");
+
+  assert.match(docs, /verified email.*before.*lead/is);
+  assert.match(docs, /Gmail SMTP.*Supabase Dashboard/is);
+  assert.match(docs, /\{\{ \.Token \}\}/);
+  assert.match(docs, /60-second.*resend/is);
+  assert.match(docs, /10-minute.*OTP/is);
+  assert.match(docs, /begin_qualified_quiz_v2.*compatibility/is);
+  assert.match(docs, /complete approved inclusions/is);
+  assert.match(docs, /accepted.*true.*delivery_id/is);
+  assert.match(docs, /booking.*handoff.*external.*consumer/is);
+  assert.doesNotMatch(docs, /SMTP_PASSWORD\s*=\s*[^<\s]/i);
+});
+
 test("the Next homepage composes the approved seven-section React experience", () => {
   const page = readFileSync(fromRoot("src/app/page.tsx"), "utf8");
   assert.doesNotMatch(page, /live-home\.html/);

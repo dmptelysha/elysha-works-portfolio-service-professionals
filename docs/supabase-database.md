@@ -86,6 +86,14 @@ If the CLI is installed globally, the equivalent core commands are `supabase tes
 
 Anonymous users operate through PostgreSQL role `authenticated`; ownership remains `auth.uid() = owner_user_id`. The `anon` role receives only explicitly granted public published/active reads.
 
+## Verified email OTP and Gmail SMTP
+
+The qualified quiz is verified-email-first: contact details remain memory-only until Supabase Auth verifies the six-digit email OTP. Only then does the browser create owned visitor/session/quiz rows and call `begin_verified_qualified_quiz`; the RPC reads canonical email and verification time from `auth.users` before creating or reusing the lead.
+
+Local `supabase/config.toml` points to `supabase/templates/magic-link.html`, whose hosted equivalent must include `{{ .Token }}`. Configure a **10-minute OTP expiry** and **60-second resend** interval. For the hosted project, configure the authorized **Gmail SMTP connection in the Supabase Dashboard** under Authentication email/SMTP settings. Enter the Gmail credential only in the dashboard secret field; never place it in `.env.local`, SQL, source, chat, screenshots, shell commands, or Git.
+
+The current additive compatibility window intentionally leaves `begin_qualified_quiz_v2` callable for cached clients while the new verified function is deployed. New code never calls it. After observing that stale-client traffic has ended, use a separately reviewed migration to return `upgrade_required`, then a later separately approved migration to revoke its browser execution. Do not combine those compatibility retirements with the initial verified-lead migration.
+
 ## Authorization assumption
 
 `public.is_portfolio_admin()` uses the secure default-deny assumption `app_metadata.role = 'admin'`. Only trusted server-side administration may set this claim. The helper never trusts `user_metadata` or email addresses, no user is automatically promoted, and no fake admin account is created. Changing the final claim convention requires changing this isolated helper and rerunning the security tests.
@@ -94,7 +102,7 @@ Anonymous users operate through PostgreSQL role `authenticated`; ownership remai
 
 Visitor-callable security-definer functions validate `auth.uid()`, ownership of every referenced row, bounded scalar/JSON inputs, and fixed `search_path = ''`. They assign CRM state, ownership, prices, timestamps, proposal state, and orchestration values internally.
 
-Existing restricted functions include lead/booking/analytics/linking operations. The connected flow uses `begin_qualified_quiz_v2`; it recognizes a reused email only inside the current anonymous owner's visitor record, returns a minimal same/another-business decision, reuses the stable lead for the same business, and creates a separate lead for another business. Cross-device recognition remains unavailable until an email OTP flow is approved. The legacy `begin_qualified_quiz` function remains for migration compatibility but browser execution is revoked. Trusted proposal state functions are service-role-only, and the former browser-wide result persistence grant is revoked.
+Existing restricted functions include lead/booking/analytics/linking operations. The connected flow uses `begin_verified_qualified_quiz`; it rejects anonymous JWTs, derives identity from the verified Auth user, returns a minimal same/another-business decision, reuses the stable lead for the same business, and creates a separate lead for another business. `begin_qualified_quiz_v2` remains only for the explicitly documented compatibility window. The legacy `begin_qualified_quiz` function remains for older migration compatibility but browser execution is revoked. Trusted proposal state functions are service-role-only, and the former browser-wide result persistence grant is revoked.
 
 Four Edge Functions form the external boundary:
 
@@ -126,6 +134,10 @@ Do not put secret values on a command line that may be captured in shell history
 - Legal/business retention periods and destructive cleanup remain deferred; do not install a destructive cron job.
 
 Make uses two scenarios. Scenario A receives one signed idempotent immediate-delivery request and sends the proposal link/key through an authorized Gmail connection. Its final Webhook Response must return JSON containing `accepted: true` and the exact incoming `delivery_id`; a generic HTTP 2xx response is rejected and cannot mark the proposal email `sent`. Scenario B runs every 15 minutes, asks `make-proposal-followups` for due work, revalidates immediately before sending, and acknowledges the result. Follow-ups occur at +24, +48, and +72 hours; +96 marks an eligible unbooked lead cold without sending a fourth email. Any booking row or valid stop request suppresses later automation. Do not treat either scenario as production-ready until the Gmail connection, idempotency branch, final acknowledgement, and controlled delivery test are verified.
+
+Roadmap and protected-proposal views render the **complete approved inclusions** for the selected package/platform; they do not truncate the catalog for presentation. Make receives only the sanitized proposal summaries and access data required for delivery.
+
+Direct booking prefill is gated by the booking handoff external consumer defined in `docs/contracts/quiz-booking-handoff.md`. Until that backend is deployed and contract-tested, production uses the safe `/booking/` form fallback.
 
 No PDF is generated. Make does not receive database authority, the Supabase service-role key, or permission to decide eligibility.
 

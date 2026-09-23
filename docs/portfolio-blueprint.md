@@ -31,12 +31,12 @@ Convert relevant visitors into qualified leads and strategy-call bookings by tur
 
 ### Important experience rule
 
-The approved quiz is a **contact-qualified assessment**. After choosing an audience and before Question 1, the visitor supplies a first name, business name, email address, and explicit proposal-email consent. The contact step explains that Elysha Works will email the proposal and up to three proposal-related follow-ups unless booking or a stop request ends the sequence. The browser keeps the form values when submission fails and never silently bypasses lead creation.
+The approved quiz is a **verified-email contact-qualified assessment**. After choosing an audience and before Question 1, the visitor supplies a first name, last name, business name, email address, and explicit proposal-email consent. Supabase sends a six-digit passwordless email OTP. The visitor must verify the email before any qualified lead or visitor/session/quiz context is created. Unverified contact PII stays only in React component memory and never enters local storage, URLs, analytics, or logs. The contact step explains that Elysha Works will email the proposal and up to three proposal-related follow-ups unless booking or a stop request ends the sequence.
 
 The authoritative journey is:
 
 ```text
-Audience → Contact → Quiz → Point A → Point B → Recommended solution
+Audience → Contact → Verified email OTP → Qualified context → Quiz → Point A → Point B → Recommended solution
 → Basic vs Advanced vs Complete → 72-hour proposal → Discovery call
 ```
 
@@ -78,14 +78,15 @@ flowchart TD
 ### Quiz page
 
 1. Choose audience type card.
-2. Submit first name, business name, email address, and required proposal/follow-up consent.
-3. Complete the multi-step quiz without navigation or page reload.
-4. Review the personalized Point A, Point B, recommended solution, and Basic/Advanced/Complete comparison.
-5. Receive the server-verified roadmap while the recommended feasible tier/platform is automatically finalized and emailed.
-6. Confirm the success message, or retry email delivery without losing the visible roadmap.
-7. Open the protected proposal from the emailed reference link by entering the separate access key.
-8. Optionally compare the three packages, review platform feasibility, and book a discovery call.
-9. Use the footer links for Back to portfolio, Privacy, and Terms.
+2. Submit first name, last name, business name, email address, and required proposal/follow-up consent.
+3. Verify the email with the six-digit OTP before the lead and owned quiz context are created.
+4. Complete the multi-step quiz without navigation or page reload.
+5. Review the personalized Point A, Point B, recommended solution, and Basic/Advanced/Complete comparison.
+6. Receive the server-verified roadmap while the recommended feasible tier/platform is automatically finalized and emailed.
+7. Confirm the success message, or retry email delivery without losing the visible roadmap.
+8. Open the protected proposal from the emailed reference link by entering the separate access key.
+9. Optionally compare the three packages, review platform feasibility, and book a discovery call.
+10. Use the footer links for Back to portfolio, Privacy, and Terms.
 
 ---
 
@@ -146,8 +147,10 @@ Selecting a card:
 
 ### 3.4 Quiz Interface
 
-- After audience selection and before Question 1, show three required fields in this order: **first name**, **business name**, and **email address**.
+- After audience selection and before Question 1, show four required fields in this order: **first name**, **last name**, **business name**, and **email address**.
 - Require a consent checkbox using the approved `proposal_followup_v1` copy before continuing. The copy explains the initial proposal email and up to three proposal-related follow-ups unless the visitor books or stops them.
+- Send a six-digit email OTP through Supabase Auth. Use a **10-minute OTP expiry** and a **60-second resend** interval. The branded hosted template must contain `{{ .Token }}` rather than relying on a magic-link click.
+- A verified email is required before lead creation. `begin_verified_qualified_quiz` derives the canonical email and verification timestamp from `auth.users`; the browser cannot supply or override them.
 - Trim all values, normalize email to lowercase, keep form values after a backend error, and show a retry action.
 - Do not store contact fields in local storage, URLs, analytics, or client logs.
 - One question per screen.
@@ -1355,6 +1358,8 @@ Indexes: `visitor_id`; `source_portfolio_session_id`; unique partial `source_qui
 Purpose: a strategy-call booking linked to its lead and original journey without becoming a calendar platform.
 
 The quiz and protected proposal currently link to the existing `/booking/` form. Direct-to-date selection is intentionally **not enabled** in this repository. It depends on the separately deployed booking backend implementing the opaque, 256-bit, single-use handoff contract in `docs/contracts/quiz-booking-handoff.md`, including a server-stored SHA-256 hash, 10-minute TTL, atomic consume, replay rejection, no PII in the URL, and a safe form fallback. Until that consumer passes its own contract tests, the existing form remains the secure production behavior.
+
+This booking handoff remains blocked on its external consumer. No client-side query-string prefill is an acceptable substitute.
 
 | Column | PostgreSQL type | Required | Default | Relationship/constraint | Purpose |
 |---|---|---:|---|---|---|
