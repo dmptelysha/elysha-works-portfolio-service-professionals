@@ -8,6 +8,7 @@ import { SITE_CONTENT } from "@/data/site-content";
 
 import { AudienceSelector } from "./AudienceSelector";
 import { calculateRecommendation } from "./cortex";
+import { EmailOtpStep } from "./EmailOtpStep";
 import { LeadContactStep } from "./LeadContactStep";
 import {
   QUIZ_STORAGE_VERSION,
@@ -56,10 +57,13 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaError, setCaptchaError] = useState(false);
   const [captchaAttempt, setCaptchaAttempt] = useState(0);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [setupBusy, setSetupBusy] = useState(false);
   const createdAtRef = useRef(new Date().toISOString());
   const ownedContextRef = useRef<OwnedQuizContext | null>(null);
   const contextPromiseRef = useRef<Promise<OwnedQuizContext> | null>(null);
   const autoIssueAttemptedRef = useRef(false);
+  const emailVerifiedRef = useRef(false);
   const proposalDialogRef = useRef<HTMLElement>(null);
   const proposalDialogButtonRef = useRef<HTMLButtonElement>(null);
   const resumeDialogRef = useRef<HTMLElement>(null);
@@ -157,15 +161,6 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   }, [hydrated, state]);
 
   useEffect(() => {
-    if (!hydrated || !state.audienceKey || state.resumeCandidate) return;
-    const captchaSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
-    if (captchaSiteKey && !captchaToken) return;
-    void ensureOwnedContext(state.audienceKey).catch(() => {
-      setSyncMessage("We could not start the secure assessment. Check your connection and try again.");
-    });
-  }, [captchaToken, ensureOwnedContext, hydrated, state.audienceKey, state.resumeCandidate]);
-
-  useEffect(() => {
     if (!hydrated || state.screen !== "question" || !state.audienceKey || !ownedContextRef.current) return;
     const question = QUIZ_DEFINITIONS[state.audienceKey].questions[state.currentQuestionIndex];
     const answered = Boolean(question && state.answers[question.key]?.length);
@@ -214,6 +209,9 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     setIssueError(null);
     setProposalDialog(null);
     autoIssueAttemptedRef.current = false;
+    emailVerifiedRef.current = false;
+    setSetupError(null);
+    setSetupBusy(false);
     dispatch({ type: "START_OVER" });
   };
 
@@ -225,6 +223,9 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     setIssueError(null);
     setProposalDialog(null);
     autoIssueAttemptedRef.current = false;
+    emailVerifiedRef.current = false;
+    setSetupError(null);
+    setSetupBusy(false);
     dispatch({ type: "SELECT_AUDIENCE", audienceKey });
   };
 
@@ -233,6 +234,35 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const productionCaptchaMissing = process.env.NODE_ENV === "production" && !captchaSiteKey;
   const securityReady = productionCaptchaMissing ? false : !captchaSiteKey || Boolean(captchaToken);
   const question = definition?.questions[state.currentQuestionIndex];
+  const finishVerifiedSetup = async (businessScope?: "same_business" | "another_business") => {
+    if (!state.audienceKey || !state.contact) return;
+    setSetupBusy(true);
+    setSetupError(null);
+    try {
+      const context = await ensureOwnedContext(state.audienceKey);
+      const contact = businessScope ? { ...state.contact, businessScope } : state.contact;
+      const result = await service.submitLeadContact(context, contact);
+      if (result.status === "business_scope_required") {
+        dispatch({ type: "BUSINESS_SCOPE_REQUIRED", existingBusinessName: result.existingBusinessName });
+      } else {
+        dispatch({ type: "CONTACT_ACCEPTED", contact });
+      }
+    } catch {
+      setSetupError("Your email is verified, but we could not prepare the secure assessment. Please retry setup.");
+    } finally {
+      setSetupBusy(false);
+    }
+  };
+
+  const verifyAndStart = async (token: string) => {
+    if (!state.otpChallenge) return;
+    if (!emailVerifiedRef.current) {
+      await service.verifyEmailOtp(state.otpChallenge.email, token);
+      emailVerifiedRef.current = true;
+      dispatch({ type: "OTP_VERIFIED" });
+    }
+    await finishVerifiedSetup();
+  };
   const flushProgress = async () => {
     if (!state.audienceKey) return;
     const question = QUIZ_DEFINITIONS[state.audienceKey].questions[state.currentQuestionIndex];
@@ -331,11 +361,60 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
 
         {hydrated && state.screen === "contact" ? (
           <LeadContactStep onSubmit={async (contact) => {
-            const context = await ensureOwnedContext(state.audienceKey!);
-            const result = await service.submitLeadContact(context, contact);
-            if (result.status === "accepted") dispatch({ type: "CONTACT_ACCEPTED", contact });
-            return result;
+            const challenge = await service.requestEmailOtp(contact.email, captchaToken ?? undefined);
+            dispatch({ type: "OTP_REQUESTED", contact, challenge });
           }} securityError={captchaError} securityReady={securityReady} />
+        ) : null}
+
+        {hydrated && state.screen === "verify_email" && state.otpChallenge ? (
+          setupError ? (
+            <section className="quiz-stage quiz-error" role="alert">
+              <p className="quiz-kicker">Email verified</p>
+              <h1>Let’s finish your secure setup.</h1>
+              <p>{setupError}</p>
+              <div className="quiz-error-actions">
+                <button className="quiz-primary" disabled={setupBusy} onClick={() => void finishVerifiedSetup()} type="button">
+                  {setupBusy ? "Preparing assessment…" : "Retry setup"}
+                </button>
+                <button className="quiz-secondary" onClick={() => {
+                  emailVerifiedRef.current = false;
+                  setSetupError(null);
+                  dispatch({ type: "CHANGE_EMAIL" });
+                }} type="button">Change details</button>
+              </div>
+            </section>
+          ) : (
+            <EmailOtpStep
+              email={state.otpChallenge.email}
+              resendAvailableAt={state.otpChallenge.resendAvailableAt}
+              onVerify={verifyAndStart}
+              onResend={async () => {
+                const challenge = await service.requestEmailOtp(state.otpChallenge!.email, captchaToken ?? undefined);
+                dispatch({ type: "OTP_REQUESTED", contact: state.contact!, challenge });
+              }}
+              onChangeEmail={() => {
+                emailVerifiedRef.current = false;
+                dispatch({ type: "CHANGE_EMAIL" });
+              }}
+            />
+          )
+        ) : null}
+
+        {hydrated && state.screen === "business_scope" && state.contact && state.existingBusinessName ? (
+          <section className="quiz-stage quiz-business-scope" aria-labelledby="quiz-business-scope-title">
+            <p className="quiz-kicker">Verified identity</p>
+            <h1 id="quiz-business-scope-title">Is this assessment for {state.existingBusinessName}?</h1>
+            <p className="quiz-lede">Choose how this assessment should be organized under your verified email.</p>
+            {setupError ? <p className="quiz-validation" role="alert">{setupError}</p> : null}
+            <div className="quiz-business-scope-actions">
+              <button className="quiz-primary" disabled={setupBusy} onClick={() => void finishVerifiedSetup("same_business")} type="button">Same business</button>
+              <button className="quiz-secondary" disabled={setupBusy} onClick={() => void finishVerifiedSetup("another_business")} type="button">Another business</button>
+              <button className="quiz-back" disabled={setupBusy} onClick={() => {
+                emailVerifiedRef.current = false;
+                dispatch({ type: "CHANGE_EMAIL" });
+              }} type="button">Change business details</button>
+            </div>
+          </section>
         ) : null}
 
         {hydrated && state.screen === "intro" && definition ? (

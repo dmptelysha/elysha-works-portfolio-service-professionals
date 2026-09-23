@@ -71,7 +71,7 @@ export function EmailOtpStep({
   return (
     <section className="quiz-stage quiz-otp" aria-labelledby="quiz-otp-title">
       <p className="quiz-kicker">Verify your email</p>
-      <h1 id="quiz-otp-title">Enter your six-digit code.</h1>
+      <h1 id="quiz-otp-title">Check your email.</h1>
       <p className="quiz-lede">We sent it to <strong>{maskEmail(email)}</strong>. Verification protects your proposal from mistyped or automated submissions.</p>
       <form className="quiz-otp-form" onSubmit={submit} noValidate>
         <label htmlFor="quiz-email-code">Verification code</label>

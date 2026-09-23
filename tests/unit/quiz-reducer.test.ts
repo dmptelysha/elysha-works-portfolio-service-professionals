@@ -35,15 +35,39 @@ const saved = {
   expiresAt: "2026-10-22T00:00:00.000Z",
 } satisfies SavedQuizAttempt;
 
+const verifiedContact = { firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "mara@example.com", consent: true as const };
+
+function acceptVerifiedContact(state: QuizState, contact = verifiedContact) {
+  state = quizReducer(state, {
+    type: "OTP_REQUESTED",
+    contact,
+    challenge: { email: contact.email, requestedAt: "2026-09-23T00:00:00.000Z", resendAvailableAt: "2026-09-23T00:01:00.000Z" },
+  });
+  state = quizReducer(state, { type: "OTP_VERIFIED" });
+  return quizReducer(state, { type: "CONTACT_ACCEPTED", contact });
+}
+
 describe("quiz reducer", () => {
   it("requires accepted contact details between audience and intro", () => {
     let state = createInitialQuizState();
     state = quizReducer(state, { type: "SELECT_AUDIENCE", audienceKey: "coaches_educators" });
     expect(state.screen).toBe("contact");
+    const contact = { firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "mara@example.com", consent: true as const };
     state = quizReducer(state, {
-      type: "CONTACT_ACCEPTED",
-      contact: { firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "mara@example.com", consent: true },
+      type: "OTP_REQUESTED",
+      contact,
+      challenge: {
+        email: "mara@example.com",
+        requestedAt: "2026-09-23T00:00:00.000Z",
+        resendAvailableAt: "2026-09-23T00:01:00.000Z",
+      },
     });
+    expect(state.screen).toBe("verify_email");
+    expect(state.clientIdentity).toBeNull();
+    state = quizReducer(state, { type: "OTP_VERIFIED" });
+    expect(state.screen).toBe("verify_email");
+    expect(state.emailVerified).toBe(true);
+    state = quizReducer(state, { type: "CONTACT_ACCEPTED", contact });
     expect(state.screen).toBe("intro");
     expect(state.clientIdentity).toEqual({ firstName: "Mara", businessName: "Mara Consulting" });
     state = quizReducer(state, { type: "CONTINUE_INTRO" });
@@ -51,9 +75,23 @@ describe("quiz reducer", () => {
     expect(state.currentQuestionIndex).toBe(0);
   });
 
+  it("returns to editable contact without keeping a verification challenge", () => {
+    const contact = { firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "mara@example.com", consent: true as const };
+    let state = quizReducer(createInitialQuizState(), { type: "SELECT_AUDIENCE", audienceKey: "service_businesses" });
+    state = quizReducer(state, {
+      type: "OTP_REQUESTED",
+      contact,
+      challenge: { email: contact.email, requestedAt: "2026-09-23T00:00:00.000Z", resendAvailableAt: "2026-09-23T00:01:00.000Z" },
+    });
+    state = quizReducer(state, { type: "CHANGE_EMAIL" });
+    expect(state.screen).toBe("contact");
+    expect(state.otpChallenge).toBeNull();
+    expect(state.emailVerified).toBe(false);
+  });
+
   it("supports single and multi-select answers, Next, Back, and editing", () => {
     let state = quizReducer(createInitialQuizState(), { type: "SELECT_AUDIENCE", audienceKey: "coaches_educators" });
-    state = quizReducer(state, { type: "CONTACT_ACCEPTED", contact: { firstName: "Ely", lastName: "Santos", businessName: "Ely Works", email: "ely@example.com", consent: true } });
+    state = acceptVerifiedContact(state, { firstName: "Ely", lastName: "Santos", businessName: "Ely Works", email: "ely@example.com", consent: true });
     state = quizReducer(state, { type: "CONTINUE_INTRO" });
     state = quizReducer(state, { type: "ANSWER_SINGLE", questionKey: "q1_goal", optionKey: "coach_goal_book_calls" });
     state = quizReducer(state, { type: "NEXT" });
@@ -70,7 +108,7 @@ describe("quiz reducer", () => {
 
   it("does not advance without a valid current answer", () => {
     let state = quizReducer(createInitialQuizState(), { type: "SELECT_AUDIENCE", audienceKey: "service_businesses" });
-    state = quizReducer(state, { type: "CONTACT_ACCEPTED", contact: { firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "mara@example.com", consent: true } });
+    state = acceptVerifiedContact(state);
     state = quizReducer(state, { type: "CONTINUE_INTRO" });
     state = quizReducer(state, { type: "NEXT" });
     expect(state.currentQuestionIndex).toBe(0);

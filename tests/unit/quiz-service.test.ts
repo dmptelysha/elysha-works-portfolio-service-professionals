@@ -255,14 +255,14 @@ describe("Supabase quiz service", () => {
       firstName: " Mara ", lastName: " Santos ", businessName: " Mara Consulting ", email: "MARA@EXAMPLE.COM", consent: true,
     }, fake.client as never)).resolves.toEqual({ status: "accepted", leadId: LEAD_ID, quizSessionId: QUIZ_SESSION_ID });
 
-    expect(fake.rpc).toHaveBeenCalledWith("begin_qualified_quiz_v2", {
+    expect(fake.rpc).toHaveBeenCalledWith("begin_verified_qualified_quiz", {
       p_visitor_id: VISITOR_ID,
       p_portfolio_session_id: PORTFOLIO_SESSION_ID,
       p_quiz_session_id: QUIZ_SESSION_ID,
       p_audience_key: "service_businesses",
       p_first_name: "Mara",
+      p_last_name: "Santos",
       p_business_name: "Mara Consulting",
-      p_email: "mara@example.com",
       p_consent: true,
       p_consent_version: "proposal_followup_v1",
       p_business_scope: null,
@@ -292,7 +292,7 @@ describe("Supabase quiz service", () => {
     });
 
     await submitLeadContact(context, { ...contact, businessScope: "same_business" }, fake.client as never);
-    expect(fake.rpc).toHaveBeenLastCalledWith("begin_qualified_quiz_v2", expect.objectContaining({
+    expect(fake.rpc).toHaveBeenLastCalledWith("begin_verified_qualified_quiz", expect.objectContaining({
       p_business_scope: "same_business",
     }));
   });

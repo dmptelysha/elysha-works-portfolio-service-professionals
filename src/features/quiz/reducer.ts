@@ -4,6 +4,7 @@ import type {
   AudienceKey,
   ClientIdentity,
   CortexResult,
+  EmailOtpChallenge,
   LeadContactInput,
   ProposalDraftViewModel,
   ProposalViewModel,
@@ -15,6 +16,8 @@ import type {
 export type QuizScreen =
   | "audience"
   | "contact"
+  | "verify_email"
+  | "business_scope"
   | "intro"
   | "question"
   | "calculating"
@@ -29,6 +32,9 @@ export interface QuizState {
   result: CortexResult | null;
   roadmapSelection: RoadmapSelection | null;
   contact: LeadContactInput | null;
+  otpChallenge: EmailOtpChallenge | null;
+  emailVerified: boolean;
+  existingBusinessName: string | null;
   clientIdentity: ClientIdentity | null;
   proposal: ProposalDraftViewModel | ProposalViewModel | null;
   errorMessage: string | null;
@@ -42,6 +48,10 @@ export type QuizAction =
   | { type: "DISMISS_RESUME" }
   | { type: "START_OVER" }
   | { type: "SELECT_AUDIENCE"; audienceKey: AudienceKey }
+  | { type: "OTP_REQUESTED"; contact: LeadContactInput; challenge: EmailOtpChallenge }
+  | { type: "OTP_VERIFIED" }
+  | { type: "CHANGE_EMAIL" }
+  | { type: "BUSINESS_SCOPE_REQUIRED"; existingBusinessName: string }
   | { type: "CONTACT_ACCEPTED"; contact: LeadContactInput }
   | { type: "CONTINUE_INTRO" }
   | { type: "ANSWER_SINGLE"; questionKey: string; optionKey: string }
@@ -63,6 +73,9 @@ export function createInitialQuizState(): QuizState {
     result: null,
     roadmapSelection: null,
     contact: null,
+    otpChallenge: null,
+    emailVerified: false,
+    existingBusinessName: null,
     clientIdentity: null,
     proposal: null,
     errorMessage: null,
@@ -89,6 +102,9 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         result: attempt.result,
         roadmapSelection: attempt.roadmapSelection,
         contact: null,
+        otpChallenge: null,
+        emailVerified: false,
+        existingBusinessName: null,
         clientIdentity: null,
         proposal: null,
         errorMessage: null,
@@ -104,8 +120,43 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         screen: "contact",
         audienceKey: action.audienceKey,
       };
+    case "OTP_REQUESTED": {
+      if (!state.audienceKey || !["contact", "verify_email"].includes(state.screen)) return state;
+      const contact = {
+        ...action.contact,
+        firstName: action.contact.firstName.trim(),
+        lastName: action.contact.lastName.trim(),
+        businessName: action.contact.businessName.trim(),
+        email: action.contact.email.trim().toLowerCase(),
+      };
+      if (!contact.firstName || !contact.lastName || !contact.businessName || !contact.email || !contact.consent) return state;
+      return {
+        ...state,
+        screen: "verify_email",
+        contact,
+        otpChallenge: action.challenge,
+        emailVerified: false,
+        existingBusinessName: null,
+      };
+    }
+    case "OTP_VERIFIED":
+      if (state.screen !== "verify_email" || !state.contact || !state.otpChallenge) return state;
+      return { ...state, emailVerified: true };
+    case "CHANGE_EMAIL":
+      if (!["verify_email", "business_scope"].includes(state.screen)) return state;
+      return {
+        ...state,
+        screen: "contact",
+        contact: null,
+        otpChallenge: null,
+        emailVerified: false,
+        existingBusinessName: null,
+      };
+    case "BUSINESS_SCOPE_REQUIRED":
+      if (!state.emailVerified || !state.contact) return state;
+      return { ...state, screen: "business_scope", existingBusinessName: action.existingBusinessName };
     case "CONTACT_ACCEPTED": {
-      if (!state.audienceKey || state.screen !== "contact") return state;
+      if (!state.audienceKey || !state.emailVerified || !["verify_email", "business_scope"].includes(state.screen)) return state;
       const firstName = action.contact.firstName.trim();
       const lastName = action.contact.lastName.trim();
       const businessName = action.contact.businessName.trim();
@@ -114,8 +165,10 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
       return {
         ...state,
         screen: "intro",
-        contact: { firstName, lastName, businessName, email, consent: true },
+        contact: null,
+        otpChallenge: null,
         clientIdentity: { firstName, businessName },
+        existingBusinessName: null,
       };
     }
     case "CONTINUE_INTRO":

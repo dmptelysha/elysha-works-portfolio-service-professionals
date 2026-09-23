@@ -2,10 +2,10 @@
 
 import { type FormEvent, useState } from "react";
 
-import type { LeadContactInput, LeadContactSubmissionResult } from "./types";
+import type { LeadContactInput } from "./types";
 
 interface LeadContactStepProps {
-  onSubmit: (contact: LeadContactInput) => Promise<LeadContactSubmissionResult>;
+  onSubmit: (contact: LeadContactInput) => Promise<unknown>;
   securityError?: boolean;
   securityReady?: boolean;
 }
@@ -20,46 +20,31 @@ export function LeadContactStep({ onSubmit, securityError = false, securityReady
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [existingBusinessName, setExistingBusinessName] = useState<string | null>(null);
 
   const normalizedEmail = email.trim().toLowerCase();
   const canSubmit = Boolean(
-    firstName.trim() && lastName.trim() && businessName.trim() && EMAIL_PATTERN.test(normalizedEmail) && consent && securityReady && !submitting,
+    firstName.trim() && lastName.trim() && businessName.trim()
+      && EMAIL_PATTERN.test(normalizedEmail) && consent && securityReady && !submitting,
   );
 
-  const submitContact = async (businessScope?: LeadContactInput["businessScope"]) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (!canSubmit) return;
-    if (businessScope === "another_business"
-      && existingBusinessName
-      && businessName.trim().toLowerCase() === existingBusinessName.trim().toLowerCase()) {
-      setError("Enter the other business name above, then choose Another business again.");
-      return;
-    }
-
     setSubmitting(true);
     setError(null);
     try {
-      const result = await onSubmit({
+      await onSubmit({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         businessName: businessName.trim(),
         email: normalizedEmail,
         consent: true,
-        businessScope,
       });
-      if (result.status === "business_scope_required") {
-        setExistingBusinessName(result.existingBusinessName);
-      }
     } catch {
-      setError("We could not save your details. Please try again; your entries are still here.");
+      setError("We could not send a verification code. Please try again; your entries are still here.");
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    await submitContact();
   };
 
   return (
@@ -89,7 +74,6 @@ export function LeadContactStep({ onSubmit, securityError = false, securityReady
           <span>Email</span>
           <input autoComplete="email" name="email" required type="email" value={email} onChange={(event) => {
             setEmail(event.target.value);
-            setExistingBusinessName(null);
             setError(null);
           }} />
         </label>
@@ -103,25 +87,10 @@ export function LeadContactStep({ onSubmit, securityError = false, securityReady
             {securityError ? "Security verification is paused. Use Retry security check below." : "Preparing the secure assessment…"}
           </p>
         ) : null}
-        {submitting ? <p className="quiz-contact-status" role="status">Saving your details…</p> : null}
-        {existingBusinessName ? (
-          <div className="quiz-business-scope" aria-live="polite">
-            <h2>Is this assessment for {existingBusinessName}?</h2>
-            <p>Your email is already connected to a business on this device. Choose how this new assessment should be organized.</p>
-            <div className="quiz-business-scope-actions">
-              <button className="quiz-primary" disabled={submitting} onClick={() => void submitContact("same_business")} type="button">
-                Same business
-              </button>
-              <button className="quiz-secondary" disabled={submitting} onClick={() => void submitContact("another_business")} type="button">
-                Another business
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button className="quiz-primary" disabled={!canSubmit} type="submit">
-            Continue to Assessment <span aria-hidden="true">→</span>
-          </button>
-        )}
+        {submitting ? <p className="quiz-contact-status" role="status">Sending verification code…</p> : null}
+        <button className="quiz-primary" disabled={!canSubmit} type="submit">
+          Send Verification Code <span aria-hidden="true">→</span>
+        </button>
       </form>
     </section>
   );

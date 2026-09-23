@@ -71,14 +71,14 @@ function normalizeEmail(email: string): string {
 
 export async function requestEmailOtp(
   email: string,
-  captchaToken: string,
+  captchaToken?: string,
   client?: SupabaseClient,
 ): Promise<EmailOtpChallenge> {
   const normalizedEmail = normalizeEmail(email);
-  if (!captchaToken.trim()) throw new Error(OTP_ERROR);
+  const normalizedCaptchaToken = captchaToken?.trim();
   const response = await clientOrDefault(client).auth.signInWithOtp({
     email: normalizedEmail,
-    options: { shouldCreateUser: true, captchaToken: captchaToken.trim() },
+    options: { shouldCreateUser: true, ...(normalizedCaptchaToken ? { captchaToken: normalizedCaptchaToken } : {}) },
   });
   if (response.error) throw new Error(OTP_ERROR);
   const requestedAt = new Date();
@@ -230,14 +230,14 @@ export async function submitLeadContact(
   client?: SupabaseClient,
 ): Promise<LeadContactSubmissionResult> {
   const supabase = clientOrDefault(client);
-  const response = await supabase.rpc("begin_qualified_quiz_v2", {
+  const response = await supabase.rpc("begin_verified_qualified_quiz", {
     p_visitor_id: requireUuid(context.visitorId),
     p_portfolio_session_id: requireUuid(context.portfolioSessionId),
     p_quiz_session_id: requireUuid(context.quizSessionId),
     p_audience_key: context.audienceKey,
     p_first_name: contact.firstName.trim(),
+    p_last_name: contact.lastName.trim(),
     p_business_name: contact.businessName.trim(),
-    p_email: contact.email.trim().toLowerCase(),
     p_consent: contact.consent === true,
     p_consent_version: "proposal_followup_v1",
     p_business_scope: contact.businessScope ?? null,

@@ -15,6 +15,8 @@ import {
   CATALOG_VERSION,
   CORTEX_VERSION,
   QUESTION_SET_VERSION,
+  type LeadContactInput,
+  type LeadContactSubmissionResult,
   type SavedQuizAttempt,
 } from "@/features/quiz/types";
 
@@ -49,7 +51,7 @@ function createFakeQuizService() {
   let answers: Record<string, readonly string[]> = {};
   let identity = { firstName: "Mara", businessName: "Mara Consulting" };
   const createOwnedQuizContext = vi.fn(async (audienceKey: typeof ownedContext.audienceKey) => ({ ...ownedContext, audienceKey }));
-  const submitLeadContact = vi.fn(async (_context: OwnedQuizContext, contact: { firstName: string; businessName: string }) => {
+  const submitLeadContact = vi.fn(async (_context: OwnedQuizContext, contact: LeadContactInput): Promise<LeadContactSubmissionResult> => {
     identity = { firstName: contact.firstName, businessName: contact.businessName };
     return { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId };
   });
@@ -88,7 +90,7 @@ function createFakeQuizService() {
   return { requestEmailOtp, verifyEmailOtp, createOwnedQuizContext, submitLeadContact, saveOwnedQuizProgress, previewProposal, issueProposal };
 }
 
-async function completeContactStep(
+async function fillContactStep(
   user: ReturnType<typeof userEvent.setup>,
   values = { firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "Mara@Example.com" },
 ) {
@@ -97,7 +99,17 @@ async function completeContactStep(
   await user.type(screen.getByLabelText(/business name/i), values.businessName);
   await user.type(screen.getByLabelText(/^email/i), values.email);
   await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
-  await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
+  await user.click(screen.getByRole("button", { name: /send verification code/i }));
+}
+
+async function completeContactStep(
+  user: ReturnType<typeof userEvent.setup>,
+  values = { firstName: "Mara", lastName: "Santos", businessName: "Mara Consulting", email: "Mara@Example.com" },
+) {
+  await fillContactStep(user, values);
+  await user.type(await screen.findByLabelText(/verification code/i), "123456");
+  await user.click(screen.getByRole("button", { name: /verify email/i }));
+  await screen.findByRole("heading", { name: /your roadmap starts with context/i });
 }
 
 async function completeServiceBusinessAssessment(user: ReturnType<typeof userEvent.setup>) {
@@ -170,6 +182,35 @@ describe("local portfolio quiz", () => {
     expect(service.createOwnedQuizContext).not.toHaveBeenCalled();
   });
 
+  it("keeps contact memory-only and creates no owned context until email OTP succeeds", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} />);
+
+    await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await user.type(screen.getByLabelText(/first name/i), "Mara");
+    await user.type(screen.getByLabelText(/last name/i), "Santos");
+    await user.type(screen.getByLabelText(/business name/i), "Mara Consulting");
+    await user.type(screen.getByLabelText(/^email/i), "mara@example.com");
+    await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
+    await user.click(screen.getByRole("button", { name: /send verification code/i }));
+
+    expect(await screen.findByRole("heading", { name: /check your email/i })).toBeInTheDocument();
+    expect(service.requestEmailOtp).toHaveBeenCalledWith("mara@example.com", undefined);
+    expect(service.createOwnedQuizContext).not.toHaveBeenCalled();
+    expect(service.submitLeadContact).not.toHaveBeenCalled();
+    const savedBeforeVerification = localStorage.getItem(QUIZ_STORAGE_KEY) ?? "";
+    expect(savedBeforeVerification).not.toContain("mara@example.com");
+    expect(savedBeforeVerification).not.toContain("Mara Consulting");
+
+    await user.type(screen.getByLabelText(/verification code/i), "123456");
+    await user.click(screen.getByRole("button", { name: /verify email/i }));
+    await waitFor(() => expect(service.verifyEmailOtp).toHaveBeenCalledWith("mara@example.com", "123456"));
+    await waitFor(() => expect(service.createOwnedQuizContext).toHaveBeenCalledOnce());
+    expect(service.submitLeadContact).toHaveBeenCalledOnce();
+    expect(await screen.findByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
+  });
+
   it("unblocks contact submission on Turnstile success and safely blocks again on expiry or error", async () => {
     vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "test-site-key");
     const user = userEvent.setup();
@@ -181,7 +222,7 @@ describe("local portfolio quiz", () => {
     await user.type(screen.getByLabelText(/business name/i), "Mara Consulting");
     await user.type(screen.getByLabelText(/^email/i), "mara@example.com");
     await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
-    const submit = screen.getByRole("button", { name: /continue to assessment/i });
+    const submit = screen.getByRole("button", { name: /send verification code/i });
 
     expect(submit).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent(/preparing the secure assessment/i);
@@ -214,8 +255,8 @@ describe("local portfolio quiz", () => {
       return { status: "accepted", leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId };
     }} />);
 
-    const submit = screen.getByRole("button", { name: /continue to assessment/i });
-    expect(submit).toHaveTextContent("Continue to Assessment →");
+    const submit = screen.getByRole("button", { name: /send verification code/i });
+    expect(submit).toHaveTextContent("Send Verification Code →");
     expect(submit).toBeDisabled();
     await user.type(screen.getByLabelText(/first name/i), "  Mara  ");
     await user.type(screen.getByLabelText(/last name/i), "  Santos  ");
@@ -235,48 +276,40 @@ describe("local portfolio quiz", () => {
     expect(window.location.href).toBe(initialUrl);
   });
 
-  it("asks whether a saved same-device email is for the same or another business", async () => {
+  it("asks a verified returning identity whether this is the same or another business", async () => {
     const user = userEvent.setup();
-    const submissions: Array<{ businessName: string; businessScope?: string }> = [];
-    render(<LeadContactStep onSubmit={async (contact) => {
-      submissions.push(contact);
-      if (!contact.businessScope) {
-        return {
-          status: "business_scope_required",
-          quizSessionId: ownedContext.quizSessionId,
-          existingBusinessName: "Mara Consulting",
-        };
-      }
-      return {
-        status: "accepted",
-        leadId: "60000000-0000-4000-8000-000000000001",
-        quizSessionId: ownedContext.quizSessionId,
-      };
-    }} />);
-
-    await completeContactStep(user);
-    expect(await screen.findByRole("heading", { name: /is this assessment for mara consulting/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/^email/i)).toHaveValue("Mara@Example.com");
-    await user.click(screen.getByRole("button", { name: /same business/i }));
-    await waitFor(() => expect(submissions.at(-1)?.businessScope).toBe("same_business"));
-  });
-
-  it("requires a different name before confirming another business", async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn(async (contact: { businessScope?: string }) => contact.businessScope
+    const service = createFakeQuizService();
+    service.submitLeadContact.mockImplementation(async (_context, contact) => contact.businessScope
       ? { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId }
       : { status: "business_scope_required" as const, quizSessionId: ownedContext.quizSessionId, existingBusinessName: "Mara Consulting" });
-    render(<LeadContactStep onSubmit={onSubmit} />);
-    await completeContactStep(user);
-    await user.click(await screen.findByRole("button", { name: /another business/i }));
-    expect(screen.getByRole("alert")).toHaveTextContent(/enter the other business name/i);
-    expect(onSubmit).toHaveBeenCalledTimes(1);
+    render(<QuizExperience service={service} />);
 
-    const businessInput = screen.getByLabelText(/business name/i);
-    await user.clear(businessInput);
-    await user.type(businessInput, "Mara Academy");
-    await user.click(screen.getByRole("button", { name: /another business/i }));
-    await waitFor(() => expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({
+    await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await fillContactStep(user);
+    await user.type(await screen.findByLabelText(/verification code/i), "123456");
+    await user.click(screen.getByRole("button", { name: /verify email/i }));
+    expect(await screen.findByRole("heading", { name: /is this assessment for mara consulting/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /same business/i }));
+    await waitFor(() => expect(service.submitLeadContact).toHaveBeenLastCalledWith(
+      expect.anything(), expect.objectContaining({ businessScope: "same_business" }),
+    ));
+    expect(await screen.findByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
+  });
+
+  it("lets a verified returning identity organize a different business separately", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    service.submitLeadContact.mockImplementation(async (_context, contact) => contact.businessScope
+      ? { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId }
+      : { status: "business_scope_required" as const, quizSessionId: ownedContext.quizSessionId, existingBusinessName: "Mara Consulting" });
+    render(<QuizExperience service={service} />);
+
+    await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await fillContactStep(user, { firstName: "Mara", lastName: "Santos", businessName: "Mara Academy", email: "mara@example.com" });
+    await user.type(await screen.findByLabelText(/verification code/i), "123456");
+    await user.click(screen.getByRole("button", { name: /verify email/i }));
+    await user.click(await screen.findByRole("button", { name: /another business/i }));
+    await waitFor(() => expect(service.submitLeadContact).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({
       businessName: "Mara Academy",
       businessScope: "another_business",
     })));
@@ -285,9 +318,9 @@ describe("local portfolio quiz", () => {
   it("retains contact fields and announces a submission failure", async () => {
     const user = userEvent.setup();
     render(<LeadContactStep onSubmit={async () => { throw new Error("Backend unavailable"); }} />);
-    await completeContactStep(user);
+    await fillContactStep(user);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/could not save your details/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not send a verification code/i);
     expect(screen.getByLabelText(/first name/i)).toHaveValue("Mara");
     expect(screen.getByLabelText(/business name/i)).toHaveValue("Mara Consulting");
     expect(screen.getByLabelText(/^email/i)).toHaveValue("Mara@Example.com");
@@ -361,17 +394,14 @@ describe("local portfolio quiz", () => {
     render(<QuizExperience service={service} />);
 
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
-    await user.type(screen.getByLabelText(/first name/i), "Mara");
-    await user.type(screen.getByLabelText(/last name/i), "Santos");
-    await user.type(screen.getByLabelText(/business name/i), "Mara Consulting");
-    await user.type(screen.getByLabelText(/^email/i), "mara@example.com");
-    await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
-    const submit = screen.getByRole("button", { name: /continue to assessment/i });
-    await user.click(submit);
+    await fillContactStep(user);
+    await user.type(await screen.findByLabelText(/verification code/i), "123456");
+    const verify = screen.getByRole("button", { name: /verify email/i });
+    await user.click(verify);
 
-    expect(submit).toBeDisabled();
-    expect(screen.getByRole("status")).toHaveTextContent("Saving your details…");
-    expect(service.submitLeadContact).toHaveBeenCalledOnce();
+    expect(verify).toBeDisabled();
+    expect(verify).toHaveTextContent(/verifying/i);
+    await waitFor(() => expect(service.submitLeadContact).toHaveBeenCalledOnce());
     finishSubmission();
     expect(await screen.findByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
   });
