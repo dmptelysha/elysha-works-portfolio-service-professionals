@@ -1,9 +1,8 @@
-import { bytesToBase64Url, hmacSha256Hex } from "./crypto.ts";
+import { bytesToHex, hmacSha256Hex } from "./crypto.ts";
 
 const encoder = new TextEncoder();
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/u;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
 export type OtpPurpose = "qualified_quiz";
@@ -20,6 +19,9 @@ export interface OtpDigestInput {
 
 export interface MakeOtpPayload {
   deliveryId: string;
+  timestamp: string;
+  nonce: string;
+  keyVersion: string;
   to: string;
   otp: string;
   expiresInMinutes: number;
@@ -36,8 +38,7 @@ export interface MakeOtpEnvelope extends EncryptedMakeOtpPayload {
   deliveryId: string;
   timestamp: string;
   nonce: string;
-  keyVersion: "otp-transport-v1";
-  signature: string;
+  keyVersion: string;
 }
 
 function requireLongSecret(secret: string, name: string): void {
@@ -118,6 +119,9 @@ export async function encryptMakeOtpEnvelope(
   }
   if (
     !UUID_PATTERN.test(payload.deliveryId) ||
+    !UUID_PATTERN.test(payload.nonce) ||
+    Number.isNaN(Date.parse(payload.timestamp)) ||
+    !/^[a-z0-9._-]{1,32}$/u.test(payload.keyVersion) ||
     !/^\d{6}$/u.test(payload.otp) ||
     payload.expiresInMinutes !== 10 ||
     payload.templateVersion !== "elysha_otp_v1"
@@ -126,6 +130,9 @@ export async function encryptMakeOtpEnvelope(
   }
   const canonicalPayload: MakeOtpPayload = {
     deliveryId: payload.deliveryId.toLowerCase(),
+    timestamp: new Date(payload.timestamp).toISOString(),
+    nonce: payload.nonce.toLowerCase(),
+    keyVersion: payload.keyVersion,
     to: normalizeOtpEmail(payload.to),
     otp: payload.otp,
     expiresInMinutes: payload.expiresInMinutes,
@@ -151,43 +158,8 @@ export async function encryptMakeOtpEnvelope(
   );
   const tagOffset = encrypted.byteLength - 16;
   return {
-    iv: bytesToBase64Url(iv),
-    ciphertext: bytesToBase64Url(encrypted.slice(0, tagOffset)),
-    tag: bytesToBase64Url(encrypted.slice(tagOffset)),
+    iv: bytesToHex(iv),
+    ciphertext: bytesToHex(encrypted.slice(0, tagOffset)),
+    tag: bytesToHex(encrypted.slice(tagOffset)),
   };
-}
-
-export function otpEnvelopeSigningInput(
-  envelope: Omit<MakeOtpEnvelope, "signature">,
-): string {
-  const fields = [
-    envelope.timestamp,
-    envelope.nonce,
-    envelope.deliveryId,
-    envelope.keyVersion,
-    envelope.iv,
-    envelope.ciphertext,
-    envelope.tag,
-  ];
-  if (
-    envelope.keyVersion !== "otp-transport-v1" ||
-    !UUID_PATTERN.test(envelope.deliveryId) ||
-    !UUID_PATTERN.test(envelope.nonce) ||
-    Number.isNaN(Date.parse(envelope.timestamp)) ||
-    fields.some((field) => field.includes("\n")) ||
-    ![envelope.iv, envelope.ciphertext, envelope.tag].every((field) =>
-      BASE64URL_PATTERN.test(field)
-    )
-  ) {
-    throw new Error("invalid_otp_envelope");
-  }
-  return ["elysha-otp-envelope-v1", ...fields].join("\n");
-}
-
-export async function signOtpEnvelope(
-  envelope: Omit<MakeOtpEnvelope, "signature">,
-  secret: string,
-): Promise<string> {
-  requireLongSecret(secret, "make_otp_webhook_secret");
-  return await hmacSha256Hex(otpEnvelopeSigningInput(envelope), secret);
 }

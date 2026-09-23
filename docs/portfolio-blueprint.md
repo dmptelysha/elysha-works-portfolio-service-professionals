@@ -31,12 +31,12 @@ Convert relevant visitors into qualified leads and strategy-call bookings by tur
 
 ### Important experience rule
 
-The approved quiz is a **verified-email contact-qualified assessment**. After choosing an audience and before Question 1, the visitor supplies a first name, last name, business name, email address, and explicit proposal-email consent. Supabase sends a six-digit passwordless email OTP. The visitor must verify the email before any qualified lead or visitor/session/quiz context is created. Unverified contact PII stays only in React component memory and never enters local storage, URLs, analytics, or logs. The contact step explains that Elysha Works will email the proposal and up to three proposal-related follow-ups unless booking or a stop request ends the sequence.
+The approved quiz is a **verified-email contact-qualified assessment**. After choosing an audience and before Question 1, the visitor supplies a first name, last name, business name, email address, and explicit proposal-email consent. A Supabase Edge Function generates a six-digit custom OTP, stores only its HMAC digest, and asks inactive Make/Gmail delivery infrastructure to send the encrypted code. Supabase verifies the submitted code and remains the only verification authority. A non-PII owned anonymous quiz context may be prepared in the background, but the visitor must verify the email before any qualified lead is created. Unverified contact PII stays only in React component memory and never enters local storage, URLs, analytics, or logs. The contact step explains that Elysha Works will email the proposal and up to three proposal-related follow-ups unless booking or a stop request ends the sequence.
 
 The authoritative journey is:
 
 ```text
-Audience → Contact → Verified email OTP → Qualified context → Quiz → Point A → Point B → Recommended solution
+Audience → Anonymous owned context → Contact + inline custom OTP → Verified qualified lead → Quiz → Point A → Point B → Recommended solution
 → Basic vs Advanced vs Complete → 72-hour proposal → Discovery call
 ```
 
@@ -79,7 +79,7 @@ flowchart TD
 
 1. Choose audience type card.
 2. Submit first name, last name, business name, email address, and required proposal/follow-up consent.
-3. Verify the email with the six-digit OTP before the lead and owned quiz context are created.
+3. Verify the email inline with the custom six-digit OTP before the qualified lead is created.
 4. Complete the multi-step quiz without navigation or page reload.
 5. Review the personalized Point A, Point B, recommended solution, and Basic/Advanced/Complete comparison.
 6. Receive the server-verified roadmap while the recommended feasible tier/platform is automatically finalized and emailed.
@@ -149,8 +149,9 @@ Selecting a card:
 
 - After audience selection and before Question 1, show four required fields in this order: **first name**, **last name**, **business name**, and **email address**.
 - Require a consent checkbox using the approved `proposal_followup_v1` copy before continuing. The copy explains the initial proposal email and up to three proposal-related follow-ups unless the visitor books or stops them.
-- Send a six-digit email OTP through Supabase Auth. Use a **10-minute OTP expiry** and a **60-second resend** interval. Both hosted Auth templates used by this flow—**Confirm signup** for a new address and **Magic link or OTP** for a returning address or resend—must use branded Elysha Works code-only markup containing `{{ .Token }}` and no `{{ .ConfirmationURL }}`. Production delivery uses the dashboard-only Gmail custom SMTP configuration so Supabase remains the hidden verifier rather than the visible sender brand.
-- A verified email is required before lead creation. `begin_verified_qualified_quiz` derives the canonical email and verification timestamp from `auth.users`; the browser cannot supply or override them.
+- Place **Verify Email** beside the email field. Keep the name, business, consent, and email controls mounted while the six-digit code panel expands below; do not navigate to a separate verification page.
+- Generate the six-digit OTP in `request-email-otp`, store only its HMAC digest in the private Supabase schema, and deliver its authenticated AES-256-GCM envelope through the inactive Make/Gmail scenario. Use a **10-minute OTP expiry** and a **60-second resend** interval. Never store the plaintext OTP.
+- A verified email is required before lead creation. `begin_custom_verified_qualified_quiz` consumes the short-lived challenge grant and derives the canonical email from the private challenge; the browser cannot supply or override it.
 - Trim all values, normalize email to lowercase, keep form values after a backend error, and show a retry action.
 - Do not store contact fields in local storage, URLs, analytics, or client logs.
 - One question per screen.
@@ -503,9 +504,11 @@ Every tier must deliver a functional core outcome. Higher tiers add breadth, aut
 
 ```mermaid
 flowchart TD
-    A[Choose audience] --> B[First name, business name, email, consent]
-    B --> C[Create or reuse owned lead]
-    C --> D[Complete audience-specific quiz]
+    A[Choose audience] --> B[Prepare non-PII anonymous context]
+    B --> C[First name, business name, email, consent]
+    C --> C1[Custom OTP through encrypted Make Gmail delivery]
+    C1 --> C2[Supabase verifies digest and grants one-time lead creation]
+    C2 --> D[Create or reuse qualified lead and complete quiz]
     D --> E[Server verifies Cortex recommendation]
     E --> F[Show Point A and Point B]
     F --> G[Compare Basic, Advanced, Complete]
@@ -520,6 +523,8 @@ flowchart TD
 #### Make scenarios and Gmail delivery
 
 The browser never calls Make directly. Supabase Edge Functions send signed minimum-data requests to Make and retain authority over ownership, proposal state, expiry, booking suppression, follow-up eligibility, and cold-lead transitions.
+
+**Scenario OTP — Transactional email verification:** the inactive custom webhook receives only the signed AES-256-GCM envelope from `request-email-otp`, rejects stale/tampered/duplicate deliveries, reserves the delivery UUID, decrypts through Make's advanced encrypted keychain, and sends the 10-minute code through the authorized Gmail OAuth connection. Its Data Store contains only delivery ID, creation time, and status. The complete contract and dual-secret rotation procedure live in `docs/make-email-otp-scenario.md`.
 
 **Scenario A — Immediate proposal delivery:** a private custom webhook receives an idempotent request from `finalize-proposal`, validates the shared secret and payload, sends the client first name/business name, Point A → Point B summary, proposal reference URL, separate access key, exact expiration, signed stop link, and discovery-call CTA through an authorized Gmail connection. The Make Data Store may track only processing/sent/failed idempotency state; it must never store the raw access key. A confirmed send is acknowledged to Supabase before the 72-hour clock begins.
 

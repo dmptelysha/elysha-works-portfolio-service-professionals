@@ -7,7 +7,6 @@ import {
   generateSixDigitOtp,
   type MakeOtpEnvelope,
   normalizeOtpEmail,
-  signOtpEnvelope,
 } from "../_shared/email-otp.ts";
 import { getEmailOtpEnv } from "../_shared/env.ts";
 import {
@@ -52,7 +51,7 @@ export interface RequestEmailOtpDependencies {
   otpPepper: string;
   otpGroupingSecret: string;
   turnstileExpectedHostname: string;
-  makeWebhookSecret: string;
+  makeKeyVersion: string;
   makeEncryptionKey: Uint8Array;
   now: () => Date;
   randomUuid: () => string;
@@ -203,24 +202,20 @@ export function createRequestEmailOtpHandler(
 
       const encrypted = await encryptMakeOtpEnvelope({
         deliveryId,
+        timestamp: createdAt,
+        nonce,
+        keyVersion: dependencies.makeKeyVersion,
         to: email,
         otp,
         expiresInMinutes: 10,
         templateVersion: "elysha_otp_v1",
       }, dependencies.makeEncryptionKey);
-      const unsigned: Omit<MakeOtpEnvelope, "signature"> = {
+      const envelope: MakeOtpEnvelope = {
         deliveryId,
         timestamp: createdAt,
         nonce,
-        keyVersion: "otp-transport-v1",
+        keyVersion: dependencies.makeKeyVersion,
         ...encrypted,
-      };
-      const envelope: MakeOtpEnvelope = {
-        ...unsigned,
-        signature: await signOtpEnvelope(
-          unsigned,
-          dependencies.makeWebhookSecret,
-        ),
       };
 
       let acknowledgement: { accepted: boolean; deliveryId: string };

@@ -86,15 +86,15 @@ If the CLI is installed globally, the equivalent core commands are `supabase tes
 
 Anonymous users operate through PostgreSQL role `authenticated`; ownership remains `auth.uid() = owner_user_id`. The `anon` role receives only explicitly granted public published/active reads.
 
-## Verified email OTP and Gmail SMTP
+## Custom verified email OTP and Make/Gmail delivery
 
-The qualified quiz is verified-email-first: contact details remain memory-only until Supabase Auth verifies the six-digit email OTP. Only then does the browser create owned visitor/session/quiz rows and call `begin_verified_qualified_quiz`; the RPC reads canonical email and verification time from `auth.users` before creating or reusing the lead.
+The qualified quiz is verified-email-first. After an owned anonymous quiz context exists, `request-email-otp` validates Cloudflare Turnstile, normalizes the address, enforces per-owner/email/IP-prefix rate limits, generates an unbiased six-digit code, and stores only an HMAC-SHA-256 digest in the private `email_otp_challenges` table. Supabase never stores the plaintext OTP. The plaintext code exists only inside the short-lived encrypted Make delivery envelope.
 
-Local `supabase/config.toml` points both the **Confirm signup** and **Magic link or OTP** flows to branded Elysha Works templates. Both templates must contain `{{ .Token }}` and must not contain `{{ .ConfirmationURL }}`: a new address receives the confirmation template, while a returning address receives the magic-link/OTP template. This keeps first-time requests and **Resend code** aligned with the six-digit field in the quiz. Configure a **10-minute OTP expiry** and **60-second resend** interval.
+Make decrypts the authenticated AES-256-GCM envelope and sends the transactional code through the owner-approved Gmail OAuth connection. The code has a **10-minute OTP expiry** and a **60-second resend** interval. Make never verifies codes and receives no database authority. The full inactive scenario contract is documented in `docs/make-email-otp-scenario.md`.
 
-Local template files do not configure the hosted project automatically. For the hosted project, first enable the authorized **Gmail SMTP connection in the Supabase Dashboard** under Authentication > Emails > SMTP Settings, then copy the branded code-only markup into both hosted templates. Set the sender name to **Elysha Works** so Supabase remains the behind-the-scenes Auth verifier rather than the visible sender brand. Enter the Gmail App Password only in the dashboard secret field; never place it in `.env.local`, SQL, source, chat, screenshots, shell commands, or Git.
+`verify-email-otp` performs the atomic digest comparison, attempt counting, expiry check, and single-use grant issuance. The browser then calls `begin_custom_verified_qualified_quiz` with the challenge UUID; the RPC consumes the grant atomically and creates or reuses the lead. It receives no browser-supplied email argument. The exact verified address comes from the private challenge row.
 
-The current additive compatibility window intentionally leaves `begin_qualified_quiz_v2` callable for cached clients while the new verified function is deployed. New code never calls it. After observing that stale-client traffic has ended, use a separately reviewed migration to return `upgrade_required`, then a later separately approved migration to revoke its browser execution. Do not combine those compatibility retirements with the initial verified-lead migration.
+The legacy Supabase Auth email-OTP templates and SMTP sender are not part of this quiz verification path. Anonymous Auth remains responsible only for browser ownership and RLS. Any cached client still using an earlier Auth-OTP build must be upgraded; do not run both verification authorities as interchangeable production paths.
 
 ## Authorization assumption
 
@@ -104,12 +104,14 @@ The current additive compatibility window intentionally leaves `begin_qualified_
 
 Visitor-callable security-definer functions validate `auth.uid()`, ownership of every referenced row, bounded scalar/JSON inputs, and fixed `search_path = ''`. They assign CRM state, ownership, prices, timestamps, proposal state, and orchestration values internally.
 
-Existing restricted functions include lead/booking/analytics/linking operations. The connected flow uses `begin_verified_qualified_quiz`; it rejects anonymous JWTs, derives identity from the verified Auth user, returns a minimal same/another-business decision, reuses the stable lead for the same business, and creates a separate lead for another business. `begin_qualified_quiz_v2` remains only for the explicitly documented compatibility window. The legacy `begin_qualified_quiz` function remains for older migration compatibility but browser execution is revoked. Trusted proposal state functions are service-role-only, and the former browser-wide result persistence grant is revoked.
+Existing restricted functions include lead/booking/analytics/linking operations. The connected flow uses `begin_custom_verified_qualified_quiz`; it requires the owning anonymous JWT and a valid custom verification grant, consumes that grant atomically, derives the canonical email from the private challenge, returns a minimal same/another-business decision, reuses the stable lead for the same business, and creates a separate lead for another business. Legacy quiz-start functions are not verification authorities for the new client. Trusted proposal state functions are service-role-only, and the former browser-wide result persistence grant is revoked.
 
-Four Edge Functions form the external boundary:
+Six Edge Functions form the external boundary:
 
 | Function | Contract |
 |---|---|
+| `request-email-otp` | Owner-JWT plus Turnstile; rate-limits, creates the digest-only challenge, and sends an authenticated encrypted delivery envelope to inactive Make infrastructure |
+| `verify-email-otp` | Owner-JWT; atomically compares the submitted six-digit code against the stored HMAC digest and returns only a short-lived grant expiry |
 | `finalize-proposal` | Owner-JWT `preview` returns a server-calculated sanitized draft; `issue` reruns Cortex/catalog rules, validates selection, stores snapshots, issues reference/access, calls Make, and activates the exact 72-hour window only after successful email acknowledgement |
 | `verify-proposal` | Accepts reference plus separate access key, enforces status/expiry/five-failure lock/HMAC checks, and returns only the sanitized client proposal view |
 | `make-proposal-followups` | Authenticates Make with `MAKE_AUTOMATION_SECRET` and supports `claim`, `revalidate`, and `acknowledge` without exposing a service-role key to Make |
@@ -118,6 +120,8 @@ Four Edge Functions form the external boundary:
 Deploy functions only after the migrations are approved and applied to the exact verified project:
 
 ```powershell
+npx supabase@latest functions deploy request-email-otp --project-ref <verified-project-ref>
+npx supabase@latest functions deploy verify-email-otp --project-ref <verified-project-ref>
 npx supabase@latest functions deploy finalize-proposal --project-ref <verified-project-ref>
 npx supabase@latest functions deploy verify-proposal --project-ref <verified-project-ref>
 npx supabase@latest functions deploy make-proposal-followups --project-ref <verified-project-ref>
@@ -196,4 +200,4 @@ The globally installed CLI equivalent begins with `supabase gen types typescript
 - Legal/business retention durations and any future destructive cleanup schedule.
 - Approved real project/site-content records not already complete in the repository.
 - Remote Anonymous Auth, rate limits, and Turnstile/CAPTCHA dashboard configuration.
-- Owner-authorized Gmail connection and test-recipient address for controlled Make verification.
+- Owner-authorized Gmail OAuth connection in Make and an owner-controlled test-recipient address.

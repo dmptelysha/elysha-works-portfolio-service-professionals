@@ -2,19 +2,15 @@
 
 type EnvGetter = (name: string) => string | undefined;
 
-function decodeBase64Url(value: string, name: string): Uint8Array {
-  if (!/^[A-Za-z0-9_-]+$/u.test(value)) {
+function decodeHexKey(value: string, name: string): Uint8Array {
+  if (!/^[0-9a-f]{64}$/iu.test(value)) {
     throw new Error(`Invalid configuration: ${name}`);
   }
   try {
-    const padded = value.replaceAll("-", "+").replaceAll("_", "/") +
-      "=".repeat((4 - value.length % 4) % 4);
-    const bytes = Uint8Array.from(
-      atob(padded),
-      (character) => character.charCodeAt(0),
+    return Uint8Array.from(
+      value.match(/.{2}/gu) ?? [],
+      (pair) => Number.parseInt(pair, 16),
     );
-    if (bytes.byteLength !== 32) throw new Error("wrong length");
-    return bytes;
   } catch {
     throw new Error(`Invalid configuration: ${name}`);
   }
@@ -89,8 +85,8 @@ export function getEmailOtpEnv(get: EnvGetter = Deno.env.get) {
     turnstileSecretKey: required(get, "TURNSTILE_SECRET_KEY"),
     turnstileExpectedHostname,
     makeWebhookUrl,
-    makeWebhookSecret: required(get, "MAKE_OTP_WEBHOOK_SECRET", 32),
-    makeEncryptionKey: decodeBase64Url(
+    makeKeyVersion: required(get, "MAKE_OTP_KEY_VERSION"),
+    makeEncryptionKey: decodeHexKey(
       required(get, "MAKE_OTP_ENCRYPTION_KEY"),
       "MAKE_OTP_ENCRYPTION_KEY",
     ),

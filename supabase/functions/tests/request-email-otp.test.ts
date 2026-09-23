@@ -64,7 +64,7 @@ function dependencies(
     otpPepper: "p".repeat(32),
     otpGroupingSecret: "g".repeat(32),
     turnstileExpectedHostname: "elyshaworks.com",
-    makeWebhookSecret: "w".repeat(32),
+    makeKeyVersion: "v1",
     makeEncryptionKey: Uint8Array.from({ length: 32 }, (_, index) => index),
     now: () => new Date("2026-09-23T04:00:00.000Z"),
     randomUuid: () => uuids.shift() ?? crypto.randomUUID(),
@@ -227,14 +227,14 @@ Deno.test("successful OTP request persists no plaintext and sends ciphertext-onl
     ip: "203.0.113.10",
   });
   assert(makeEnvelope);
-  assertEquals(makeEnvelope.keyVersion, "otp-transport-v1");
-  assert(typeof makeEnvelope.signature === "string");
+  assertEquals(makeEnvelope.keyVersion, "v1");
+  assertEquals(Object.hasOwn(makeEnvelope, "signature"), false);
   const serializedMake = JSON.stringify(makeEnvelope);
   const serializedDatabase = JSON.stringify(databaseArgs);
   assert(!serializedMake.includes("person@example.com"));
   assert(!serializedMake.includes("012345"));
   assert(!serializedDatabase.includes("012345"));
-  assert(!JSON.stringify(responseBody).includes("w".repeat(32)));
+  assert(!JSON.stringify(responseBody).includes("person@example.com"));
   assertEquals(response.headers.get("cache-control"), "no-store");
 });
 

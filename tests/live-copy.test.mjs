@@ -48,11 +48,12 @@ test("the authoritative docs describe the verified proposal workflow", () => {
   ].join("\n");
 
   assert.match(docs, /verified email.*before.*lead/is);
-  assert.match(docs, /Gmail SMTP.*Supabase Dashboard/is);
-  assert.match(docs, /\{\{ \.Token \}\}/);
+  assert.match(docs, /custom.*OTP.*Make.*Gmail/is);
+  assert.match(docs, /HMAC.*digest/is);
   assert.match(docs, /60-second.*resend/is);
   assert.match(docs, /10-minute.*OTP/is);
-  assert.match(docs, /begin_qualified_quiz_v2.*compatibility/is);
+  assert.match(docs, /begin_custom_verified_qualified_quiz/is);
+  assert.match(docs, /never.*plaintext.*OTP/is);
   assert.match(docs, /complete approved inclusions/is);
   assert.match(docs, /accepted.*true.*delivery_id/is);
   assert.match(docs, /booking.*handoff.*external.*consumer/is);
@@ -217,4 +218,28 @@ test("the Make proposal automation guide locks the inactive delivery and follow-
   assert.match(initial, /"access_key": "REDACTED"/);
   assert.match(initial, /"stop_url": "https:\/\/example\.invalid\/stop\?token=REDACTED"/);
   assert.match(followup, /"work_kind": "follow_up"/);
+});
+
+test("the Make OTP runbook preserves encrypted, authenticated, idempotent delivery", () => {
+  const guidePath = fromRoot("docs/make-email-otp-scenario.md");
+  assert.ok(existsSync(guidePath), "missing custom Make OTP scenario runbook");
+  const guide = readFileSync(guidePath, "utf8");
+
+  for (const field of ["deliveryId", "timestamp", "nonce", "keyVersion", "iv", "ciphertext", "tag"]) {
+    assert.match(guide, new RegExp(`\\b${field}\\b`), `missing encrypted envelope field ${field}`);
+  }
+  assert.match(guide, /AES-256-GCM.*advanced.*keychain/is);
+  assert.match(guide, /inner.*outer.*deliveryId.*timestamp.*nonce.*keyVersion/is);
+  assert.doesNotMatch(guide, /MAKE_OTP_SIGNING_SECRET|canonical HMAC signature/is);
+  assert.match(guide, /10-minute.*code/is);
+  assert.match(guide, /sequential processing/is);
+  assert.match(guide, /confidential.*data/is);
+  assert.match(guide, /incomplete executions.*disabled/is);
+  assert.match(guide, /delivery_id.*created_at.*status/is);
+  assert.match(guide, /Data Store schema contains only `delivery_id`, `created_at`, and `status`/i);
+  assert.match(guide, /pending.*never resent automatically/is);
+  assert.match(guide, /generic failure.*without request data/is);
+  assert.match(guide, /MAKE_OTP_ENCRYPTION_KEY.*MAKE_OTP_KEY_VERSION.*versioned transport key/is);
+  assert.match(guide, /accepted.*true.*deliveryId.*same UUID/is);
+  assert.match(guide, /inactive/is);
 });

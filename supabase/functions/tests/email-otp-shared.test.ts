@@ -3,9 +3,7 @@ import {
   deriveOtpGroupingDigest,
   encryptMakeOtpEnvelope,
   generateSixDigitOtp,
-  type MakeOtpEnvelope,
   normalizeOtpEmail,
-  signOtpEnvelope,
 } from "../_shared/email-otp.ts";
 import { getEmailOtpEnv } from "../_shared/env.ts";
 
@@ -40,19 +38,11 @@ async function assertRejects(
   throw new Error("expected function to reject");
 }
 
-function base64UrlEncode(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(
-    /=+$/u,
-    "",
+function hexDecode(value: string): Uint8Array {
+  return Uint8Array.from(
+    value.match(/.{2}/gu) ?? [],
+    (pair) => Number.parseInt(pair, 16),
   );
-}
-
-function base64UrlDecode(value: string): Uint8Array {
-  const padded = value.replaceAll("-", "+").replaceAll("_", "/") +
-    "=".repeat((4 - value.length % 4) % 4);
-  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -146,6 +136,9 @@ Deno.test("rate-limit grouping digests are domain separated", async () => {
 Deno.test("Make envelope is AES-256-GCM ciphertext-only and authenticates its tag", async () => {
   const payload = {
     deliveryId: DELIVERY_ID,
+    timestamp: "2026-09-23T04:00:00.000Z",
+    nonce: "78000000-0000-4000-8000-000000000001",
+    keyVersion: "v1",
     to: "person@example.com",
     otp: "012345",
     expiresInMinutes: 10,
@@ -156,9 +149,9 @@ Deno.test("Make envelope is AES-256-GCM ciphertext-only and authenticates its ta
     ENCRYPTION_KEY,
     Uint8Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
   );
-  assertEquals(encrypted.iv, "AAECAwQFBgcICQoL");
-  assert(/^[A-Za-z0-9_-]+$/u.test(encrypted.ciphertext));
-  assert(/^[A-Za-z0-9_-]+$/u.test(encrypted.tag));
+  assertEquals(encrypted.iv, "000102030405060708090a0b");
+  assert(/^[0-9a-f]+$/u.test(encrypted.ciphertext));
+  assert(/^[0-9a-f]{32}$/u.test(encrypted.tag));
   const key = await crypto.subtle.importKey(
     "raw",
     ENCRYPTION_KEY,
@@ -166,15 +159,15 @@ Deno.test("Make envelope is AES-256-GCM ciphertext-only and authenticates its ta
     false,
     ["decrypt"],
   );
-  const ciphertext = base64UrlDecode(encrypted.ciphertext);
-  const tag = base64UrlDecode(encrypted.tag);
+  const ciphertext = hexDecode(encrypted.ciphertext);
+  const tag = hexDecode(encrypted.tag);
   const joined = new Uint8Array(ciphertext.length + tag.length);
   joined.set(ciphertext);
   joined.set(tag, ciphertext.length);
   const plaintext = await crypto.subtle.decrypt(
     {
       name: "AES-GCM",
-      iv: toArrayBuffer(base64UrlDecode(encrypted.iv)),
+      iv: toArrayBuffer(hexDecode(encrypted.iv)),
       tagLength: 128,
     },
     key,
@@ -187,7 +180,7 @@ Deno.test("Make envelope is AES-256-GCM ciphertext-only and authenticates its ta
       crypto.subtle.decrypt(
         {
           name: "AES-GCM",
-          iv: toArrayBuffer(base64UrlDecode(encrypted.iv)),
+          iv: toArrayBuffer(hexDecode(encrypted.iv)),
           tagLength: 128,
         },
         key,
@@ -197,9 +190,12 @@ Deno.test("Make envelope is AES-256-GCM ciphertext-only and authenticates its ta
   );
 });
 
-Deno.test("Make encryption uses fresh IVs and signed outer JSON leaks no mailbox data", async () => {
+Deno.test("Make encryption uses fresh IVs and authenticated outer JSON leaks no mailbox data", async () => {
   const payload = {
     deliveryId: DELIVERY_ID,
+    timestamp: "2026-09-23T04:00:00.000Z",
+    nonce: "78000000-0000-4000-8000-000000000001",
+    keyVersion: "v1",
     to: "person@example.com",
     otp: "012345",
     expiresInMinutes: 10,
@@ -208,16 +204,14 @@ Deno.test("Make encryption uses fresh IVs and signed outer JSON leaks no mailbox
   const first = await encryptMakeOtpEnvelope(payload, ENCRYPTION_KEY);
   const second = await encryptMakeOtpEnvelope(payload, ENCRYPTION_KEY);
   assert(first.iv !== second.iv);
-  const unsigned: Omit<MakeOtpEnvelope, "signature"> = {
+  const envelope = {
     deliveryId: DELIVERY_ID,
     timestamp: "2026-09-23T04:00:00.000Z",
     nonce: "78000000-0000-4000-8000-000000000001",
-    keyVersion: "otp-transport-v1",
+    keyVersion: "v1",
     ...first,
   };
-  const signature = await signOtpEnvelope(unsigned, SECRET);
-  assertEquals(signature, await signOtpEnvelope(unsigned, SECRET));
-  const serialized = JSON.stringify({ ...unsigned, signature });
+  const serialized = JSON.stringify(envelope);
   assert(!serialized.includes(payload.to));
   assert(!serialized.includes(payload.otp));
 });
@@ -229,13 +223,16 @@ Deno.test("email OTP environment validates secrets, HTTPS, hostname, and 32-byte
     TURNSTILE_SECRET_KEY: "turnstile-test-secret",
     TURNSTILE_EXPECTED_HOSTNAME: " ElyshaWorks.COM ",
     MAKE_OTP_WEBHOOK_URL: "https://hook.us2.make.com/example",
-    MAKE_OTP_WEBHOOK_SECRET: "w".repeat(32),
-    MAKE_OTP_ENCRYPTION_KEY: base64UrlEncode(ENCRYPTION_KEY),
+    MAKE_OTP_KEY_VERSION: "v1",
+    MAKE_OTP_ENCRYPTION_KEY: Array.from(ENCRYPTION_KEY, (byte) =>
+      byte.toString(16).padStart(2, "0")
+    ).join(""),
   };
   const environment = getEmailOtpEnv((name) => values[name]);
   assertEquals(environment.turnstileExpectedHostname, "elyshaworks.com");
   assertEquals([...environment.makeEncryptionKey], [...ENCRYPTION_KEY]);
   assertEquals(environment.makeWebhookUrl, values.MAKE_OTP_WEBHOOK_URL);
+  assertEquals(environment.makeKeyVersion, "v1");
   await assertRejects(
     () =>
       getEmailOtpEnv((name) =>
