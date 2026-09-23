@@ -2,6 +2,24 @@
 
 type EnvGetter = (name: string) => string | undefined;
 
+function decodeBase64Url(value: string, name: string): Uint8Array {
+  if (!/^[A-Za-z0-9_-]+$/u.test(value)) {
+    throw new Error(`Invalid configuration: ${name}`);
+  }
+  try {
+    const padded = value.replaceAll("-", "+").replaceAll("_", "/") +
+      "=".repeat((4 - value.length % 4) % 4);
+    const bytes = Uint8Array.from(
+      atob(padded),
+      (character) => character.charCodeAt(0),
+    );
+    if (bytes.byteLength !== 32) throw new Error("wrong length");
+    return bytes;
+  } catch {
+    throw new Error(`Invalid configuration: ${name}`);
+  }
+}
+
 function required(get: EnvGetter, name: string, minimumLength = 1): string {
   const value = get(name)?.trim();
   if (!value || value.length < minimumLength) {
@@ -47,4 +65,34 @@ export function getMakeWebhookEnv(get: EnvGetter = Deno.env.get) {
 
 export function getMakeAutomationSecret(get: EnvGetter = Deno.env.get) {
   return required(get, "MAKE_AUTOMATION_SECRET", 32);
+}
+
+export function getEmailOtpEnv(get: EnvGetter = Deno.env.get) {
+  const makeWebhookUrl = required(get, "MAKE_OTP_WEBHOOK_URL");
+  if (new URL(makeWebhookUrl).protocol !== "https:") {
+    throw new Error("MAKE_OTP_WEBHOOK_URL must use HTTPS");
+  }
+  const turnstileExpectedHostname = required(
+    get,
+    "TURNSTILE_EXPECTED_HOSTNAME",
+  ).toLowerCase();
+  if (
+    turnstileExpectedHostname.includes(":") ||
+    turnstileExpectedHostname.includes("/") ||
+    turnstileExpectedHostname.includes(" ")
+  ) {
+    throw new Error("Invalid configuration: TURNSTILE_EXPECTED_HOSTNAME");
+  }
+  return {
+    otpPepper: required(get, "OTP_PEPPER", 32),
+    otpGroupingSecret: required(get, "OTP_GROUPING_SECRET", 32),
+    turnstileSecretKey: required(get, "TURNSTILE_SECRET_KEY"),
+    turnstileExpectedHostname,
+    makeWebhookUrl,
+    makeWebhookSecret: required(get, "MAKE_OTP_WEBHOOK_SECRET", 32),
+    makeEncryptionKey: decodeBase64Url(
+      required(get, "MAKE_OTP_ENCRYPTION_KEY"),
+      "MAKE_OTP_ENCRYPTION_KEY",
+    ),
+  };
 }

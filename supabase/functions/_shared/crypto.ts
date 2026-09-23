@@ -1,17 +1,40 @@
 const encoder = new TextEncoder();
 const ACCESS_KEY_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
-function bytesToHex(bytes: Uint8Array): string {
+export function bytesToHex(bytes: Uint8Array): string {
   return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join(
     "",
   );
 }
 
-function hexToBytes(value: string): Uint8Array | null {
+export function hexToBytes(value: string): Uint8Array | null {
   if (!/^[0-9a-f]+$/i.test(value) || value.length % 2 !== 0) return null;
   return new Uint8Array(
     value.match(/.{2}/g)!.map((pair) => Number.parseInt(pair, 16)),
   );
+}
+
+export function bytesToBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(
+    /=+$/u,
+    "",
+  );
+}
+
+export function base64UrlToBytes(value: string): Uint8Array | null {
+  if (!/^[A-Za-z0-9_-]+$/u.test(value)) return null;
+  try {
+    const padded = value.replaceAll("-", "+").replaceAll("_", "/") +
+      "=".repeat((4 - value.length % 4) % 4);
+    return Uint8Array.from(
+      atob(padded),
+      (character) => character.charCodeAt(0),
+    );
+  } catch {
+    return null;
+  }
 }
 
 function base64UrlEncode(value: string): string {
