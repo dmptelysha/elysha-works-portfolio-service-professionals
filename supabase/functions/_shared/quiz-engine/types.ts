@@ -297,6 +297,7 @@ export interface ProposalRecommendationView {
 }
 
 export interface ProposalContentViewModel {
+  audienceKey: AudienceKey;
   client: { firstName: string; businessName: string };
   pointA: PointABSummary["pointA"];
   pointB: PointABSummary["pointB"];

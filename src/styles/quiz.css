@@ -245,6 +245,7 @@
 .quiz-result { width: min(100%, 86rem); }
 .result-hero { padding: clamp(1rem, 4vw, 4rem) 0 clamp(4rem, 8vw, 7rem); text-align: center; }
 .result-hero h1 { margin-inline: auto; }
+.result-hero--client h1 { max-width: none; font-size: clamp(1.85rem, 3.2vw, 3.5rem); line-height: 1.05; white-space: nowrap; }
 .result-hero > p:not(.quiz-kicker) { margin: 1.25rem 0 .7rem; color: var(--portfolio-gold); font-size: clamp(1.3rem, 2.5vw, 2.2rem); font-weight: 700; }
 .result-confidence { display: block; width: fit-content; margin: 0 auto .75rem; padding: .38rem .65rem; border: 1px solid rgba(255,211,105,.45); color: var(--portfolio-gold); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; }
 .result-confidence--low { border-color: #ffd7a3; color: #ffd7a3; }
@@ -252,6 +253,8 @@
 .result-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid rgba(255,255,255,.14); border-left: 1px solid rgba(255,255,255,.14); }
 .result-card { min-height: 20rem; padding: clamp(1.5rem, 4vw, 3.5rem); border-right: 1px solid rgba(255,255,255,.14); border-bottom: 1px solid rgba(255,255,255,.14); background: rgba(9,10,9,.75); }
 .result-card--wide { grid-column: 1 / -1; }
+.result-point-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.result-point-row .result-card { height: 100%; min-width: 0; }
 .result-card--gold { background: var(--portfolio-gold); color: #050606; }
 .result-card--gold .result-number { color: #51400d; }
 .result-card h2 { max-width: 38rem; margin: 0; font-size: clamp(2rem, 4vw, 4rem); line-height: 1; letter-spacing: -.045em; }
@@ -284,7 +287,13 @@
 .investment-total { font-size: clamp(1.2rem, 2.2vw, 2rem); color: var(--portfolio-gold); }
 .scope-note { font-size: .8rem; }
 .result-projects { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-top: 2.5rem; }
-.result-projects article { padding: 1.5rem; border: 1px solid rgba(255,255,255,.13); }
+.result-projects article { overflow: hidden; border: 1px solid rgba(255,255,255,.13); background: #090a09; }
+.result-project-image { position: relative; aspect-ratio: 16 / 10; overflow: hidden; border-bottom: 1px solid rgba(255,255,255,.13); background: #11120f; }
+.result-project-image img { object-fit: cover; object-position: top center; transition: transform .5s ease; }
+.result-projects article:hover .result-project-image img { transform: scale(1.025); }
+.result-project-copy { padding: 1.5rem; }
+.result-project-copy h3 { margin: .7rem 0; }
+.result-project-copy p { margin-bottom: 0; color: var(--portfolio-muted); line-height: 1.55; }
 .result-projects span { color: var(--portfolio-gold); font-size: .68rem; text-transform: uppercase; letter-spacing: .12em; }
 .result-card--comparison, .result-card--selection { padding: 0; }
 .roadmap-comparison, .roadmap-selection-summary { padding: clamp(1.5rem, 4vw, 3.5rem); }
@@ -346,6 +355,8 @@
   .audience-grid, .quiz-options, .result-grid, .result-projects { grid-template-columns: 1fr; }
   .audience-card { min-height: 15rem; }
   .result-card--wide { grid-column: auto; }
+  .result-point-row { grid-template-columns: 1fr; }
+  .result-hero--client h1 { white-space: normal; }
   .result-check-list { columns: 1; }
   .snapshot-list { grid-template-columns: 1fr; }
   .result-card { min-height: 0; }

@@ -1,5 +1,4 @@
-import { PROJECTS } from "@/data/projects";
-
+import { RelatedWorkCards } from "./RelatedWorkCards";
 import { RoadmapComparison } from "./RoadmapComparison";
 import { RoadmapSelectionSummary } from "./RoadmapSelectionSummary";
 import type {
@@ -49,8 +48,6 @@ export function QuizResult({
   issueError,
   persistenceAvailable,
 }: QuizResultProps) {
-  const relevantProjects = PROJECTS.filter((project) => project.audienceKeys.includes(result.audienceKey)).slice(0, 2);
-
   if (proposal) {
     const completeTier = proposal.tiers.find((tier) => tier.tierKey === "complete");
     const completeVariant = completeTier?.variants.find(
@@ -59,7 +56,7 @@ export function QuizResult({
 
     return (
       <article className="quiz-result" aria-labelledby="result-title">
-        <header className="result-hero">
+        <header className="result-hero result-hero--client">
           <p className="quiz-kicker">Your personalized roadmap</p>
           <h1 id="result-title">{proposal.client.firstName}’s roadmap for {proposal.client.businessName}</h1>
           <p>{proposal.recommendation.title}</p>
@@ -68,19 +65,21 @@ export function QuizResult({
         </header>
 
         <div className="result-grid">
-          <section className="result-card result-card--wide" aria-labelledby="point-a-title">
-            <p className="result-number">01 · Point A</p>
-            <h2 id="point-a-title">{proposal.pointA.heading}</h2>
-            <p>{proposal.pointA.summary}</p>
-            <ul className="result-simple-list">{proposal.pointA.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
-          </section>
+          <div className="result-point-row result-card--wide" data-testid="point-a-b-row">
+            <section className="result-card" aria-labelledby="point-a-title">
+              <p className="result-number">01 · Point A</p>
+              <h2 id="point-a-title">{proposal.pointA.heading}</h2>
+              <p>{proposal.pointA.summary}</p>
+              <ul className="result-simple-list">{proposal.pointA.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+            </section>
 
-          <section className="result-card result-card--wide result-card--gold" aria-labelledby="point-b-title">
-            <p className="result-number">02 · Point B</p>
-            <h2 id="point-b-title">{proposal.pointB.heading}</h2>
-            <p>{proposal.pointB.summary}</p>
-            <ul className="result-simple-list">{proposal.pointB.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
-          </section>
+            <section className="result-card result-card--gold" aria-labelledby="point-b-title">
+              <p className="result-number">02 · Point B</p>
+              <h2 id="point-b-title">{proposal.pointB.heading}</h2>
+              <p>{proposal.pointB.summary}</p>
+              <ul className="result-simple-list">{proposal.pointB.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+            </section>
+          </div>
 
           <section className="result-card result-card--wide" aria-labelledby="recommended-path-title">
             <p className="result-number">03 · Recommended path</p>
@@ -105,7 +104,7 @@ export function QuizResult({
             <p>{completeTier?.promise}</p>
             {completeVariant ? (
               <ul className="result-simple-list">
-                {completeVariant.offer.includedFeatures.slice(0, 4).map((feature) => <li key={feature}>{feature}</li>)}
+                {completeVariant.offer.includedFeatures.map((feature) => <li key={feature}>{feature}</li>)}
               </ul>
             ) : null}
           </section>
@@ -113,11 +112,7 @@ export function QuizResult({
           <section className="result-card result-card--wide" aria-labelledby="work-title">
             <p className="result-number">07 · Relevant work</p>
             <h2 id="work-title">Related work</h2>
-            <div className="result-projects">
-              {relevantProjects.map((project) => (
-                <article key={project.slug}><span>{project.kind}</span><h3>{project.title}</h3><p>{project.summary}</p></article>
-              ))}
-            </div>
+            <RelatedWorkCards audienceKey={result.audienceKey} />
           </section>
 
           <section className="result-card result-card--next result-card--wide" aria-labelledby="next-title">
@@ -235,11 +230,7 @@ export function QuizResult({
         <section className="result-card result-card--wide" aria-labelledby="work-title">
           <p className="result-number">10 · Relevant projects</p>
           <h2 id="work-title">Related work</h2>
-          <div className="result-projects">
-            {relevantProjects.map((project) => (
-              <article key={project.slug}><span>{project.kind}</span><h3>{project.title}</h3><p>{project.summary}</p></article>
-            ))}
-          </div>
+          <RelatedWorkCards audienceKey={result.audienceKey} />
         </section>
 
         <section className="result-card result-card--next result-card--wide" aria-labelledby="next-title">

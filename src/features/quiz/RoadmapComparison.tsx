@@ -66,7 +66,7 @@ export function RoadmapComparison({ result, selection, onSelect }: RoadmapCompar
                 <strong>{money.format(selectedVariant.offer.basePriceUsd)}{selectedVariant.offer.startingPrice ? "+" : ""}</strong>
               </div>
               <ul>
-                {selectedVariant.offer.includedFeatures.slice(0, 5).map((feature) => <li key={feature}>{feature}</li>)}
+                {selectedVariant.offer.includedFeatures.map((feature) => <li key={feature}>{feature}</li>)}
               </ul>
               <button
                 className="roadmap-choose"

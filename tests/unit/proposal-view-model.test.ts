@@ -161,5 +161,15 @@ describe("proposal view model", () => {
       expect(nextIndex, `missing or misordered: ${copy}`).toBeGreaterThan(priorIndex);
       priorIndex = nextIndex;
     }
+
+    expect(screen.getByTestId("point-a-b-row")).toContainElement(screen.getByRole("heading", { name: proposal.pointA.heading }));
+    expect(screen.getByTestId("point-a-b-row")).toContainElement(screen.getByRole("heading", { name: proposal.pointB.heading }));
+    expect(screen.getAllByRole("img", { name: /project preview/i }).length).toBeGreaterThan(0);
+
+    const selectedTier = proposal.tiers.find((tier) => tier.tierKey === selection.tierKey)!;
+    const selectedVariant = selectedTier.variants.find((variant) => variant.platform === selection.platform)!;
+    for (const feature of selectedVariant.offer.includedFeatures) {
+      expect(screen.getAllByText(feature).length).toBeGreaterThan(0);
+    }
   });
 });

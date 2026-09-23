@@ -25,6 +25,7 @@ function buildContent(
   resolveRoadmapSelection(result, selection);
   const pointAB = buildPointABSummary(businessName, result.audienceKey, answers);
   return Object.freeze({
+    audienceKey: result.audienceKey,
     client: Object.freeze({ firstName, businessName }),
     ...pointAB,
     recommendation: Object.freeze({

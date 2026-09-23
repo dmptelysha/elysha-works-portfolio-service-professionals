@@ -75,6 +75,18 @@ describe("protected proposal access", () => {
     expect(within(main).getByRole("heading", { name: /^Complete$/i })).toBeInTheDocument();
     expect(within(main).getByRole("link", { name: /book a discovery call/i })).toHaveAttribute("href", "/booking/");
     expect(within(main).getByText(/available until/i)).toBeInTheDocument();
+    expect(within(main).getByTestId("point-a-b-row")).toContainElement(pointA);
+    expect(within(main).getByTestId("point-a-b-row")).toContainElement(pointB);
+    expect(within(main).getAllByRole("img", { name: /project preview/i }).length).toBeGreaterThan(0);
+
+    for (const tier of proposal.tiers) {
+      const variant = tier.variants.find((item) => item.platform === proposal.selection.platform && item.feasibility.available)
+        ?? tier.variants.find((item) => item.feasibility.available)
+        ?? tier.variants[0];
+      for (const feature of variant.offer.includedFeatures) {
+        expect(within(main).getAllByText(feature).length).toBeGreaterThan(0);
+      }
+    }
     expect(verify).toHaveBeenCalledWith(reference, "ABCD234567");
   });
 

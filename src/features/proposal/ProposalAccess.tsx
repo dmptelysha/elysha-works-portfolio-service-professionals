@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
 import type { PlatformKey, ProposalViewModel, RoadmapVariant } from "@/features/quiz/types";
+import { RelatedWorkCards } from "@/features/quiz/RelatedWorkCards";
 
 import { defaultProposalService, isProposalReference, type ProposalService } from "./proposal-service";
 
@@ -64,19 +65,21 @@ function ProposalDocument({ proposal }: { proposal: ProposalViewModel }) {
           <span>Available until {expiry} (Philippine time)</span>
         </header>
 
-        <section className="proposal-panel" aria-labelledby="proposal-point-a">
-          <p className="proposal-number">01 · Point A</p>
-          <h2 id="proposal-point-a">{proposal.pointA.heading}</h2>
-          <p>{proposal.pointA.summary}</p>
-          <ul>{proposal.pointA.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
-        </section>
+        <div className="proposal-point-row" data-testid="point-a-b-row">
+          <section className="proposal-panel" aria-labelledby="proposal-point-a">
+            <p className="proposal-number">01 · Point A</p>
+            <h2 id="proposal-point-a">{proposal.pointA.heading}</h2>
+            <p>{proposal.pointA.summary}</p>
+            <ul>{proposal.pointA.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+          </section>
 
-        <section className="proposal-panel proposal-panel--gold" aria-labelledby="proposal-point-b">
-          <p className="proposal-number">02 · Point B</p>
-          <h2 id="proposal-point-b">{proposal.pointB.heading}</h2>
-          <p>{proposal.pointB.summary}</p>
-          <ul>{proposal.pointB.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
-        </section>
+          <section className="proposal-panel proposal-panel--gold" aria-labelledby="proposal-point-b">
+            <p className="proposal-number">02 · Point B</p>
+            <h2 id="proposal-point-b">{proposal.pointB.heading}</h2>
+            <p>{proposal.pointB.summary}</p>
+            <ul>{proposal.pointB.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+          </section>
+        </div>
 
         <section className="proposal-panel" aria-labelledby="proposal-recommendation">
           <p className="proposal-number">03 · Recommended solution</p>
@@ -109,7 +112,7 @@ function ProposalDocument({ proposal }: { proposal: ProposalViewModel }) {
                     <small>Estimated investment</small>
                     <b>${variant.estimatedProjectInvestmentUsd.toLocaleString("en-US")}</b>
                   </div>
-                  <ul>{variant.offer.includedFeatures.slice(0, 6).map((feature) => <li key={feature}>{feature}</li>)}</ul>
+                  <ul>{variant.offer.includedFeatures.map((feature) => <li key={feature}>{feature}</li>)}</ul>
                   {!variant.feasibility.available ? <p className="proposal-unavailable">This route requires a different platform to deliver the approved capability.</p> : null}
                 </article>
               );
@@ -117,8 +120,14 @@ function ProposalDocument({ proposal }: { proposal: ProposalViewModel }) {
           </div>
         </section>
 
+        <section className="proposal-related" aria-labelledby="proposal-related-work">
+          <p className="proposal-number">05 · Related work</p>
+          <h2 id="proposal-related-work">See the thinking in practice.</h2>
+          <RelatedWorkCards audienceKey={proposal.audienceKey} />
+        </section>
+
         <section className="proposal-next" aria-labelledby="proposal-next-step">
-          <p className="proposal-number">05 · Next step</p>
+          <p className="proposal-number">06 · Next step</p>
           <h2 id="proposal-next-step">Let&apos;s turn the roadmap into a practical scope.</h2>
           <p>Book a discovery call to review the recommendation, confirm the details, and decide whether working together is the right fit.</p>
           <a className="proposal-primary" href="/booking/">Book a Discovery Call <span aria-hidden="true">→</span></a>
