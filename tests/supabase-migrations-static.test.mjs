@@ -22,6 +22,7 @@ const expectedMigrations = [
   '202609230002_add_custom_email_otp.sql',
   '202609230003_add_assessment_location_and_roadmap_metadata.sql',
   '202609240001_grant_quiz_location_read.sql',
+  '202609240002_update_proposal_snapshot_versions.sql',
 ];
 
 const phaseOneTables = [
@@ -178,6 +179,17 @@ test('assessment owners can read the location metadata required by proposal prev
     sql,
     /grant\s+select\s*\([^;]*business_country[^;]*country_code[^;]*display_currency[^;]*currency_symbol[^;]*fx_rate[^;]*fx_rate_timestamp[^;]*\)\s+on\s+public\.quiz_sessions\s+to\s+authenticated/is,
   );
+});
+
+test('proposal finalization accepts the approved V2 snapshot versions', () => {
+  const sql = read('supabase/migrations/202609240002_update_proposal_snapshot_versions.sql');
+  assert.match(sql, /create\s+or\s+replace\s+function\s+public\.finalize_quiz_proposal\s*\(/i);
+  assert.match(sql, /business-systems-cortex-2026\.09-v2/);
+  assert.match(sql, /business-systems-assessment-2026\.09-v2/);
+  assert.match(sql, /business-systems-catalog-2026\.09-v2/);
+  assert.match(sql, /cortex-local-v0\.1/);
+  assert.match(sql, /portfolio-qualifier-v0\.1/);
+  assert.match(sql, /portfolio-catalog-v0\.1/);
 });
 
 test('migrations create exactly the Phase 1 public tables', () => {
