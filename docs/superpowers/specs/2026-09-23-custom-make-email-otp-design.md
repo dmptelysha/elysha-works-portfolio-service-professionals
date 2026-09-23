@@ -10,7 +10,7 @@
 
 ## 1. Outcome
 
-The portfolio will use a custom email-verification challenge whose six-digit OTP is generated only in a Supabase Edge Function. PostgreSQL stores only a keyed digest of the OTP. A dedicated Make scenario receives the plaintext OTP once over an authenticated HTTPS webhook and sends the verification email through the approved Gmail connection. A second Edge Function verifies the submitted code against Supabase state, and the qualified-lead RPC atomically consumes the verified challenge.
+The portfolio will use a custom email-verification challenge whose six-digit OTP is generated only in a Supabase Edge Function. PostgreSQL stores only a keyed digest of the OTP. A dedicated Make scenario receives an authenticated AES-256-GCM encrypted envelope over HTTPS, decrypts the recipient and OTP only inside a confidential execution, and sends the verification email through the approved Gmail connection. A second Edge Function verifies the submitted code against Supabase state, and the qualified-lead RPC atomically consumes the verified challenge.
 
 This OTP proves control of one email address for the current assessment and proposal workflow. It does not create a permanent email login, client-portal identity, password, or cross-device authenticated account.
 
@@ -82,9 +82,9 @@ PostgreSQL stores the challenge, fixed-length digest, normalized email, owner, p
 
 ### Make and Gmail
 
-Make receives the plaintext OTP only in the signed request body needed to send the current verification email. Make does not persist the OTP in a Data Store, return it in a webhook response, include it in error text, or forward it to another service. Gmail transports the rendered message; Gmail neither generates nor verifies the code.
+Make's webhook receives only a signed AES-256-GCM envelope. The advanced Encryptor module decrypts the canonical recipient and plaintext OTP only inside the confidential scenario execution needed to send the current verification email. Make does not persist the decrypted recipient or OTP in a Data Store, return either value in a webhook response, include either value in error text, or forward either value to another service. Gmail transports the rendered message; Gmail neither generates nor verifies the code.
 
-Make is a sensitive-data boundary because execution history may contain webhook inputs. The scenario must use confidential-data controls where available, the shortest practical execution-history retention, restricted team access, and no debug logging of the request body. If those controls cannot be enforced, the production sender must move from Make to a transactional email provider called directly by the Edge Function before launch.
+Make is a sensitive-data boundary because the webhook service retains request metadata/body temporarily and execution history may otherwise contain decrypted inputs. Webhook logs must contain ciphertext only. The scenario must use AES decrypt (advanced) with a hidden keychain, confidential-data controls, sequential processing, disabled incomplete-execution storage, restricted team access, and no debug logging of decrypted data. If those controls cannot be enforced, the production sender must move from Make to a transactional email provider called directly by the Edge Function before launch.
 
 ## 5. Cryptography and Challenge Rules
 
@@ -193,7 +193,7 @@ Processing order:
 4. Enforce issuance limits.
 5. Generate the OTP and challenge identifiers.
 6. Derive and store only the OTP digest in a `pending_delivery` challenge.
-7. Call the signed Make webhook with the minimum delivery payload.
+7. Encrypt the minimum delivery payload with AES-256-GCM and call the signed Make webhook with only the authenticated envelope.
 8. Require the matching delivery ID in Make's success acknowledgement.
 9. Mark the challenge active/delivered, discard the plaintext OTP from local scope, and return the opaque challenge ID plus authoritative expiry/cooldown timestamps.
 10. On delivery failure, mark the challenge failed, clear its OTP digest, and return a generic retryable error.
@@ -219,23 +219,26 @@ Create a dedicated scenario separate from proposal delivery and proposal follow-
 
 - Trigger: private Make custom webhook called only by `request-email-otp`.
 - Transport: HTTPS only.
-- Headers: timestamp, nonce/delivery ID, HMAC signature, and the dedicated OTP webhook secret.
-- Make validates the timestamp window, delivery ID, signature, and required payload before the Gmail module.
+- Envelope fields: timestamp, nonce, delivery ID, key version, IV, ciphertext, GCM authentication tag, and HMAC signature.
+- Make validates the timestamp window, delivery ID, signature, and replay reservation before decrypting; it validates the exact decrypted payload before the Gmail module.
 - The Edge Function and Make Data Store use the delivery ID for idempotency. A replay never sends a second email.
 
-### Minimum payload
+### Encrypted transport envelope
 
 ```json
 {
   "deliveryId": "uuid",
-  "to": "person@example.com",
-  "otp": "012345",
-  "expiresInMinutes": 10,
-  "templateVersion": "elysha_otp_v1"
+  "timestamp": "2026-09-23T00:00:00.000Z",
+  "nonce": "uuid",
+  "keyVersion": "otp-transport-v1",
+  "iv": "BASE64URL_12_BYTES",
+  "ciphertext": "BASE64URL_CIPHERTEXT",
+  "tag": "BASE64URL_16_BYTES",
+  "signature": "LOWERCASE_HEX_HMAC_SHA256"
 }
 ```
 
-The payload excludes names, business name, lead IDs, quiz answers, proposal data, IP data, Supabase owner IDs, hashes, and secrets.
+The decrypted inner payload contains exact keys `deliveryId`, `to`, `otp`, `expiresInMinutes`, and `templateVersion`. The outer envelope excludes plaintext email/OTP plus names, business name, lead IDs, quiz answers, proposal data, IP data, Supabase owner IDs, hashes, and secrets. The HMAC secret and AES transport key are independent Edge secrets; Make stores the AES key only in an advanced encrypted keychain.
 
 ### Email content
 
@@ -327,7 +330,7 @@ OTP verification reduces mistyped addresses, fake submissions, and avoidable bou
 
 ## 14. Retention and Cleanup
 
-- Plaintext OTP exists only in Edge Function memory and the transient signed Make request/Gmail message.
+- Plaintext OTP exists only in Edge Function memory, the confidential post-decryption Make execution, and the Gmail message. Make webhook logs contain ciphertext only.
 - Successful challenge consumption clears `otp_digest` immediately.
 - Failed, expired, superseded, and delivery-failed terminal rows have their digest cleared by bounded cleanup.
 - Terminal challenge metadata is deleted after 24 hours.
@@ -355,8 +358,8 @@ OTP verification reduces mistyped addresses, fake submissions, and avoidable bou
 
 ### Make contract tests
 
-- Valid signatures send exactly one Gmail message and return the matching delivery ID.
-- Invalid signature, stale timestamp, malformed payload, and duplicate delivery ID do not send.
+- Valid signed AES-GCM envelopes decrypt and send exactly one Gmail message, then return the matching delivery ID.
+- Invalid signature, stale timestamp, malformed envelope, wrong GCM tag/key/IV, mismatched inner delivery ID, and duplicate delivery ID do not send.
 - Gmail failure returns no success acknowledgement and leaves no active challenge.
 - Scenario logs/Data Stores contain no retained OTP after the configured operational window.
 
@@ -397,8 +400,8 @@ Using one owner-approved test address and no fake lead data:
 2. Add failing unit, SQL, Edge Function, Make-contract, component, and browser tests.
 3. Add the private challenge table and restricted database functions in an additive migration.
 4. Deploy database changes and both Edge Functions while the current Supabase Auth OTP remains active.
-5. Configure Edge secrets: OTP pepper, Turnstile secret, Make OTP webhook URL, Make OTP signing secret, and grouping-digest secret. No value is printed, committed, or placed in browser environment variables.
-6. Build the Make OTP scenario inactive, enable confidential-data controls, connect Gmail, and test signed/idempotent delivery with an owner-approved address.
+5. Configure Edge secrets: OTP pepper, Turnstile secret, Make OTP webhook URL, Make OTP signing secret, Make OTP AES transport key, and grouping-digest secret. No value is printed, committed, or placed in browser environment variables.
+6. Build the Make OTP scenario inactive, create the advanced encrypted AES keychain, enable confidential sequential processing with incomplete execution storage disabled, connect Gmail, and test encrypted/signed/idempotent delivery with an owner-approved address.
 7. Deploy the inline frontend behind one configuration switch that selects `supabase_auth_otp` or `custom_make_otp`.
 8. Run the controlled production smoke test against `custom_make_otp`.
 9. Keep the Supabase Auth OTP path available only for the measured rollback window; do not run both paths for one attempt.
@@ -409,7 +412,7 @@ Using one owner-approved test address and no fake lead data:
 ### Rollback
 
 - Before old-code removal, switch the frontend back to `supabase_auth_otp` without dropping the additive table or functions.
-- Stop the Make OTP scenario and rotate/revoke its dedicated signing secret if compromise is suspected.
+- Stop the Make OTP scenario and rotate/revoke both its dedicated signing secret and AES transport keychain if compromise is suspected.
 - Do not delete challenge rows during rollback; allow the 24-hour cleanup to remove terminal metadata.
 - Database rollback never drops lead, quiz, proposal, booking, or analytics data.
 
@@ -432,7 +435,7 @@ Implementation updates must keep these files aligned:
 
 ## 18. Final Security Invariants
 
-1. No plaintext OTP is stored in PostgreSQL, browser persistence, analytics, Git, or a Make Data Store.
+1. No plaintext OTP is stored in PostgreSQL, browser persistence, analytics, Git, a Make Data Store, or a Make webhook request/log.
 2. The OTP generator and every secret remain outside the browser bundle.
 3. A challenge can verify and qualify only the anonymous owner to which it was issued.
 4. A verified challenge is short-lived and consumed exactly once.

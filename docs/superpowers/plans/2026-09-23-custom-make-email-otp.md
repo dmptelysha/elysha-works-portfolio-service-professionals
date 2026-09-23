@@ -4,7 +4,7 @@
 
 **Goal:** Replace the browser's Supabase Auth email OTP with a server-generated, hash-only Supabase challenge delivered by a dedicated Make/Gmail scenario, while retaining Turnstile, anonymous-session RLS ownership, inline email verification, and the existing quiz/proposal journey.
 
-**Architecture:** The browser keeps one anonymous Supabase Auth session solely for `auth.uid()` ownership. `request-email-otp` verifies that session and a fresh Turnstile token, generates a cryptographic six-digit code, stores only an HMAC digest in a private PostgreSQL table, and sends the plaintext code once to a signed Make webhook. `verify-email-otp` derives the candidate digest and calls a service-only atomic verifier; the versioned lead RPC consumes the verified challenge exactly once and derives the canonical email from it.
+**Architecture:** The browser keeps one anonymous Supabase Auth session solely for `auth.uid()` ownership. `request-email-otp` verifies that session and a fresh Turnstile token, generates a cryptographic six-digit code, stores only an HMAC digest in a private PostgreSQL table, encrypts the recipient/code in an authenticated AES-256-GCM envelope, and sends only ciphertext to Make. Make decrypts inside a confidential execution and sends through Gmail. `verify-email-otp` derives the candidate digest and calls a service-only atomic verifier; the versioned lead RPC consumes the verified challenge exactly once and derives the canonical email from it.
 
 **Tech Stack:** Next.js 16 static export, React 19, TypeScript, Vitest/Testing Library, Playwright, Supabase Anonymous Auth/PostgreSQL/RLS/Edge Functions, pgTAP/static migration tests, Cloudflare Turnstile, Make custom webhook/Gmail, Firebase Hosting.
 
@@ -16,7 +16,7 @@
 - Firebase Hosting is static. OTP generation, hashing, verification, rate limits, and secrets belong only in Supabase Edge Functions/PostgreSQL.
 - PostgreSQL, browser persistence, analytics, Git, and Make Data Stores never store plaintext OTPs.
 - The migration creates one non-API `private` schema table, bringing the approved Phase 1 runtime-table count from 11 to exactly 12; it does not add CRM, campaign, or durable-login tables.
-- Make receives plaintext OTP only in the signed delivery request and must not retain it in scenario history beyond the shortest available confidential operational window.
+- Make webhook requests/logs receive ciphertext only. Plaintext email/OTP exists in Make only after AES-GCM decryption inside a confidential execution and must never enter a Data Store, response, error, or incomplete-execution record.
 - Keep Anonymous Auth and `auth.uid()` ownership for visitors, portfolio sessions, quiz sessions, RLS, and proposal finalization.
 - Canonical lead email comes only from a consumed verified challenge, never from a browser-supplied RPC email.
 - Turnstile uses a fresh single-use token for anonymous-session creation and every OTP request/resend.
@@ -44,7 +44,7 @@
 - Remote: a disposable inactive Make scenario with no Gmail send module.
 
 **Interfaces:**
-- Produces: an evidence-backed go/no-go decision for canonical HMAC verification, header access, confidential execution handling, sequential processing, and replay reservation.
+- Produces: an evidence-backed go/no-go decision for AES-256-GCM advanced decryption, canonical HMAC verification, ciphertext-only webhook logging, confidential execution handling, sequential processing, and replay reservation.
 - Consumes: the authenticated Make workspace only; no production webhook URL, real OTP, recipient address, or Gmail send.
 
 - [ ] **Step 1: Add a failing documentation assertion**
@@ -55,8 +55,8 @@ Require the feasibility note to record the Make team/scenario identity, availabl
 
 Build only enough of a disposable inactive scenario to confirm that Make can:
 
-1. read the required signature/timestamp/nonce headers;
-2. reconstruct and HMAC-SHA256 a documented canonical field string;
+1. read the required encrypted-envelope fields;
+2. decrypt AES-256-GCM using a hidden advanced keychain and reconstruct/HMAC-SHA256 a documented canonical envelope string;
 3. reject stale timestamps, invalid signatures, and reused delivery IDs;
 4. process webhook executions sequentially; and
 5. reserve an unseen delivery ID as `pending` before any future send step.
@@ -65,13 +65,13 @@ Use synthetic non-PII values and a disposable secret entered privately. Never at
 
 - [ ] **Step 3: Record the decision and stop if any invariant is unavailable**
 
-The canonical signing string is versioned and field-delimited rather than dependent on raw JSON bytes:
+The canonical signing string is versioned, field-delimited, and contains ciphertext only rather than depending on raw JSON bytes:
 
 ```text
-elysha-otp-v1\n<timestamp>\n<nonce>\n<deliveryId>\n<to>\n<otp>\n<expiresInMinutes>\n<templateVersion>
+elysha-otp-envelope-v1\n<timestamp>\n<nonce>\n<deliveryId>\n<keyVersion>\n<iv>\n<ciphertext>\n<tag>
 ```
 
-All fields have strict formats that exclude newlines before signing. If Make cannot compute/compare this HMAC securely, hide execution data for the required minimum window, run sequentially, or reserve a delivery ID before send, stop the project before Tasks 1-4 and revise the delivery boundary.
+All fields have strict formats that exclude newlines before signing. If Make cannot decrypt AES-256-GCM with a hidden advanced keychain, compute/compare this HMAC securely, hide decrypted execution data, run sequentially, or reserve a delivery ID before send, stop the project before Tasks 1-4 and revise the delivery boundary.
 
 - [ ] **Step 4: Run the documentation test and commit**
 
@@ -229,12 +229,12 @@ git commit -m "Add private custom email OTP schema"
 - Create: `supabase/functions/tests/email-otp-shared.test.ts`
 
 **Interfaces:**
-- Produces: `generateSixDigitOtp(randomFill?)`, `normalizeOtpEmail(email)`, `deriveOtpDigest(input, pepper)`, `deriveOtpGroupingDigest(domain, value, secret)`, `signOtpDelivery(body, timestamp, nonce, secret)`, `getEmailOtpEnv()`.
+- Produces: `generateSixDigitOtp(randomFill?)`, `normalizeOtpEmail(email)`, `deriveOtpDigest(input, pepper)`, `deriveOtpGroupingDigest(domain, value, secret)`, `encryptMakeOtpEnvelope(payload, key, iv?)`, `signOtpEnvelope(envelope, secret)`, `getEmailOtpEnv()`.
 - Consumes: Web Crypto, existing `hmacSha256Hex`, and Edge Function secrets.
 
 - [ ] **Step 1: Write failing shared-unit tests**
 
-Tests cover leading zeroes, non-digit rejection, normalization, domain separation, every digest input field, minimum secret lengths, HTTPS webhook validation, and deterministic signatures:
+Tests cover leading zeroes, non-digit rejection, normalization, domain separation, every digest input field, minimum secret lengths, HTTPS webhook validation, deterministic signatures, AES-256-GCM round-trip against a hand-checked fixture, unique IVs, authentication-tag failure, and proof that serialized outer envelopes contain neither email nor OTP:
 
 ```ts
 const otp = generateSixDigitOtp((buffer) => buffer.set([0, 1, 2, 3, 4, 5]));
@@ -276,7 +276,7 @@ export function generateSixDigitOtp(fill = crypto.getRandomValues.bind(crypto)):
 }
 ```
 
-`deriveOtpDigest` HMACs the exact versioned newline-delimited message from the spec and returns 32 digest bytes/64 lowercase hex characters. Grouping digests use separate `email-rate-v1` and `ip-rate-v1` domains. Make signatures bind the exact validated fields in the Task 0 canonical signing string, including UTC timestamp and nonce/delivery ID; they never assume Make can access byte-identical raw JSON.
+`deriveOtpDigest` HMACs the exact versioned newline-delimited message from the spec and returns 32 digest bytes/64 lowercase hex characters. Grouping digests use separate `email-rate-v1` and `ip-rate-v1` domains. `encryptMakeOtpEnvelope` uses AES-256-GCM with a fresh 96-bit IV, separates the 128-bit tag from ciphertext for Make's advanced decrypt module, and emits base64url fields. Make signatures bind the exact ciphertext-only fields in the Task 0 canonical signing string, including UTC timestamp and nonce/delivery ID; they never assume Make can access byte-identical raw JSON.
 
 - [ ] **Step 4: Add validated environment names**
 
@@ -289,9 +289,10 @@ TURNSTILE_SECRET_KEY
 TURNSTILE_EXPECTED_HOSTNAME
 MAKE_OTP_WEBHOOK_URL
 MAKE_OTP_WEBHOOK_SECRET
+MAKE_OTP_ENCRYPTION_KEY
 ```
 
-Both secrets require at least 32 characters; webhook URL requires HTTPS; hostname is lowercased; values are never logged.
+The signing/grouping/pepper secrets require at least 32 characters; the encryption key must decode to exactly 32 random bytes; webhook URL requires HTTPS; hostname is lowercased; values are never logged.
 
 - [ ] **Step 5: Run shared and complete Edge tests GREEN, then commit**
 
@@ -328,9 +329,11 @@ const response = await handler(request({
   turnstileToken: "fresh-turnstile-token",
 }));
 assertEquals(response.status, 200);
-assertEquals(capturedMakePayload.to, "person@example.com");
-assertMatch(capturedMakePayload.otp, /^\d{6}$/);
-assert(!JSON.stringify(capturedDatabaseArgs).includes(capturedMakePayload.otp));
+assertEquals(capturedMakeEnvelope.keyVersion, "otp-transport-v1");
+assertMatch(capturedMakeEnvelope.ciphertext, /^[A-Za-z0-9_-]+$/);
+assert(!JSON.stringify(capturedMakeEnvelope).includes("person@example.com"));
+assert(!JSON.stringify(capturedMakeEnvelope).includes(capturedGeneratedOtp));
+assert(!JSON.stringify(capturedDatabaseArgs).includes(capturedGeneratedOtp));
 ```
 
 - [ ] **Step 2: Run and observe RED**
@@ -345,16 +348,21 @@ Use `validateBrowserRequest`, `readJsonObject`, and `assertExactKeys`. Verify th
 
 - [ ] **Step 4: Implement challenge issuance and Make delivery**
 
-Generate challenge/delivery UUIDs and the six-digit OTP; derive OTP/email/IP digests; call the issuance RPC; send only this Make payload:
+Generate challenge/delivery UUIDs and the six-digit OTP; derive OTP/email/IP digests; call the issuance RPC; encrypt the exact inner delivery JSON, and send only this ciphertext envelope to Make:
 
 ```ts
-const deliveryBody = JSON.stringify({
+const encrypted = await encryptMakeOtpEnvelope({
   deliveryId, to: normalizedEmail, otp,
   expiresInMinutes: 10, templateVersion: "elysha_otp_v1",
+}, encryptionKey);
+const deliveryBody = JSON.stringify({
+  deliveryId, timestamp, nonce, keyVersion: "otp-transport-v1",
+  iv: encrypted.iv, ciphertext: encrypted.ciphertext, tag: encrypted.tag,
+  signature: await signOtpEnvelope(/* exact outer fields */, signingSecret),
 });
 ```
 
-Headers contain `x-elysha-timestamp`, `x-elysha-nonce`, and `x-elysha-signature`. Require `{ accepted: true, deliveryId }` with the exact same UUID, then call the delivery-transition RPC for that challenge/owner/delivery tuple. On failure or mismatched acknowledgement, transition only that tuple to `delivery_failed` so the digest is cleared. Invoke bounded cleanup before issuance without allowing cleanup failure to expose private state. Never log request body, email, OTP, digest, IP, or secrets.
+Require `{ accepted: true, deliveryId }` with the exact same UUID, then call the delivery-transition RPC for that challenge/owner/delivery tuple. On failure or mismatched acknowledgement, transition only that tuple to `delivery_failed` so the digest is cleared. Invoke bounded cleanup before issuance without allowing cleanup failure to expose private state. Never log the decrypted inner body, email, OTP, digest, IP, keys, or secrets; webhook-visible JSON must remain ciphertext-only.
 
 - [ ] **Step 5: Configure JWT gateway and CORS, run GREEN, commit**
 
@@ -586,7 +594,7 @@ git commit -m "Add inline verified email experience"
 
 - [ ] **Step 1: Write failing documentation assertions**
 
-Assert the runbook names the exact payload fields, signed headers, 10-minute code email, duplicate-delivery behavior, confidential-data setting, no OTP Data Store field, failure response, and secret-rotation procedure.
+Assert the runbook names the exact encrypted-envelope fields, AES advanced keychain, HMAC input, 10-minute code email, duplicate-delivery behavior, confidential-data setting, disabled incomplete executions, no recipient/OTP Data Store field, failure response, and dual-secret rotation procedure.
 
 - [ ] **Step 2: Run and observe RED**
 
@@ -600,19 +608,21 @@ Document modules in order:
 
 ```text
 1. Webhooks / Custom webhook
-2. Security validation (timestamp + nonce + HMAC)
+2. Validate ciphertext envelope (timestamp + nonce + HMAC)
 3. Data Store / Reject an already reserved delivery ID
 4. Data Store / Reserve the unseen delivery ID as pending
-5. Gmail / Send an email
-6. Data Store / Update the reserved delivery ID to delivered
-7. Webhooks / Response {accepted:true,deliveryId:<same UUID>}
+5. Encryptor / AES decrypt (advanced hidden keychain)
+6. Validate exact decrypted shape and matching delivery ID
+7. Gmail / Send an email
+8. Data Store / Update the reserved delivery ID to delivered
+9. Webhooks / Response {accepted:true,deliveryId:<same UUID>}
 ```
 
-Enable sequential processing before connecting Gmail so reservation and send cannot race across parallel webhook executions. The Data Store schema contains only `delivery_id`, `created_at`, and `status`; it never contains recipient, OTP, body, or secrets. A `pending` reservation is never resent automatically after an ambiguous failure, favoring one missed code over duplicate email. Document the Elysha Works subject/body and the separate error route returning a generic failure without request data. Reuse the exact Task 0 canonical HMAC implementation and compare the complete expected signature. If any passed Task 0 capability is no longer available, stop before live email and revise the protocol rather than weakening or omitting authentication/idempotency.
+Enable sequential processing and confidential data, and disable incomplete-execution storage before connecting Gmail so reservation/send cannot race or retain decrypted inputs. The Data Store schema contains only `delivery_id`, `created_at`, and `status`; it never contains recipient, OTP, body, ciphertext, IV, tag, or secrets. A `pending` reservation is never resent automatically after an ambiguous failure, favoring one missed code over duplicate email. Document the Elysha Works subject/body and the separate error route returning a generic failure without request data. Reuse the exact Task 0 canonical HMAC/envelope implementation and compare the complete expected signature before decrypting. If any passed Task 0 capability is no longer available, stop before live email and revise the protocol rather than weakening or omitting encryption, authentication, or idempotency.
 
 - [ ] **Step 4: Build the scenario in Make but keep it inactive**
 
-Using the existing authenticated Make browser session, create the dedicated scenario, enter the webhook secret only in Make's protected configuration, enable confidential-data handling/minimum retention where available, connect the approved Gmail OAuth connection, and validate malformed/stale/duplicate requests without sending real email. Do not activate scheduling or production traffic.
+Using the existing authenticated Make browser session, create the dedicated scenario, enter the webhook signing secret only in protected configuration, create the AES-256-GCM advanced encrypted keychain, enable sequential/confidential handling with incomplete executions disabled, connect the approved Gmail OAuth connection, and validate malformed/stale/tampered/duplicate encrypted requests without sending real email. Do not activate scheduling or production traffic.
 
 - [ ] **Step 5: Verify documentation GREEN and commit**
 
@@ -724,9 +734,10 @@ TURNSTILE_SECRET_KEY
 TURNSTILE_EXPECTED_HOSTNAME
 MAKE_OTP_WEBHOOK_URL
 MAKE_OTP_WEBHOOK_SECRET
+MAKE_OTP_ENCRYPTION_KEY
 ```
 
-The same Make OTP secret is entered privately in the Make validation module. No secret is echoed, copied into chat, written to `.env.local`, or committed.
+The same Make OTP signing secret is entered privately in the Make validation module, and the transport key is created as an AES advanced encrypted keychain. No secret is echoed, copied into chat, written to `.env.local`, or committed.
 
 - [ ] **Step 2: Apply the additive migration, verify cleanup scheduling, publish generated types, and deploy both functions**
 
@@ -754,7 +765,7 @@ npx supabase@latest functions deploy verify-email-otp --project-ref gftjoanbwcvp
 
 - [ ] **Step 3: Test the inactive Make scenario with one owner-approved address**
 
-Send one signed controlled request from the deployed Edge Function. Verify one Gmail message, correct six-digit rendering, no link, exact subject, matching delivery ID, duplicate suppression, and no retained OTP in Data Store/log views allowed by Make. If retention/confidentiality cannot meet the spec, stop and do not activate or cut over.
+Send one encrypted/signed controlled request from the deployed Edge Function. Verify that webhook logs expose only ciphertext, one Gmail message renders the correct six-digit code with no link and the exact subject, the acknowledgement matches the delivery ID, duplicate/tamper attempts do not send, and no decrypted recipient/OTP is retained in Data Store or execution logs. If encryption, retention, or confidentiality cannot meet the spec, stop and do not activate or cut over.
 
 - [ ] **Step 4: Activate Make and build the custom-mode frontend**
 
@@ -786,7 +797,7 @@ With manual Turnstile completion, always test through inline OTP verification an
 
 - [ ] **Step 7: Observe rollback window, retire old Auth OTP, and revoke unused Gmail App Password**
 
-During the compatibility window, rollback means rebuilding with `supabase_auth_otp`, stopping the Make OTP scenario, and leaving additive data intact. After verified stability, remove `EmailOtpStep.tsx` and old `signInWithOtp/verifyOtp` code under RED→GREEN tests, disable unused Supabase custom SMTP, revoke its Gmail App Password if no other system uses it, rerun the full suite, and deploy Hosting only again.
+During the compatibility window, rollback means rebuilding with `supabase_auth_otp`, stopping the Make OTP scenario, and leaving additive data intact. Rotate/revoke both Make OTP transport secrets if compromise is suspected. After verified stability, remove `EmailOtpStep.tsx` and old `signInWithOtp/verifyOtp` code under RED→GREEN tests, disable unused Supabase custom SMTP, revoke its Gmail App Password if no other system uses it, rerun the full suite, and deploy Hosting only again.
 
 - [ ] **Step 8: Commit any rollback-window retirement changes explicitly, push, and report exact production evidence**
 
