@@ -144,6 +144,81 @@ select throws_ok(
 );
 reset role;
 
+select results_eq(
+  $$select challenge_id is not null,result_code from public.reuse_verified_email_challenge(
+    '76000000-0000-0000-0000-000000000003',
+    '71000000-0000-0000-0000-000000000001',
+    '73000000-0000-0000-0000-000000000001',
+    'person@example.test',decode(repeat('11',32),'hex'),
+    decode(repeat('33',32),'hex'),
+    '77000000-0000-0000-0000-000000000003',now()
+  )$$,
+  $$values (true,'verified_reused'::text)$$,
+  'same owner and visitor receive a short-lived reusable verification grant'
+);
+select results_eq(
+  $$select status,otp_digest is null,verified_at is not null,grant_expires_at > verified_at
+    from private.email_otp_challenges
+    where id='76000000-0000-0000-0000-000000000003'$$,
+  $$values ('verified'::text,true,true,true)$$,
+  'reusable verification stores no OTP and remains a short-lived grant'
+);
+select results_eq(
+  $$select result_code from public.reuse_verified_email_challenge(
+    '76000000-0000-0000-0000-000000000004',
+    '71000000-0000-0000-0000-000000000002',
+    '73000000-0000-0000-0000-000000000002',
+    'person@example.test',decode(repeat('11',32),'hex'),
+    decode(repeat('33',32),'hex'),
+    '77000000-0000-0000-0000-000000000004',now()
+  )$$,
+  $$values ('not_found'::text)$$,
+  'another owner cannot reuse a verified email from a different visitor'
+);
+
+update public.leads
+set email_verified_at='2026-08-25 00:00:00+00'
+where source_quiz_session_id='75000000-0000-0000-0000-000000000001';
+select results_eq(
+  $$select result_code from public.reuse_verified_email_challenge(
+    '76000000-0000-0000-0000-000000000005',
+    '71000000-0000-0000-0000-000000000001',
+    '73000000-0000-0000-0000-000000000001',
+    'person@example.test',decode(repeat('11',32),'hex'),
+    decode(repeat('33',32),'hex'),
+    '77000000-0000-0000-0000-000000000005','2026-09-24 00:00:00+00'
+  )$$,
+  $$values ('verified_reused'::text)$$,
+  'verification can be reused at the exact 30-day freshness boundary'
+);
+select results_eq(
+  $$select result_code from public.reuse_verified_email_challenge(
+    '76000000-0000-0000-0000-000000000006',
+    '71000000-0000-0000-0000-000000000001',
+    '73000000-0000-0000-0000-000000000001',
+    'person@example.test',decode(repeat('11',32),'hex'),
+    decode(repeat('33',32),'hex'),
+    '77000000-0000-0000-0000-000000000006','2026-09-24 00:00:01+00'
+  )$$,
+  $$values ('not_found'::text)$$,
+  'verification older than 30 days requires a new OTP'
+);
+update public.leads
+set email_verified_at=null
+where source_quiz_session_id='75000000-0000-0000-0000-000000000001';
+select results_eq(
+  $$select result_code from public.reuse_verified_email_challenge(
+    '76000000-0000-0000-0000-000000000007',
+    '71000000-0000-0000-0000-000000000001',
+    '73000000-0000-0000-0000-000000000001',
+    'person@example.test',decode(repeat('11',32),'hex'),
+    decode(repeat('33',32),'hex'),
+    '77000000-0000-0000-0000-000000000007','2026-09-24 00:00:00+00'
+  )$$,
+  $$values ('not_found'::text)$$,
+  'cleared verification requires a new OTP'
+);
+
 select lives_ok(
   $$select * from public.record_email_otp_challenge(
     '76000000-0000-0000-0000-000000000002',

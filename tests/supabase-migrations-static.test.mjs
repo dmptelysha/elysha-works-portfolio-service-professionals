@@ -23,6 +23,7 @@ const expectedMigrations = [
   '202609230003_add_assessment_location_and_roadmap_metadata.sql',
   '202609240001_grant_quiz_location_read.sql',
   '202609240002_update_proposal_snapshot_versions.sql',
+  '202609240003_reuse_owner_verified_email.sql',
 ];
 
 const phaseOneTables = [
@@ -45,6 +46,7 @@ const requiredFunctions = [
   'verify_proposal_access_state', 'claim_due_proposal_work',
   'acknowledge_proposal_work', 'stop_proposal_followups',
   'record_trusted_proposal_event',
+  'reuse_verified_email_challenge',
 ];
 
 function read(path) {
@@ -190,6 +192,21 @@ test('proposal finalization accepts the approved V2 snapshot versions', () => {
   assert.match(sql, /cortex-local-v0\.1/);
   assert.match(sql, /portfolio-qualifier-v0\.1/);
   assert.match(sql, /portfolio-catalog-v0\.1/);
+});
+
+test('verified-email reuse is service-only and scoped to the same owner and visitor', () => {
+  const sql = read('supabase/migrations/202609240003_reuse_owner_verified_email.sql');
+  assert.doesNotMatch(sql, /drop\s+(?:table|schema|function)\b|truncate\b|delete\s+from\b/i);
+  assert.match(sql, /function\s+public\.reuse_verified_email_challenge\s*\(/i);
+  assert.match(sql, /l\.auth_user_id\s*=\s*p_owner_user_id/i);
+  assert.match(sql, /l\.visitor_id\s*=\s*p_visitor_id/i);
+  assert.match(sql, /v\.id\s*=\s*p_visitor_id/i);
+  assert.match(sql, /v\.owner_user_id\s*=\s*p_owner_user_id/i);
+  assert.match(sql, /l\.visitor_id/i);
+  assert.match(sql, /l\.email_verified_at\s+is\s+not\s+null/i);
+  assert.match(sql, /l\.email_verified_at\s*>=\s*p_now\s*-\s*interval\s*'30 days'/i);
+  assert.match(sql, /revoke\s+execute[^;]+from\s+public,\s*anon,\s*authenticated/is);
+  assert.match(sql, /grant\s+execute[^;]+to\s+service_role/is);
 });
 
 test('migrations create exactly the Phase 1 public tables', () => {

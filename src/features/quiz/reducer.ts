@@ -139,16 +139,18 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
       };
       if (!contact.firstName || !contact.lastName || !contact.businessName || !contact.email) return state;
       if (
-        action.challenge.email !== contact.email || action.challenge.verified ||
+        action.challenge.email !== contact.email ||
         !action.challenge.id || !Number.isFinite(Date.parse(action.challenge.expiresAt)) ||
-        !Number.isFinite(Date.parse(action.challenge.resendAvailableAt))
+        !Number.isFinite(Date.parse(action.challenge.resendAvailableAt)) ||
+        (action.challenge.verified &&
+          (!action.challenge.grantExpiresAt || !Number.isFinite(Date.parse(action.challenge.grantExpiresAt))))
       ) return state;
       return {
         ...state,
         screen: "verify_email",
         contact,
         otpChallenge: action.challenge,
-        emailVerified: false,
+        emailVerified: action.challenge.verified,
         existingBusinessName: null,
       };
     }

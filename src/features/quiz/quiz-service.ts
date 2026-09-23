@@ -96,15 +96,18 @@ function normalizeEmail(email: string): string {
 export async function requestCustomEmailOtp(
   email: string,
   turnstileToken: string,
+  visitorId: string,
   client?: SupabaseClient,
 ): Promise<CustomEmailOtpChallenge> {
   const normalizedEmail = normalizeEmail(email);
   const normalizedToken = turnstileToken.trim();
+  const normalizedVisitorId = requireUuid(visitorId);
   const response = await clientOrDefault(client).functions.invoke("request-email-otp", {
     body: {
       email: normalizedEmail,
       purpose: "qualified_quiz",
       turnstileToken: normalizedToken,
+      visitorId: normalizedVisitorId,
     },
   });
   const data = response.data as Record<string, unknown> | null;
@@ -113,15 +116,22 @@ export async function requestCustomEmailOtp(
     typeof data.challengeId !== "string" || !UUID_PATTERN.test(data.challengeId) ||
     typeof data.expiresAt !== "string" || !Number.isFinite(Date.parse(data.expiresAt)) ||
     typeof data.resendAvailableAt !== "string" || !Number.isFinite(Date.parse(data.resendAvailableAt)) ||
-    Date.parse(data.resendAvailableAt) > Date.parse(data.expiresAt)
+    Date.parse(data.resendAvailableAt) > Date.parse(data.expiresAt) ||
+    (data.verified !== undefined && typeof data.verified !== "boolean")
   ) throw new Error(OTP_ERROR);
+  const verified = data.verified === true;
+  const grantExpiresAt = verified && typeof data.grantExpiresAt === "string" &&
+      Number.isFinite(Date.parse(data.grantExpiresAt))
+    ? new Date(data.grantExpiresAt).toISOString()
+    : null;
+  if (verified && !grantExpiresAt) throw new Error(OTP_ERROR);
   return {
     id: data.challengeId,
     email: normalizedEmail,
     expiresAt: new Date(data.expiresAt).toISOString(),
     resendAvailableAt: new Date(data.resendAvailableAt).toISOString(),
-    verified: false,
-    grantExpiresAt: null,
+    verified,
+    grantExpiresAt,
   };
 }
 

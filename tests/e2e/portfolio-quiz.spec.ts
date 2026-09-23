@@ -22,6 +22,48 @@ const proposalDraft = {
   client: { firstName: "Mara", businessName: "Mara Consulting" },
   pointA: { heading: "Where Mara Consulting is now", summary: "The current path needs clearer qualification.", evidence: ["Manual lead handling"] },
   pointB: { heading: "Where the business wants to go", summary: "A connected inquiry-to-booking path.", evidence: ["Qualified discovery calls"] },
+  problem: { primary: "Inquiries are handled manually.", secondary: null, summary: "Manual qualification slows response time." },
+  missingSystem: "A connected qualification, booking, and follow-up workflow.",
+  customerJourney: ["Visit", "Qualify", "Book", "Follow up"],
+  platform: {
+    recommended: "gohighlevel",
+    reasons: ["It supports the selected client journey."],
+    alternatives: {
+      systeme_io: "Best for a simpler funnel-led scope.",
+      gohighlevel: "Best fit for the selected CRM workflow.",
+      custom_app: "Reserved for specialized operations.",
+    },
+  },
+  package: { offerName: "Growth System", reasons: ["Adds qualification and follow-up automation."] },
+  pages: ["Service page", "Qualification form", "Booking page"],
+  automations: ["Lead acknowledgement", "Booking reminders"],
+  payment: { options: ["Card payment"], includedSetupCount: 1 },
+  domainAndEmail: {
+    domainOwnership: "Client-owned domain",
+    domainSetup: "Domain connection included",
+    businessEmail: "Client-owned business email",
+  },
+  investment: {
+    basePriceUsd: 2500,
+    estimatedTotalUsd: 2500,
+    currency: "USD",
+    symbol: "$",
+    localTotal: null,
+    fxRate: null,
+    fxRateTimestamp: null,
+  },
+  includedScope: ["CRM setup", "Booking workflow"],
+  optionalEnhancements: ["Client portal"],
+  ongoingCosts: ["Platform subscription paid directly by the client"],
+  clientRequirements: ["Approved copy", "Brand assets"],
+  ownership: [{ item: "Domain", elyshaWorks: "Connect", client: "Own and renew" }],
+  paymentSchedule: { depositPercent: 50, balancePercent: 50, depositAmount: 1250, balanceAmount: 1250 },
+  pathToPointB: {
+    today: "Manual inquiry handling",
+    withSystem: "Qualified and automated follow-up",
+    target: "Consistent discovery calls",
+  },
+  disclaimer: "Final scope is confirmed during the discovery call.",
   recommendation: {
     title: "A connected lead and booking system",
     reason: "The selected answers prioritize qualification and follow-up.",
@@ -78,6 +120,14 @@ async function mockSupabaseQuiz(
       verified: true,
       grantExpiresAt: "2026-09-23T00:20:00.000Z",
     });
+    if (url.pathname.endsWith("/functions/v1/currency-quote")) return json({
+      businessCountry: "Philippines",
+      countryCode: "PH",
+      displayCurrency: "PHP",
+      currencySymbol: "PHP",
+      fxRate: 58,
+      fxRateTimestamp: "2026-09-23T00:00:00.000Z",
+    });
     if (url.pathname.endsWith("/rest/v1/quiz_definitions")) {
       return json({ id: ids.definition, version: 1, audience_key: "service_businesses" });
     }
@@ -117,6 +167,8 @@ async function fillQuizContact(page: import("@playwright/test").Page) {
   await expect(page.getByText(/email verified/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /continue to assessment/i })).toBeDisabled();
   await consent.check();
+  await page.getByRole("button", { name: /continue to assessment/i }).click();
+  await expect(page.getByRole("heading", { name: /where does your business operate/i })).toBeVisible();
   await page.getByRole("button", { name: /continue to assessment/i }).click();
   await expect(page.getByRole("heading", { name: /your roadmap starts with context/i })).toBeVisible();
 }
@@ -246,22 +298,24 @@ test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or 
     await page.locator(".quiz-options button").first().click();
     await page.getByRole("button", { name: /^continue/i }).click();
   }
-  await expect(page.getByText("Question 4 of 8")).toBeVisible();
+  await expect(page.getByText("Question 4 of 11")).toBeVisible();
   expect(await page.evaluate(() => performance.getEntriesByType("navigation").length)).toBe(initialNavigationCount);
 
   await page.reload();
   await page.getByRole("button", { name: /^resume$/i }).click();
   await fillQuizContact(page);
   await page.getByRole("button", { name: /start my assessment/i }).click();
-  await expect(page.getByText("Question 4 of 8")).toBeVisible();
+  await expect(page.getByText("Question 4 of 11")).toBeVisible();
 
-  for (let index = 3; index < 8; index += 1) {
+  for (let index = 3; index < 11; index += 1) {
     await page.locator(".quiz-options button").first().click();
-    await page.getByRole("button", { name: index === 7 ? /see my roadmap/i : /^continue/i }).click();
+    await page.getByRole("button", { name: index === 10 ? /see my roadmap/i : /^continue/i }).click();
   }
 
   await expect(page.getByRole("heading", { name: /Mara.*roadmap for Mara Consulting/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: /compare your roadmap options/i })).toBeVisible();
+  const pointBListColor = await page.locator(".result-card--gold li").first().evaluate((element) => getComputedStyle(element).color);
+  expect(pointBListColor).toBe("rgb(5, 6, 6)");
   const successDialog = page.getByRole("dialog", { name: /your proposal is ready/i });
   await expect(successDialog).toBeVisible();
   await expect(successDialog.getByText(/sent.*m\*\*\*@example\.com/i)).toBeVisible();

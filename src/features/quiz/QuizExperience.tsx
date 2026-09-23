@@ -475,7 +475,10 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
             onRequestCode={async (contact) => {
               setDeliveryEmail(contact.email.trim().toLowerCase());
               try {
-                const challenge = await service.requestEmailOtp(contact.email, captchaToken ?? "");
+                const context = ownedContextRef.current;
+                if (!context) throw new Error("The secure assessment is not ready yet.");
+                const challenge = await service.requestEmailOtp(contact.email, captchaToken ?? "", context.visitorId);
+                emailVerifiedRef.current = challenge.verified;
                 dispatch({ type: "OTP_REQUESTED", contact, challenge });
               } finally {
                 setCaptchaToken(null);
@@ -485,7 +488,10 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
             onResendCode={async () => {
               if (!state.otpChallenge || !state.contact) return;
               try {
-                const challenge = await service.requestEmailOtp(state.otpChallenge.email, captchaToken ?? "");
+                const context = ownedContextRef.current;
+                if (!context) throw new Error("The secure assessment is not ready yet.");
+                const challenge = await service.requestEmailOtp(state.otpChallenge.email, captchaToken ?? "", context.visitorId);
+                emailVerifiedRef.current = challenge.verified;
                 dispatch({ type: "OTP_REQUESTED", contact: state.contact, challenge });
               } finally {
                 setCaptchaToken(null);

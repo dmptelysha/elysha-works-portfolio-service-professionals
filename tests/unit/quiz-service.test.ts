@@ -120,7 +120,7 @@ describe("Supabase quiz service", () => {
       error: null,
     } });
 
-    await expect(requestCustomEmailOtp(" Person@Example.com ", "turnstile-token", fake.client as never))
+    await expect(requestCustomEmailOtp(" Person@Example.com ", "turnstile-token", VISITOR_ID, fake.client as never))
       .resolves.toEqual({
         id: CHALLENGE_ID,
         email: "person@example.com",
@@ -135,9 +135,33 @@ describe("Supabase quiz service", () => {
         email: "person@example.com",
         purpose: "qualified_quiz",
         turnstileToken: "turnstile-token",
+        visitorId: VISITOR_ID,
       },
     });
     expect(fake.signInWithOtp).not.toHaveBeenCalled();
+  });
+
+  it("accepts an owner-scoped reusable verification grant without another code", async () => {
+    const fake = fakeClient({ functionResponse: {
+      data: {
+        challengeId: CHALLENGE_ID,
+        expiresAt: "2026-09-23T00:10:00.000Z",
+        resendAvailableAt: "2026-09-23T00:01:00.000Z",
+        verified: true,
+        grantExpiresAt: "2026-09-23T00:10:00.000Z",
+      },
+      error: null,
+    } });
+
+    await expect(requestCustomEmailOtp("person@example.com", "turnstile-token", VISITOR_ID, fake.client as never))
+      .resolves.toEqual({
+        id: CHALLENGE_ID,
+        email: "person@example.com",
+        expiresAt: "2026-09-23T00:10:00.000Z",
+        resendAvailableAt: "2026-09-23T00:01:00.000Z",
+        verified: true,
+        grantExpiresAt: "2026-09-23T00:10:00.000Z",
+      });
   });
 
   it("verifies the custom six-digit code without replacing the anonymous session", async () => {

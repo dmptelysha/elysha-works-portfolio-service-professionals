@@ -592,7 +592,9 @@ Every tier must deliver a functional core outcome. Higher tiers add breadth, aut
 flowchart TD
     A[Choose audience] --> B[Prepare non-PII anonymous context]
     B --> C[First name, business name, email, consent]
-    C --> C1[Custom OTP through encrypted Make Gmail delivery]
+    C --> C0{Same owner, visitor, and email verified within 30 days?}
+    C0 -->|Yes| C2[Supabase issues a fresh single-use grant]
+    C0 -->|No| C1[Custom OTP through encrypted Make Gmail delivery]
     C1 --> C2[Supabase verifies digest and grants one-time lead creation]
     C2 --> D[Create or reuse qualified lead and complete quiz]
     D --> E[Server verifies Cortex recommendation]
@@ -610,7 +612,7 @@ flowchart TD
 
 The browser never calls Make directly. Supabase Edge Functions send signed minimum-data requests to Make and retain authority over ownership, proposal state, expiry, booking suppression, follow-up eligibility, and cold-lead transitions.
 
-**Scenario OTP — Transactional email verification:** the inactive custom webhook receives only the signed AES-256-GCM envelope from `request-email-otp`, rejects stale/tampered/duplicate deliveries, reserves the delivery UUID, decrypts through Make's advanced encrypted keychain, and sends the 10-minute code through the authorized Gmail OAuth connection. Its Data Store contains only delivery ID, creation time, and status. The complete contract and dual-secret rotation procedure live in `docs/make-email-otp-scenario.md`.
+**Scenario OTP — Transactional email verification:** when Supabase cannot safely reuse a verification for the same anonymous owner and owned visitor, the custom webhook receives only the signed AES-256-GCM envelope from `request-email-otp`, rejects stale/tampered/duplicate deliveries, reserves the delivery UUID, decrypts through Make's advanced encrypted keychain, and sends the 10-minute code through the authorized Gmail OAuth connection. A successful owner-scoped reuse never calls Make. Its Data Store contains only delivery ID, creation time, and status. The complete contract and dual-secret rotation procedure live in `docs/make-email-otp-scenario.md`.
 
 **Scenario A — Immediate proposal delivery:** a private custom webhook receives an idempotent request from `finalize-proposal`, validates the shared secret and payload, sends the client first name/business name, Point A → Point B summary, proposal reference URL, separate access key, exact expiration, signed stop link, and discovery-call CTA through an authorized Gmail connection. The Make Data Store may track only processing/sent/failed idempotency state; it must never store the raw access key. A confirmed send is acknowledged to Supabase before the 72-hour clock begins.
 

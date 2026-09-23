@@ -15,6 +15,7 @@ import {
   CATALOG_VERSION,
   CORTEX_VERSION,
   QUESTION_SET_VERSION,
+  type CustomEmailOtpChallenge,
   type LeadContactInput,
   type LeadContactSubmissionResult,
   type SavedQuizAttempt,
@@ -87,7 +88,7 @@ function createFakeQuizService() {
       proposal: { ...buildProposalDraft(identity, answers, result, selection), expiresAt: "2026-09-25T05:00:00.000Z" },
     };
   });
-  const requestEmailOtp = vi.fn(async (email: string) => ({
+  const requestEmailOtp = vi.fn(async (email: string, _token: string, _visitorId: string): Promise<CustomEmailOtpChallenge> => ({
     id: "70000000-0000-4000-8000-000000000001",
     email: email.trim().toLowerCase(),
     expiresAt: "2026-09-23T00:10:00.000Z",
@@ -291,6 +292,28 @@ describe("local portfolio quiz", () => {
     expect(screen.queryByLabelText(/verification code/i)).not.toBeInTheDocument();
   });
 
+  it("shows an existing owner-scoped verification immediately without an OTP field", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    service.requestEmailOtp.mockResolvedValueOnce({
+      id: "70000000-0000-4000-8000-000000000001",
+      email: "mara@example.com",
+      expiresAt: "2026-09-23T00:10:00.000Z",
+      resendAvailableAt: "2026-09-23T00:01:00.000Z",
+      verified: true,
+      grantExpiresAt: "2026-09-23T00:10:00.000Z",
+    });
+    render(<QuizExperience service={service} />);
+
+    await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await fillContactStep(user);
+
+    expect(await screen.findByText(/email verified/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/verification code/i)).not.toBeInTheDocument();
+    expect(service.verifyEmailOtp).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /continue to assessment/i })).toBeEnabled();
+  });
+
 
   it("shows the three audience choices immediately while the security check initializes", async () => {
     vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "test-site-key");
@@ -330,7 +353,7 @@ describe("local portfolio quiz", () => {
     await user.click(screen.getByRole("button", { name: /^verify email$/i }));
 
     expect(await screen.findByLabelText(/verification code/i)).toBeInTheDocument();
-    expect(service.requestEmailOtp).toHaveBeenCalledWith("mara@example.com", "");
+    expect(service.requestEmailOtp).toHaveBeenCalledWith("mara@example.com", "", ownedContext.visitorId);
     expect(service.createOwnedQuizContext).toHaveBeenCalledOnce();
     expect(service.submitLeadContact).not.toHaveBeenCalled();
     const savedBeforeVerification = localStorage.getItem(QUIZ_STORAGE_KEY) ?? "";
@@ -420,8 +443,8 @@ describe("local portfolio quiz", () => {
     await user.click(verifyEmail);
 
     expect(await screen.findByLabelText(/verification code/i)).toBeInTheDocument();
-    expect(service.requestEmailOtp).toHaveBeenNthCalledWith(1, "mara@example.com", "first-otp-token");
-    expect(service.requestEmailOtp).toHaveBeenNthCalledWith(2, "mara@example.com", "fresh-otp-token");
+    expect(service.requestEmailOtp).toHaveBeenNthCalledWith(1, "mara@example.com", "first-otp-token", ownedContext.visitorId);
+    expect(service.requestEmailOtp).toHaveBeenNthCalledWith(2, "mara@example.com", "fresh-otp-token", ownedContext.visitorId);
   });
 
   it("validates and normalizes required lead contact details without navigating", async () => {

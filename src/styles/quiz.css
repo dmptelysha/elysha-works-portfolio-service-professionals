@@ -342,6 +342,7 @@
 .result-card h3 { font-size: 1.5rem; }
 .result-card > p:not(.result-number), .result-card li, .result-card dd { color: var(--portfolio-muted); line-height: 1.65; }
 .result-card--gold > p:not(.result-number) { color: rgba(5,6,6,.76); }
+.result-card--gold li, .result-card--gold dd { color: #050606; }
 .result-card--gold > strong { display: block; margin-top: 2rem; }
 .result-price { display: block; margin-top: 2rem; color: var(--portfolio-gold); font-size: clamp(1.2rem, 2vw, 1.8rem); }
 .snapshot-list { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1px; margin: 3rem 0 0; background: rgba(255,255,255,.14); }

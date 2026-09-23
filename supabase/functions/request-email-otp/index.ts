@@ -36,6 +36,14 @@ export interface RecordedOtpChallenge {
   resultCode: string;
 }
 
+export interface ReusedOtpChallenge {
+  challengeId: string | null;
+  expiresAt: string | null;
+  resendAvailableAt: string | null;
+  grantExpiresAt: string | null;
+  resultCode: "verified_reused" | "not_found";
+}
+
 export interface RecordOtpChallengeInput {
   challengeId: string;
   ownerUserId: string;
@@ -45,6 +53,10 @@ export interface RecordOtpChallengeInput {
   requestIpDigest: string;
   makeDeliveryId: string;
   now: string;
+}
+
+export interface ReuseVerifiedEmailInput extends Omit<RecordOtpChallengeInput, "otpDigest"> {
+  visitorId: string;
 }
 
 export interface RequestEmailOtpDependencies {
@@ -64,6 +76,9 @@ export interface RequestEmailOtpDependencies {
     token: string,
     clientAddress: string,
   ) => Promise<TurnstileVerification>;
+  reuseVerifiedEmail: (
+    input: ReuseVerifiedEmailInput,
+  ) => Promise<ReusedOtpChallenge>;
   recordChallenge: (
     input: RecordOtpChallengeInput,
   ) => Promise<RecordedOtpChallenge>;
@@ -111,12 +126,14 @@ export function createRequestEmailOtpHandler(
         throw new PublicHttpError(401, "authentication_required");
       }
       const body = await readJsonObject(request, 8192);
-      assertExactKeys(body, ["email", "purpose", "turnstileToken"]);
+      assertExactKeys(body, ["email", "purpose", "turnstileToken", "visitorId"]);
       if (
         typeof body.email !== "string" ||
         body.purpose !== "qualified_quiz" ||
         typeof body.turnstileToken !== "string" ||
-        body.turnstileToken.length < 10 || body.turnstileToken.length > 4096
+        body.turnstileToken.length < 10 || body.turnstileToken.length > 4096 ||
+        typeof body.visitorId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.visitorId)
       ) {
         throw new PublicHttpError(400, "invalid_request");
       }
@@ -152,17 +169,8 @@ export function createRequestEmailOtpHandler(
 
       const challengeId = dependencies.randomUuid();
       const deliveryId = dependencies.randomUuid();
-      const nonce = dependencies.randomUuid();
-      const otp = dependencies.generateOtp();
       const createdAt = dependencies.now().toISOString();
-      const [otpDigest, emailDigest, requestIpDigest] = await Promise.all([
-        deriveOtpDigest({
-          challengeId,
-          ownerUserId: user.id,
-          email,
-          purpose: "qualified_quiz",
-          otp,
-        }, dependencies.otpPepper),
+      const [emailDigest, requestIpDigest] = await Promise.all([
         deriveOtpGroupingDigest(
           "email-rate-v1",
           email,
@@ -174,6 +182,46 @@ export function createRequestEmailOtpHandler(
           dependencies.otpGroupingSecret,
         ),
       ]);
+
+      const reused = await dependencies.reuseVerifiedEmail({
+        challengeId,
+        ownerUserId: user.id,
+        visitorId: body.visitorId,
+        email,
+        emailDigest,
+        requestIpDigest,
+        makeDeliveryId: deliveryId,
+        now: createdAt,
+      });
+      if (reused.resultCode === "verified_reused") {
+        if (
+          reused.challengeId !== challengeId || !reused.expiresAt ||
+          !reused.resendAvailableAt || !reused.grantExpiresAt ||
+          !Number.isFinite(Date.parse(reused.expiresAt)) ||
+          !Number.isFinite(Date.parse(reused.resendAvailableAt)) ||
+          !Number.isFinite(Date.parse(reused.grantExpiresAt))
+        ) throw new Error("reused verification mismatch");
+        return jsonResponse({
+          challengeId,
+          expiresAt: new Date(reused.expiresAt).toISOString(),
+          resendAvailableAt: new Date(reused.resendAvailableAt).toISOString(),
+          verified: true,
+          grantExpiresAt: new Date(reused.grantExpiresAt).toISOString(),
+        }, 200, origin);
+      }
+      if (reused.resultCode !== "not_found") {
+        throw new Error("invalid verification reuse result");
+      }
+
+      const nonce = dependencies.randomUuid();
+      const otp = dependencies.generateOtp();
+      const otpDigest = await deriveOtpDigest({
+        challengeId,
+        ownerUserId: user.id,
+        email,
+        purpose: "qualified_quiz",
+        otp,
+      }, dependencies.otpPepper);
 
       let recorded: RecordedOtpChallenge;
       try {
@@ -313,6 +361,29 @@ function defaultDependencies(): RequestEmailOtpDependencies {
           )
           : [],
       };
+    },
+    reuseVerifiedEmail: async (input) => {
+      const result = await service.rpc("reuse_verified_email_challenge", {
+        p_challenge_id: input.challengeId,
+        p_owner_user_id: input.ownerUserId,
+        p_visitor_id: input.visitorId,
+        p_email: input.email,
+        p_email_digest: `\\x${input.emailDigest}`,
+        p_request_ip_digest: `\\x${input.requestIpDigest}`,
+        p_request_id: input.makeDeliveryId,
+        p_now: input.now,
+      });
+      const row = Array.isArray(result.data) ? result.data[0] : result.data;
+      if (result.error || !row) {
+        throw new Error(result.error?.message ?? "verification reuse failed");
+      }
+      return {
+        challengeId: row.challenge_id ?? null,
+        expiresAt: row.expires_at ?? null,
+        resendAvailableAt: row.resend_available_at ?? null,
+        grantExpiresAt: row.grant_expires_at ?? null,
+        resultCode: row.result_code,
+      } as ReusedOtpChallenge;
     },
     recordChallenge: async (input) => {
       const result = await service.rpc("record_email_otp_challenge", {

@@ -88,7 +88,7 @@ Anonymous users operate through PostgreSQL role `authenticated`; ownership remai
 
 ## Custom verified email OTP and Make/Gmail delivery
 
-The qualified quiz is verified-email-first. After an owned anonymous quiz context exists, `request-email-otp` validates Cloudflare Turnstile, normalizes the address, enforces per-owner/email/IP-prefix rate limits, generates an unbiased six-digit code, and stores only an HMAC-SHA-256 digest in the private `email_otp_challenges` table. Supabase never stores the plaintext OTP. The plaintext code exists only inside the short-lived encrypted Make delivery envelope.
+The qualified quiz is verified-email-first. After an owned anonymous quiz context exists, `request-email-otp` validates Cloudflare Turnstile and normalizes the address. It first attempts a private owner-scoped reuse: only a lead with the same `auth_user_id`, the exact same owned visitor, the same normalized email, and a verification timestamp no more than 30 days old can receive a fresh short-lived single-use grant without another email. This lookup is service-only and never exposes global account state. If no safe match exists, the function enforces per-owner/email/IP-prefix rate limits, generates an unbiased six-digit code, and stores only an HMAC-SHA-256 digest in the private `email_otp_challenges` table. Supabase never stores the plaintext OTP. The plaintext code exists only inside the short-lived encrypted Make delivery envelope.
 
 Make decrypts the authenticated AES-256-GCM envelope and sends the transactional code through the owner-approved Gmail OAuth connection. The code has a **10-minute OTP expiry** and a **60-second resend** interval. Make never verifies codes and receives no database authority. The full inactive scenario contract is documented in `docs/make-email-otp-scenario.md`.
 
@@ -111,7 +111,7 @@ Seven Edge Functions form the external boundary:
 | Function | Contract |
 |---|---|
 | `currency-quote` | Public browser-safe country/currency quote lookup; returns validated USD or a current USD conversion snapshot and exposes no provider secret |
-| `request-email-otp` | Owner-JWT plus Turnstile; rate-limits, creates the digest-only challenge, and sends an authenticated encrypted delivery envelope to inactive Make infrastructure |
+| `request-email-otp` | Owner-JWT plus Turnstile; privately reuses verification only for the same owner/visitor/email, otherwise rate-limits, creates the digest-only challenge, and sends an authenticated encrypted delivery envelope to Make |
 | `verify-email-otp` | Owner-JWT; atomically compares the submitted six-digit code against the stored HMAC digest and returns only a short-lived grant expiry |
 | `finalize-proposal` | Owner-JWT `preview` returns a server-calculated sanitized draft; `issue` reruns Cortex/catalog rules, validates selection, stores snapshots, issues reference/access, calls Make, and activates the exact 72-hour window only after successful email acknowledgement |
 | `verify-proposal` | Accepts reference plus separate access key, enforces status/expiry/five-failure lock/HMAC checks, and returns only the sanitized client proposal view |

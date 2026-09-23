@@ -1,6 +1,6 @@
 # Make email OTP delivery scenario
 
-This runbook defines the dedicated, inactive **Elysha Works — Email OTP Delivery** scenario. Supabase generates and verifies each 10-minute code. Make decrypts the one-time delivery envelope and sends the transactional message through the owner-approved Gmail OAuth connection. Make never decides whether a code is valid.
+This runbook defines the dedicated **Elysha Works — Email OTP Delivery** scenario. Supabase generates and verifies each 10-minute code. Make decrypts the one-time delivery envelope and sends the transactional message through the owner-approved Gmail OAuth connection. Make never decides whether a code is valid. When Supabase finds an address verified within the last 30 days and belonging to the same anonymous owner and exact owned visitor, it issues a new short-lived single-use grant without calling this scenario; any stale verification, different owner, visitor, browser identity, or unverified address must use the normal OTP path.
 
 ## Security contract
 

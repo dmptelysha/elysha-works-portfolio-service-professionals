@@ -29,6 +29,7 @@ function request(
     email: " Person@Example.com ",
     purpose: "qualified_quiz",
     turnstileToken: "fresh-turnstile-token",
+    visitorId: "73000000-0000-4000-8000-000000000001",
   },
   options: {
     origin?: string;
@@ -76,6 +77,13 @@ function dependencies(
       action: "email_otp_request",
       hostname: "elyshaworks.com",
       errorCodes: [],
+    }),
+    reuseVerifiedEmail: async () => ({
+      challengeId: null,
+      expiresAt: null,
+      resendAvailableAt: null,
+      grantExpiresAt: null,
+      resultCode: "not_found",
     }),
     recordChallenge: async () => ({
       challengeId: CHALLENGE_ID,
@@ -236,6 +244,43 @@ Deno.test("successful OTP request persists no plaintext and sends ciphertext-onl
   assert(!serializedDatabase.includes("012345"));
   assert(!JSON.stringify(responseBody).includes("person@example.com"));
   assertEquals(response.headers.get("cache-control"), "no-store");
+});
+
+Deno.test("same-owner verified email returns a reusable grant without generating or delivering an OTP", async () => {
+  let generated = 0;
+  let delivered = 0;
+  const deps = dependencies({
+    generateOtp: () => {
+      generated += 1;
+      return "012345";
+    },
+    deliverToMake: async (envelope) => {
+      delivered += 1;
+      return { accepted: true, deliveryId: envelope.deliveryId };
+    },
+  });
+  Object.assign(deps, {
+    reuseVerifiedEmail: async () => ({
+      challengeId: CHALLENGE_ID,
+      expiresAt: "2026-09-23T04:10:00.000Z",
+      resendAvailableAt: "2026-09-23T04:01:00.000Z",
+      grantExpiresAt: "2026-09-23T04:10:00.000Z",
+      resultCode: "verified_reused",
+    }),
+  });
+
+  const response = await createRequestEmailOtpHandler(deps)(request());
+
+  assertEquals(response.status, 200);
+  assertEquals(await response.json(), {
+    challengeId: CHALLENGE_ID,
+    expiresAt: "2026-09-23T04:10:00.000Z",
+    resendAvailableAt: "2026-09-23T04:01:00.000Z",
+    verified: true,
+    grantExpiresAt: "2026-09-23T04:10:00.000Z",
+  });
+  assertEquals(generated, 0);
+  assertEquals(delivered, 0);
 });
 
 Deno.test("Make timeout, error, and mismatched acknowledgement invalidate only the pending delivery", async () => {
