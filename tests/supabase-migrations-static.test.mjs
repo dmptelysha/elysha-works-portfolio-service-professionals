@@ -21,6 +21,7 @@ const expectedMigrations = [
   '202609230001_add_verified_lead_identity.sql',
   '202609230002_add_custom_email_otp.sql',
   '202609230003_add_assessment_location_and_roadmap_metadata.sql',
+  '202609240001_grant_quiz_location_read.sql',
 ];
 
 const phaseOneTables = [
@@ -169,6 +170,14 @@ test('custom OTP migration keeps challenge state private and atomic', () => {
   assert.match(sql, /grant\s+execute\s+on\s+function\s+public\.begin_custom_verified_qualified_quiz\s*\([^;]+to\s+authenticated/is);
   assert.doesNotMatch(sql, /drop\s+(?:table|schema)\b|truncate\s+(?!table\s+private\.email_otp_challenges)/i);
   assert.doesNotMatch(sql, /delete\s+from\s+public\./i);
+});
+
+test('assessment owners can read the location metadata required by proposal preview', () => {
+  const sql = allMigrations();
+  assert.match(
+    sql,
+    /grant\s+select\s*\([^;]*business_country[^;]*country_code[^;]*display_currency[^;]*currency_symbol[^;]*fx_rate[^;]*fx_rate_timestamp[^;]*\)\s+on\s+public\.quiz_sessions\s+to\s+authenticated/is,
+  );
 });
 
 test('migrations create exactly the Phase 1 public tables', () => {
