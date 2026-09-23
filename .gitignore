@@ -9,3 +9,5 @@ next-env.d.ts
 .env.local
 public/booking/booking-config.mjs
 supabase/.temp/
+.firebase/
+test-results/
