@@ -14,6 +14,7 @@ const ids = {
   quiz: "50000000-0000-4000-8000-000000000001",
   lead: "60000000-0000-4000-8000-000000000001",
   proposal: "70000000-0000-4000-8000-000000000001",
+  challenge: "80000000-0000-4000-8000-000000000001",
 };
 
 const proposalDraft = {
@@ -37,7 +38,11 @@ const proposalDraft = {
   expiresAt: null,
 };
 
-async function mockSupabaseQuiz(page: import("@playwright/test").Page, observed: string[]) {
+async function mockSupabaseQuiz(
+  page: import("@playwright/test").Page,
+  observed: string[],
+  leadRpcPayloads: Record<string, unknown>[] = [],
+) {
   await page.route("https://*.supabase.co/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -45,11 +50,14 @@ async function mockSupabaseQuiz(page: import("@playwright/test").Page, observed:
     const json = (body: unknown, status = 200) => route.fulfill({
       status,
       contentType: "application/json",
+      headers: {
+        "access-control-allow-origin": "*",
+        "access-control-allow-headers": "authorization, apikey, content-type, x-client-info",
+      },
       body: JSON.stringify(body),
     });
 
-    if (url.pathname.endsWith("/auth/v1/otp")) return json({});
-    if (url.pathname.endsWith("/auth/v1/verify")) return json({
+    if (url.pathname.endsWith("/auth/v1/signup")) return json({
       access_token: "test-anonymous-access-token",
       token_type: "bearer",
       expires_in: 3600,
@@ -58,10 +66,17 @@ async function mockSupabaseQuiz(page: import("@playwright/test").Page, observed:
         id: ids.user,
         aud: "authenticated",
         role: "authenticated",
-        email: "mara@example.com",
-        email_confirmed_at: "2026-09-23T00:00:00.000Z",
-        is_anonymous: false,
+        is_anonymous: true,
       },
+    });
+    if (url.pathname.endsWith("/functions/v1/request-email-otp")) return json({
+      challengeId: ids.challenge,
+      expiresAt: "2026-09-23T00:10:00.000Z",
+      resendAvailableAt: "2026-09-23T00:01:00.000Z",
+    });
+    if (url.pathname.endsWith("/functions/v1/verify-email-otp")) return json({
+      verified: true,
+      grantExpiresAt: "2026-09-23T00:20:00.000Z",
     });
     if (url.pathname.endsWith("/rest/v1/quiz_definitions")) {
       return json({ id: ids.definition, version: 1, audience_key: "service_businesses" });
@@ -71,7 +86,8 @@ async function mockSupabaseQuiz(page: import("@playwright/test").Page, observed:
     if (url.pathname.endsWith("/rest/v1/portfolio_sessions") && request.method() === "POST") return json({ id: ids.portfolioSession });
     if (url.pathname.endsWith("/rest/v1/quiz_sessions") && request.method() === "POST") return json({ id: ids.quiz });
     if (url.pathname.endsWith("/rest/v1/quiz_sessions") && request.method() === "PATCH") return json(null, 204);
-    if (url.pathname.endsWith("/rest/v1/rpc/begin_verified_qualified_quiz")) {
+    if (url.pathname.endsWith("/rest/v1/rpc/begin_custom_verified_qualified_quiz")) {
+      leadRpcPayloads.push(request.postDataJSON() as Record<string, unknown>);
       return json([{ submission_status: "accepted", lead_id: ids.lead, quiz_session_id: ids.quiz }]);
     }
     if (url.pathname.endsWith("/functions/v1/finalize-proposal")) {
@@ -90,9 +106,13 @@ async function fillQuizContact(page: import("@playwright/test").Page) {
   await page.getByLabel(/business name/i).fill("Mara Consulting");
   await page.getByLabel(/^email/i).fill("mara@example.com");
   await page.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }).check();
-  await page.getByRole("button", { name: /send verification code/i }).click();
-  await page.getByLabel(/verification code/i).fill("123456");
-  await page.getByRole("button", { name: /verify email/i }).click();
+  await page.getByRole("button", { name: /^verify email$/i }).click();
+  const code = page.getByLabel(/verification code/i);
+  await expect(code).toBeVisible();
+  await code.fill("123456");
+  await page.getByRole("button", { name: /verify code/i }).click();
+  await expect(page.getByText(/email verified/i)).toBeVisible();
+  await page.getByRole("button", { name: /continue to assessment/i }).click();
   await expect(page.getByRole("heading", { name: /your roadmap starts with context/i })).toBeVisible();
 }
 
@@ -187,10 +207,11 @@ test("hero centers the roadmap CTA and preserves spacious desktop rhythm", async
 test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or page navigation", async ({ page }) => {
   const forbiddenRequests: string[] = [];
   const supabaseRequests: string[] = [];
+  const leadRpcPayloads: Record<string, unknown>[] = [];
   page.on("request", (request) => {
     if (forbiddenBackendPatterns.some((pattern) => pattern.test(request.url()))) forbiddenRequests.push(request.url());
   });
-  await mockSupabaseQuiz(page, supabaseRequests);
+  await mockSupabaseQuiz(page, supabaseRequests, leadRpcPayloads);
 
   await page.goto("/quiz/");
   const initialNavigationCount = await page.evaluate(() => performance.getEntriesByType("navigation").length);
@@ -228,10 +249,15 @@ test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or 
   await expect(page.getByRole("link", { name: /book a discovery call/i })).toHaveAttribute("href", "/booking/");
   await expect(page.getByRole("button", { name: /create my 3-day proposal/i })).toHaveCount(0);
   expect(forbiddenRequests).toEqual([]);
-  expect(supabaseRequests.some((entry) => entry.includes("/auth/v1/otp"))).toBe(true);
-  expect(supabaseRequests.some((entry) => entry.includes("/auth/v1/verify"))).toBe(true);
+  expect(supabaseRequests.some((entry) => entry.includes("/functions/v1/request-email-otp"))).toBe(true);
+  expect(supabaseRequests.some((entry) => entry.includes("/functions/v1/verify-email-otp"))).toBe(true);
+  expect(supabaseRequests.some((entry) => entry.includes("/auth/v1/otp"))).toBe(false);
+  expect(supabaseRequests.some((entry) => entry.includes("/auth/v1/verify"))).toBe(false);
   expect(supabaseRequests.some((entry) => entry.includes("/rest/v1/quiz_sessions"))).toBe(true);
-  expect(supabaseRequests.some((entry) => entry.includes("/rpc/begin_verified_qualified_quiz"))).toBe(true);
+  expect(supabaseRequests.some((entry) => entry.includes("/rpc/begin_custom_verified_qualified_quiz"))).toBe(true);
+  expect(leadRpcPayloads).not.toHaveLength(0);
+  expect(leadRpcPayloads[0]).toEqual(expect.objectContaining({ p_challenge_id: ids.challenge }));
+  expect(leadRpcPayloads[0]).not.toHaveProperty("p_email");
   expect(supabaseRequests.filter((entry) => entry.includes("/functions/v1/finalize-proposal"))).toHaveLength(2);
 
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("elysha-works:quiz-attempt:v1") ?? "null"));

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QuizExperience } from "@/features/quiz/QuizExperience";
 import { calculateRecommendation } from "@/features/quiz/cortex";
-import { EmailOtpStep } from "@/features/quiz/EmailOtpStep";
+import { InlineEmailVerification } from "@/features/quiz/InlineEmailVerification";
 import { LeadContactStep } from "@/features/quiz/LeadContactStep";
 import type { OwnedQuizContext } from "@/features/quiz/quiz-service";
 import { QUIZ_DEFINITIONS } from "@/features/quiz/questions";
@@ -98,7 +98,7 @@ async function fillContactStep(
   await user.type(screen.getByLabelText(/business name/i), values.businessName);
   await user.type(screen.getByLabelText(/^email/i), values.email);
   await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
-  await user.click(screen.getByRole("button", { name: /send verification code/i }));
+  await user.click(screen.getByRole("button", { name: /^verify email$/i }));
 }
 
 async function completeContactStep(
@@ -107,7 +107,8 @@ async function completeContactStep(
 ) {
   await fillContactStep(user, values);
   await user.type(await screen.findByLabelText(/verification code/i), "123456");
-  await user.click(screen.getByRole("button", { name: /verify email/i }));
+  await user.click(screen.getByRole("button", { name: /verify code/i }));
+  await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
   await screen.findByRole("heading", { name: /your roadmap starts with context/i });
 }
 
@@ -134,32 +135,128 @@ describe("local portfolio quiz", () => {
     turnstileControls.mounts = 0;
   });
 
-  it("accepts only a six-digit email code and keeps account state private", async () => {
+  it("expands verification inline, keeps leading zeroes, and never exposes account state", async () => {
     const user = userEvent.setup();
+    const onRequest = vi.fn(async () => undefined);
     const onVerify = vi.fn(async () => undefined);
     const onResend = vi.fn(async () => undefined);
     const onChangeEmail = vi.fn();
     render(
-      <EmailOtpStep
+      <InlineEmailVerification
         email="person@example.com"
-        resendAvailableAt="2026-09-23T00:01:00.000Z"
+        challenge={{
+          id: "70000000-0000-4000-8000-000000000001",
+          email: "person@example.com",
+          expiresAt: "2026-09-23T00:10:00.000Z",
+          resendAvailableAt: "2026-09-23T00:01:00.000Z",
+          verified: false,
+          grantExpiresAt: null,
+        }}
+        verified={false}
+        securityReady
         now={() => new Date("2026-09-23T00:00:00.000Z").getTime()}
+        onEmailChange={() => undefined}
         onChangeEmail={onChangeEmail}
+        onRequest={onRequest}
         onResend={onResend}
         onVerify={onVerify}
       />,
     );
 
     expect(screen.getByText(/p\*\*\*\*n@example\.com/i)).toBeInTheDocument();
-    const verify = screen.getByRole("button", { name: /verify email/i });
+    const verify = screen.getByRole("button", { name: /verify code/i });
     expect(verify).toBeDisabled();
-    await user.type(screen.getByLabelText(/verification code/i), "12a34-56");
-    expect(screen.getByLabelText(/verification code/i)).toHaveValue("123456");
+    await user.type(screen.getByLabelText(/verification code/i), "01a23-45");
+    expect(screen.getByLabelText(/verification code/i)).toHaveValue("012345");
     await user.click(verify);
-    expect(onVerify).toHaveBeenCalledWith("123456");
+    expect(onVerify).toHaveBeenCalledWith("012345");
     expect(screen.getByRole("button", { name: /resend in 60s/i })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: /change email/i }));
     expect(onChangeEmail).toHaveBeenCalledOnce();
+  });
+
+  it("retains the entered code after a verification error", async () => {
+    const user = userEvent.setup();
+    render(<InlineEmailVerification
+      challenge={{
+        id: "70000000-0000-4000-8000-000000000001",
+        email: "person@example.com",
+        expiresAt: "2026-09-23T00:10:00.000Z",
+        resendAvailableAt: "2026-09-23T00:01:00.000Z",
+        verified: false,
+        grantExpiresAt: null,
+      }}
+      email="person@example.com"
+      now={() => new Date("2026-09-23T00:00:00.000Z").getTime()}
+      onChangeEmail={() => undefined}
+      onEmailChange={() => undefined}
+      onRequest={async () => undefined}
+      onResend={async () => undefined}
+      onVerify={async () => { throw new Error("wrong code"); }}
+      securityReady
+      verified={false}
+    />);
+
+    const code = screen.getByLabelText(/verification code/i);
+    await user.type(code, "012345");
+    await user.click(screen.getByRole("button", { name: /verify code/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not verify that code/i);
+    expect(code).toHaveValue("012345");
+  });
+
+  it("requires fresh security before resending a code", async () => {
+    const user = userEvent.setup();
+    const onResend = vi.fn(async () => undefined);
+    const props = {
+      challenge: {
+        id: "70000000-0000-4000-8000-000000000001",
+        email: "person@example.com",
+        expiresAt: "2026-09-23T00:10:00.000Z",
+        resendAvailableAt: "2026-09-23T00:00:00.000Z",
+        verified: false,
+        grantExpiresAt: null,
+      },
+      email: "person@example.com",
+      now: () => new Date("2026-09-23T00:01:00.000Z").getTime(),
+      onChangeEmail: () => undefined,
+      onEmailChange: () => undefined,
+      onRequest: async () => undefined,
+      onResend,
+      onVerify: async () => undefined,
+      verified: false,
+    } as const;
+    const { rerender } = render(<InlineEmailVerification {...props} securityReady={false} />);
+    const resend = screen.getByRole("button", { name: /resend code/i });
+    expect(resend).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(/preparing security for a new code/i);
+
+    rerender(<InlineEmailVerification {...props} securityReady />);
+    await user.click(screen.getByRole("button", { name: /resend code/i }));
+    expect(onResend).toHaveBeenCalledOnce();
+  });
+
+  it("keeps verification independent from consent and preserves other fields when changing email", async () => {
+    const user = userEvent.setup();
+    render(<QuizExperience service={createFakeQuizService()} />);
+
+    await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await fillContactStep(user);
+    await user.type(await screen.findByLabelText(/verification code/i), "123456");
+    await user.click(screen.getByRole("button", { name: /verify code/i }));
+    expect(await screen.findByText(/email verified/i)).toBeInTheDocument();
+
+    const consent = screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i });
+    await user.click(consent);
+    expect(screen.getByText(/email verified/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /continue to assessment/i })).toBeDisabled();
+    await user.click(consent);
+    expect(screen.getByRole("button", { name: /continue to assessment/i })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: /change email/i }));
+    expect(screen.getByLabelText(/first name/i)).toHaveValue("Mara");
+    expect(screen.getByLabelText(/business name/i)).toHaveValue("Mara Consulting");
+    expect(screen.getByLabelText(/^email$/i)).toHaveValue("");
+    expect(screen.queryByLabelText(/verification code/i)).not.toBeInTheDocument();
   });
 
 
@@ -176,12 +273,18 @@ describe("local portfolio quiz", () => {
 
     await user.click(screen.getByRole("button", { name: /service-based business/i }));
     expect(screen.getByRole("heading", { name: /where should we send your proposal/i })).toBeInTheDocument();
+    expect(service.createOwnedQuizContext).not.toHaveBeenCalled();
+
+    await act(async () => turnstileControls.onSuccess?.("audience-token"));
+    await waitFor(() => expect(service.createOwnedQuizContext).toHaveBeenCalledWith(
+      "service_businesses",
+      expect.objectContaining({ captchaToken: "audience-token" }),
+    ));
     expect(screen.getByText(/securely store your personalized proposal for 72 hours/i)).toBeInTheDocument();
     expect(screen.getByText(/book a discovery call within that window/i)).toBeInTheDocument();
-    expect(service.createOwnedQuizContext).not.toHaveBeenCalled();
   });
 
-  it("keeps contact memory-only and creates no owned context until email OTP succeeds", async () => {
+  it("keeps contact and OTP memory-only while using the owned anonymous context", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
     render(<QuizExperience service={service} />);
@@ -192,20 +295,23 @@ describe("local portfolio quiz", () => {
     await user.type(screen.getByLabelText(/business name/i), "Mara Consulting");
     await user.type(screen.getByLabelText(/^email/i), "mara@example.com");
     await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
-    await user.click(screen.getByRole("button", { name: /send verification code/i }));
+    await user.click(screen.getByRole("button", { name: /^verify email$/i }));
 
-    expect(await screen.findByRole("heading", { name: /check your email/i })).toBeInTheDocument();
-    expect(service.requestEmailOtp).toHaveBeenCalledWith("mara@example.com", undefined);
-    expect(service.createOwnedQuizContext).not.toHaveBeenCalled();
+    expect(await screen.findByLabelText(/verification code/i)).toBeInTheDocument();
+    expect(service.requestEmailOtp).toHaveBeenCalledWith("mara@example.com", "");
+    expect(service.createOwnedQuizContext).toHaveBeenCalledOnce();
     expect(service.submitLeadContact).not.toHaveBeenCalled();
     const savedBeforeVerification = localStorage.getItem(QUIZ_STORAGE_KEY) ?? "";
     expect(savedBeforeVerification).not.toContain("mara@example.com");
     expect(savedBeforeVerification).not.toContain("Mara Consulting");
 
     await user.type(screen.getByLabelText(/verification code/i), "123456");
-    await user.click(screen.getByRole("button", { name: /verify email/i }));
-    await waitFor(() => expect(service.verifyEmailOtp).toHaveBeenCalledWith("mara@example.com", "123456"));
-    await waitFor(() => expect(service.createOwnedQuizContext).toHaveBeenCalledOnce());
+    await user.click(screen.getByRole("button", { name: /verify code/i }));
+    await waitFor(() => expect(service.verifyEmailOtp).toHaveBeenCalledWith("70000000-0000-4000-8000-000000000001", "123456"));
+    expect(await screen.findByText(/email verified/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^email$/i)).toHaveAttribute("readonly");
+    expect(service.submitLeadContact).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
     expect(service.submitLeadContact).toHaveBeenCalledOnce();
     expect(await screen.findByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
   });
@@ -213,18 +319,23 @@ describe("local portfolio quiz", () => {
   it("unblocks contact submission on Turnstile success and safely blocks again on expiry or error", async () => {
     vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "test-site-key");
     const user = userEvent.setup();
-    render(<QuizExperience service={createFakeQuizService()} />);
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} />);
 
+    await screen.findByTestId("turnstile-runtime");
+    await act(async () => turnstileControls.onSuccess?.("audience-token"));
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await waitFor(() => expect(service.createOwnedQuizContext).toHaveBeenCalledOnce());
+    await waitFor(() => expect(turnstileControls.mounts).toBeGreaterThanOrEqual(2));
     await user.type(screen.getByLabelText(/first name/i), "Mara");
     await user.type(screen.getByLabelText(/last name/i), "Santos");
     await user.type(screen.getByLabelText(/business name/i), "Mara Consulting");
     await user.type(screen.getByLabelText(/^email/i), "mara@example.com");
     await user.click(screen.getByRole("checkbox", { name: /initial proposal.*up to three follow-ups/i }));
-    const submit = screen.getByRole("button", { name: /send verification code/i });
+    const submit = screen.getByRole("button", { name: /^verify email$/i });
 
     expect(submit).toBeDisabled();
-    expect(screen.getByRole("status")).toHaveTextContent(/preparing the secure assessment/i);
+    expect(screen.getByRole("status")).toHaveTextContent(/preparing email security/i);
 
     act(() => turnstileControls.onSuccess?.("valid-turnstile-token"));
     await waitFor(() => expect(submit).toBeEnabled());
@@ -242,20 +353,23 @@ describe("local portfolio quiz", () => {
     const previousMounts = turnstileControls.mounts;
     await user.click(retry);
     await waitFor(() => expect(turnstileControls.mounts).toBe(previousMounts + 1));
-    expect(screen.getByRole("status")).toHaveTextContent(/preparing the secure assessment/i);
+    expect(screen.getByRole("status")).toHaveTextContent(/preparing email security/i);
   });
 
   it("validates and normalizes required lead contact details without navigating", async () => {
     const user = userEvent.setup();
     const initialUrl = window.location.href;
     let submitted: unknown = null;
-    render(<LeadContactStep onSubmit={async (contact) => {
-      submitted = contact;
-      return { status: "accepted", leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId };
-    }} />);
+    render(<LeadContactStep
+      onChangeEmail={() => undefined}
+      onContinue={async () => undefined}
+      onRequestCode={async (contact) => { submitted = contact; }}
+      onResendCode={async () => undefined}
+      onVerifyCode={async () => undefined}
+    />);
 
-    const submit = screen.getByRole("button", { name: /send verification code/i });
-    expect(submit).toHaveTextContent("Send Verification Code →");
+    const submit = screen.getByRole("button", { name: /^verify email$/i });
+    expect(submit).toHaveTextContent("Verify Email");
     expect(submit).toBeDisabled();
     await user.type(screen.getByLabelText(/first name/i), "  Mara  ");
     await user.type(screen.getByLabelText(/last name/i), "  Santos  ");
@@ -286,11 +400,12 @@ describe("local portfolio quiz", () => {
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
     await fillContactStep(user);
     await user.type(await screen.findByLabelText(/verification code/i), "123456");
-    await user.click(screen.getByRole("button", { name: /verify email/i }));
+    await user.click(screen.getByRole("button", { name: /verify code/i }));
+    await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
     expect(await screen.findByRole("heading", { name: /is this assessment for mara consulting/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /same business/i }));
     await waitFor(() => expect(service.submitLeadContact).toHaveBeenLastCalledWith(
-      expect.anything(), expect.objectContaining({ businessScope: "same_business" }),
+      expect.anything(), "70000000-0000-4000-8000-000000000001", expect.objectContaining({ businessScope: "same_business" }),
     ));
     expect(await screen.findByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
   });
@@ -306,9 +421,10 @@ describe("local portfolio quiz", () => {
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
     await fillContactStep(user, { firstName: "Mara", lastName: "Santos", businessName: "Mara Academy", email: "mara@example.com" });
     await user.type(await screen.findByLabelText(/verification code/i), "123456");
-    await user.click(screen.getByRole("button", { name: /verify email/i }));
+    await user.click(screen.getByRole("button", { name: /verify code/i }));
+    await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
     await user.click(await screen.findByRole("button", { name: /another business/i }));
-    await waitFor(() => expect(service.submitLeadContact).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({
+    await waitFor(() => expect(service.submitLeadContact).toHaveBeenLastCalledWith(expect.anything(), "70000000-0000-4000-8000-000000000001", expect.objectContaining({
       businessName: "Mara Academy",
       businessScope: "another_business",
     })));
@@ -316,7 +432,13 @@ describe("local portfolio quiz", () => {
 
   it("retains contact fields and announces a submission failure", async () => {
     const user = userEvent.setup();
-    render(<LeadContactStep onSubmit={async () => { throw new Error("Backend unavailable"); }} />);
+    render(<LeadContactStep
+      onChangeEmail={() => undefined}
+      onContinue={async () => undefined}
+      onRequestCode={async () => { throw new Error("Backend unavailable"); }}
+      onResendCode={async () => undefined}
+      onVerifyCode={async () => undefined}
+    />);
     await fillContactStep(user);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/could not send a verification code/i);
@@ -422,11 +544,12 @@ describe("local portfolio quiz", () => {
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
     await fillContactStep(user);
     await user.type(await screen.findByLabelText(/verification code/i), "123456");
-    const verify = screen.getByRole("button", { name: /verify email/i });
-    await user.click(verify);
+    await user.click(screen.getByRole("button", { name: /verify code/i }));
+    const continueButton = screen.getByRole("button", { name: /continue to assessment/i });
+    await user.click(continueButton);
 
-    expect(verify).toBeDisabled();
-    expect(verify).toHaveTextContent(/verifying/i);
+    expect(continueButton).toBeDisabled();
+    expect(continueButton).toHaveTextContent(/preparing assessment/i);
     await waitFor(() => expect(service.submitLeadContact).toHaveBeenCalledOnce());
     finishSubmission();
     expect(await screen.findByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();

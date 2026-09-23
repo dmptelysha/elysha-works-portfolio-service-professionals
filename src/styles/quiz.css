@@ -151,36 +151,60 @@
 .quiz-contact { width: min(100%, 76rem); }
 .quiz-contact > h1 {
   max-width: none;
-  font-size: clamp(2.25rem, 4vw, 4.25rem);
+  font-size: clamp(2rem, 4vw, 3.65rem);
   line-height: 1;
   letter-spacing: -.05em;
-  white-space: nowrap;
-  text-wrap: nowrap;
+  text-wrap: balance;
 }
 .quiz-contact > .quiz-lede,
 .quiz-contact-form { width: min(100%, 64rem); }
-.quiz-contact-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: clamp(2rem, 5vh, 3.5rem); }
+.quiz-contact > .quiz-lede { margin-top: clamp(.85rem, 1.8vh, 1.35rem); }
+.quiz-contact-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem 1rem; margin-top: clamp(1.25rem, 3vh, 2.25rem); }
 .quiz-contact-form label { display: grid; gap: .55rem; color: var(--portfolio-text); font-size: .78rem; font-weight: 700; }
 .quiz-contact-form input:not([type="checkbox"]) { min-width: 0; min-height: 3.6rem; padding: .85rem 1rem; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.035); color: var(--portfolio-text); font: inherit; outline: none; }
 .quiz-contact-form input:not([type="checkbox"]):focus { border-color: var(--portfolio-gold); box-shadow: 0 0 0 3px rgba(255,211,105,.1); }
-.quiz-contact-email, .quiz-consent, .quiz-contact-form > .quiz-validation, .quiz-contact-status, .quiz-contact-form > .quiz-primary { grid-column: 1 / -1; }
+.quiz-inline-email, .quiz-consent, .quiz-contact-form > .quiz-validation, .quiz-contact-status, .quiz-contact-form > .quiz-primary { grid-column: 1 / -1; }
 .quiz-consent { grid-template-columns: auto 1fr !important; align-items: start; color: var(--portfolio-muted) !important; font-weight: 500 !important; line-height: 1.55; }
 .quiz-consent input { width: 1.15rem; height: 1.15rem; margin-top: .12rem; accent-color: var(--portfolio-gold); }
 .quiz-contact-status { margin: 0; color: var(--portfolio-muted); }
 .quiz-contact-form > .quiz-primary { justify-self: start; }
+.quiz-inline-email { display: grid; gap: .75rem; }
+.quiz-email-label { display: grid; gap: .55rem; color: var(--portfolio-text); font-size: .78rem; font-weight: 700; }
+.quiz-email-row, .quiz-code-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: .65rem; }
+.quiz-email-row input[readonly] { border-color: rgba(255,211,105,.36); color: #e4e0d5; }
+.quiz-email-verify {
+  min-width: 10rem;
+  border: 1px solid rgba(255,211,105,.62);
+  border-radius: .24rem;
+  padding: .75rem 1.15rem;
+  background: rgba(255,211,105,.08);
+  color: var(--portfolio-gold);
+  font: 750 .86rem/1 Inter, Arial, sans-serif;
+  cursor: pointer;
+}
+.quiz-email-verify:hover:not(:disabled), .quiz-email-verify:focus-visible { background: rgba(255,211,105,.14); }
+.quiz-email-verify:disabled { cursor: not-allowed; opacity: .45; }
+.quiz-inline-otp { display: grid; gap: .7rem; padding: clamp(1rem, 2vw, 1.35rem); border: 1px solid rgba(255,211,105,.26); background: rgba(255,211,105,.035); }
+.quiz-inline-otp label { font-size: .76rem; }
+.quiz-inline-otp-copy, .quiz-inline-otp-note { margin: 0; color: var(--portfolio-muted); line-height: 1.5; }
+.quiz-inline-otp-copy strong { color: var(--portfolio-text); }
+.quiz-inline-otp-note { font-size: .72rem; }
+.quiz-code-row input { min-height: 3.6rem; font: 750 1.3rem/1 Inter, Arial, sans-serif !important; letter-spacing: .28em; }
+.quiz-email-verified { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; min-height: 2.5rem; color: #f6f0df; }
+.quiz-email-verified > span { display: grid; place-items: center; width: 1.65rem; height: 1.65rem; border: 1px solid var(--portfolio-gold); border-radius: 50%; color: var(--portfolio-gold); }
+.quiz-email-verified button { margin-left: auto; border: 0; padding: .35rem 0; background: transparent; color: var(--portfolio-muted); font: inherit; text-decoration: underline; text-underline-offset: .25em; cursor: pointer; }
 .quiz-business-scope { grid-column: 1 / -1; display: grid; gap: .8rem; padding: clamp(1rem, 2vw, 1.5rem); border: 1px solid rgba(255,211,105,.38); background: rgba(255,211,105,.055); }
 .quiz-business-scope h1, .quiz-business-scope h2 { margin: 0; color: var(--portfolio-text); font-size: clamp(1.75rem, 4vw, 3.6rem); }
 .quiz-business-scope p { margin: 0; max-width: 42rem; color: var(--portfolio-muted); line-height: 1.6; }
 .quiz-business-scope-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .35rem; }
-.quiz-otp { width: min(100%, 46rem); }
-.quiz-otp-form { display: grid; gap: 1rem; width: min(100%, 32rem); margin-top: clamp(2rem, 5vh, 3.5rem); }
-.quiz-otp-form label { color: var(--portfolio-text); font-size: .78rem; font-weight: 700; }
-.quiz-otp-form input { min-height: 4rem; padding: .8rem 1rem; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.035); color: var(--portfolio-text); font: 700 clamp(1.35rem, 4vw, 2rem)/1 Inter, Arial, sans-serif; letter-spacing: .35em; outline: none; }
-.quiz-otp-form input:focus { border-color: var(--portfolio-gold); box-shadow: 0 0 0 3px rgba(255,211,105,.1); }
 .quiz-otp-actions { display: flex; flex-wrap: wrap; gap: 1rem; }
 .quiz-otp-actions button { border: 0; background: transparent; color: var(--portfolio-muted); font: inherit; text-decoration: underline; text-underline-offset: .28rem; cursor: pointer; }
 .quiz-otp-actions button:disabled { cursor: not-allowed; opacity: .48; }
 .quiz-primary:disabled { cursor: not-allowed; opacity: .45; transform: none; box-shadow: none; }
+
+@media (min-width: 1024px) {
+  .quiz-contact > h1 { white-space: nowrap; text-wrap: nowrap; }
+}
 
 .quiz-primary,
 .quiz-secondary,
@@ -376,7 +400,12 @@
   .selected-roadmap-offer div:last-child { text-align: left; }
   .quiz-contact-form { grid-template-columns: 1fr; }
   .quiz-contact > h1 { white-space: normal; text-wrap: balance; }
-  .quiz-contact-email, .quiz-consent, .quiz-contact-form > .quiz-validation, .quiz-contact-status, .quiz-contact-form > .quiz-primary { grid-column: auto; }
+  .quiz-inline-email, .quiz-consent, .quiz-contact-form > .quiz-validation, .quiz-contact-status, .quiz-contact-form > .quiz-primary { grid-column: auto; }
+}
+
+@media (max-width: 640px) {
+  .quiz-email-row, .quiz-code-row { grid-template-columns: 1fr; }
+  .quiz-email-verify { min-height: 3.25rem; width: 100%; }
 }
 
 @media (max-width: 520px) {

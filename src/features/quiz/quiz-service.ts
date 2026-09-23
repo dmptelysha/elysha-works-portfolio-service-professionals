@@ -79,7 +79,6 @@ export async function requestCustomEmailOtp(
 ): Promise<CustomEmailOtpChallenge> {
   const normalizedEmail = normalizeEmail(email);
   const normalizedToken = turnstileToken.trim();
-  if (!normalizedToken) throw new Error(OTP_ERROR);
   const response = await clientOrDefault(client).functions.invoke("request-email-otp", {
     body: {
       email: normalizedEmail,
