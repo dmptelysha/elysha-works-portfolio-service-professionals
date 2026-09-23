@@ -30,6 +30,10 @@ otp_expiry = 600
 subject = "Your Elysha Works verification code"
 content_path = "./supabase/templates/magic-link.html"
 
+[auth.email.template.confirmation]
+subject = "Your Elysha Works verification code"
+content_path = "./supabase/templates/confirmation.html"
+
 [auth.captcha]
 enabled = true
 provider = "turnstile"

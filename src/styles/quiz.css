@@ -148,8 +148,17 @@
 .quiz-intro-notes { display: flex; flex-wrap: wrap; justify-content: center; gap: .75rem; margin: 2.25rem 0; }
 .quiz-intro-notes span { padding: .55rem .75rem; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; color: #d8d6cf; font-size: .76rem; }
 
-.quiz-contact { width: min(100%, 52rem); }
-.quiz-contact > h1 { max-width: 48rem; }
+.quiz-contact { width: min(100%, 76rem); }
+.quiz-contact > h1 {
+  max-width: none;
+  font-size: clamp(2.25rem, 4vw, 4.25rem);
+  line-height: 1;
+  letter-spacing: -.05em;
+  white-space: nowrap;
+  text-wrap: nowrap;
+}
+.quiz-contact > .quiz-lede,
+.quiz-contact-form { width: min(100%, 64rem); }
 .quiz-contact-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: clamp(2rem, 5vh, 3.5rem); }
 .quiz-contact-form label { display: grid; gap: .55rem; color: var(--portfolio-text); font-size: .78rem; font-weight: 700; }
 .quiz-contact-form input:not([type="checkbox"]) { min-width: 0; min-height: 3.6rem; padding: .85rem 1rem; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.035); color: var(--portfolio-text); font: inherit; outline: none; }
@@ -366,6 +375,7 @@
   .selected-roadmap-offer, .selected-roadmap-columns { grid-template-columns: 1fr; }
   .selected-roadmap-offer div:last-child { text-align: left; }
   .quiz-contact-form { grid-template-columns: 1fr; }
+  .quiz-contact > h1 { white-space: normal; text-wrap: balance; }
   .quiz-contact-email, .quiz-consent, .quiz-contact-form > .quiz-validation, .quiz-contact-status, .quiz-contact-form > .quiz-primary { grid-column: auto; }
 }
 

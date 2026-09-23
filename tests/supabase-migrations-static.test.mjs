@@ -63,8 +63,14 @@ test('Supabase scaffold has the ordered reproducible assets', () => {
   const config = read('supabase/config.toml');
   assert.match(config, /\[auth\.email\]/);
   assert.match(config, /otp_expiry\s*=\s*600/);
+  assert.match(config, /\[auth\.email\.template\.confirmation\]/);
   assert.match(config, /\[auth\.email\.template\.magic_link\]/);
-  assert.match(read('supabase/templates/magic-link.html'), /\{\{\s*\.Token\s*\}\}/);
+  for (const template of ['confirmation.html', 'magic-link.html']) {
+    const html = read(`supabase/templates/${template}`);
+    assert.match(html, /\{\{\s*\.Token\s*\}\}/, `${template} renders the six-digit OTP`);
+    assert.doesNotMatch(html, /\.ConfirmationURL/, `${template} must not render a sign-in link`);
+    assert.doesNotMatch(html, /supabase/i, `${template} must remain Elysha Works branded`);
+  }
 });
 
 test('proposal migration is additive, keeps eleven tables, and locks trusted functions down', () => {

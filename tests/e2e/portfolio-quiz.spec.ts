@@ -248,6 +248,28 @@ test("hero secondary action opens the audience selector", async ({ page }) => {
   await expect(page.getByText(/a clear roadmap in three steps/i)).toHaveCount(0);
 });
 
+test("proposal contact heading stays on one line on a laptop viewport", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Laptop geometry is asserted once.");
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.goto("/quiz/");
+  await page.getByRole("button", { name: /service-based business/i }).click();
+
+  const heading = page.getByRole("heading", { name: "Where should we send your proposal?" });
+  await expect(heading).toBeVisible();
+  const geometry = await heading.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return {
+      lineFragments: range.getClientRects().length,
+      right: element.getBoundingClientRect().right,
+      viewportWidth: window.innerWidth,
+    };
+  });
+
+  expect(geometry.lineFragments).toBe(1);
+  expect(geometry.right).toBeLessThanOrEqual(geometry.viewportWidth);
+});
+
 test("proposal access stays on-page and does not disclose why access failed", async ({ page }) => {
   await page.route("https://*.supabase.co/functions/v1/verify-proposal", async (route) => {
     await route.fulfill({

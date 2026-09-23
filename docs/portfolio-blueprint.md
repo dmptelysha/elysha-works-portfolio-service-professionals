@@ -149,7 +149,7 @@ Selecting a card:
 
 - After audience selection and before Question 1, show four required fields in this order: **first name**, **last name**, **business name**, and **email address**.
 - Require a consent checkbox using the approved `proposal_followup_v1` copy before continuing. The copy explains the initial proposal email and up to three proposal-related follow-ups unless the visitor books or stops them.
-- Send a six-digit email OTP through Supabase Auth. Use a **10-minute OTP expiry** and a **60-second resend** interval. The branded hosted template must contain `{{ .Token }}` rather than relying on a magic-link click.
+- Send a six-digit email OTP through Supabase Auth. Use a **10-minute OTP expiry** and a **60-second resend** interval. Both hosted Auth templates used by this flow—**Confirm signup** for a new address and **Magic link or OTP** for a returning address or resend—must use branded Elysha Works code-only markup containing `{{ .Token }}` and no `{{ .ConfirmationURL }}`. Production delivery uses the dashboard-only Gmail custom SMTP configuration so Supabase remains the hidden verifier rather than the visible sender brand.
 - A verified email is required before lead creation. `begin_verified_qualified_quiz` derives the canonical email and verification timestamp from `auth.users`; the browser cannot supply or override them.
 - Trim all values, normalize email to lowercase, keep form values after a backend error, and show a retry action.
 - Do not store contact fields in local storage, URLs, analytics, or client logs.
