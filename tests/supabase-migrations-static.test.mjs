@@ -328,6 +328,14 @@ test('database operations and deferred production decisions are documented', () 
   assert.match(doc, /verify-proposal/i);
 });
 
+test('proposal discount operations and limits are documented', () => {
+  const docs = `${read('docs/supabase-database.md')}\n${read('docs/portfolio-blueprint.md')}`;
+  for (const phrase of [
+    'COUPON_REDEMPTION_SECRET', 'PINOYAKO', 'EARLYBIRDWORKS', 'first 50',
+    'first 100', 'pending reservation', 'proposal-snapshot-2026.09-v2',
+  ]) assert.match(docs, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), phrase);
+});
+
 test('Edge Functions use an explicit Deno-compatible Supabase client import', () => {
   const client = read('supabase/functions/_shared/supabase.ts');
   assert.match(client, /from\s+["']npm:@supabase\/supabase-js@2\.116\.0["']/);
