@@ -2,6 +2,7 @@ export const CORTEX_VERSION = "business-systems-cortex-2026.09-v2" as const;
 export const QUESTION_SET_VERSION = "business-systems-assessment-2026.09-v2" as const;
 export const CATALOG_VERSION = "business-systems-catalog-2026.09-v2" as const;
 export const ROADMAP_VERSION = "premium-roadmap-2026.09-v1" as const;
+export const PROPOSAL_SNAPSHOT_VERSION = "proposal-snapshot-2026.09-v2" as const;
 
 export type AudienceKey =
   | "coaches_educators"
@@ -41,6 +42,25 @@ export type ReadinessLevel =
 export type PlatformKey = "systeme_io" | "gohighlevel" | "custom_app";
 export type BuildRoute = "platform" | "custom";
 export type PublicTierKey = "basic" | "advanced" | "complete";
+export type CouponCampaignKey = "pinoyako" | "earlybirdworks";
+
+export interface ValidatedDiscountCampaign {
+  campaignKey: CouponCampaignKey;
+  code: "PINOYAKO" | "EARLYBIRDWORKS";
+  percentage: 50 | 15;
+}
+
+export interface ProjectPriceQuote {
+  originalTotalUsd: number;
+  discountAmountUsd: number;
+  finalTotalUsd: number;
+  localCurrency: string;
+  localSymbol: string;
+  finalTotalLocal: number | null;
+  fxRate: number | null;
+  fxRateTimestamp: string | null;
+  campaign: ValidatedDiscountCampaign | null;
+}
 
 export interface BusinessLocation {
   businessCountry: string;
