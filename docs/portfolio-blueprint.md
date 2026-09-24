@@ -82,7 +82,7 @@ flowchart TD
 3. Verify the email inline with the custom six-digit OTP before the qualified lead is created.
 4. Complete the multi-step quiz without navigation or page reload.
 5. Review the personalized Point A, Point B, recommended solution, and Basic/Advanced/Complete comparison.
-6. Receive the server-verified roadmap while the recommended feasible tier/platform is automatically finalized and emailed.
+6. Receive the server-verified roadmap, choose a feasible tier/platform, optionally apply one eligible coupon, and explicitly confirm the selection for email delivery.
 7. Confirm the success message, or retry email delivery without losing the visible roadmap.
 8. Open the protected proposal from the emailed reference link by entering the separate access key.
 9. Optionally compare the three packages, review platform feasibility, and book a discovery call.
@@ -1915,7 +1915,7 @@ The release is ready only when:
 - Results recommend a technically justified platform/build route and base offer starting at $1,500.
 - Results itemize base inclusions, non-included add-ons, adjustments, and recurring costs paid separately by the client.
 - Projects automatically filter to the selected audience.
-- Proposal issuance starts automatically after the server-calculated roadmap selects its recommended feasible tier/platform; successful delivery shows an accessible confirmation dialog, and failed delivery keeps the roadmap visible with a narrowly scoped retry action.
+- Proposal issuance starts only after the visitor explicitly confirms the selected feasible tier/platform and validated coupon; successful delivery shows an accessible confirmation dialog, and an ambiguous failed delivery locks the initialized pricing while keeping the roadmap visible with a narrowly scoped idempotent retry action.
 - Proposal reference alone reveals no data; the separate access key works only before exact expiry and locks for 15 minutes after five failures.
 - Content, questions, package data, and projects are isolated from UI rendering, and display-copy edits do not rewrite core scoring logic.
 - Mobile, tablet, and desktop layouts are usable and visually consistent.
