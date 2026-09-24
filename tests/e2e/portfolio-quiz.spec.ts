@@ -18,6 +18,7 @@ const ids = {
 };
 
 const proposalDraft = {
+  proposalSnapshotVersion: "proposal-snapshot-2026.09-v2",
   audienceKey: "service_businesses",
   client: { firstName: "Mara", businessName: "Mara Consulting" },
   pointA: { heading: "Where Mara Consulting is now", summary: "The current path needs clearer qualification.", evidence: ["Manual lead handling"] },
@@ -45,12 +46,15 @@ const proposalDraft = {
   },
   investment: {
     basePriceUsd: 2500,
-    estimatedTotalUsd: 2500,
-    currency: "USD",
-    symbol: "$",
-    localTotal: null,
-    fxRate: null,
-    fxRateTimestamp: null,
+    originalTotalUsd: 2500,
+    discountAmountUsd: 0,
+    finalTotalUsd: 2500,
+    localCurrency: "PHP",
+    localSymbol: "₱",
+    finalTotalLocal: 145000,
+    fxRate: 58,
+    fxRateTimestamp: "2026-09-24T00:00:00.000Z",
+    campaign: null,
   },
   includedScope: ["CRM setup", "Booking workflow"],
   optionalEnhancements: ["Client portal"],
@@ -124,9 +128,9 @@ async function mockSupabaseQuiz(
       businessCountry: "Philippines",
       countryCode: "PH",
       displayCurrency: "PHP",
-      currencySymbol: "PHP",
+      currencySymbol: "₱",
       fxRate: 58,
-      fxRateTimestamp: "2026-09-23T00:00:00.000Z",
+      fxRateTimestamp: "2026-09-24T00:00:00.000Z",
     });
     if (url.pathname.endsWith("/rest/v1/quiz_definitions")) {
       return json({ id: ids.definition, version: 1, audience_key: "service_businesses" });
@@ -279,7 +283,7 @@ test("hero centers the roadmap CTA and preserves spacious desktop rhythm", async
   expect(gaps[4]).toBeGreaterThanOrEqual(19);
 });
 
-test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or page navigation", async ({ page }) => {
+test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or page navigation", async ({ page }, testInfo) => {
   const forbiddenRequests: string[] = [];
   const supabaseRequests: string[] = [];
   const leadRpcPayloads: Record<string, unknown>[] = [];
@@ -314,8 +318,18 @@ test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or 
 
   await expect(page.getByRole("heading", { name: /hi mara, here.s the roadmap for mara consulting/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: /compare your roadmap options/i })).toBeVisible();
+  if (testInfo.project.name === "mobile") {
+    const roadmapButtons = page.locator(".roadmap-platforms button:enabled, .roadmap-choose:enabled");
+    const count = await roadmapButtons.count();
+    for (let index = 0; index < count; index += 1) await roadmapButtons.nth(index).click();
+  }
   const pointBListColor = await page.locator(".result-card--gold li").first().evaluate((element) => getComputedStyle(element).color);
   expect(pointBListColor).toBe("rgb(5, 6, 6)");
+  await expect(page.getByRole("heading", { name: /project investment/i })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expect(page.locator(".result-card--gold .snapshot-list dd").first()).toHaveCSS("color", "rgb(242, 240, 232)");
+  await expect(page.getByRole("button", { name: /confirm roadmap and email proposal/i })).toBeVisible();
+  await page.getByRole("button", { name: /confirm roadmap and email proposal/i }).click();
   const successDialog = page.getByRole("dialog", { name: /your proposal is ready/i });
   await expect(successDialog).toBeVisible();
   await expect(successDialog.getByText(/sent.*m\*\*\*@example\.com/i)).toBeVisible();

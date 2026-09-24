@@ -344,6 +344,8 @@
 .result-card > p:not(.result-number), .result-card li, .result-card dd { color: var(--portfolio-muted); line-height: 1.65; }
 .result-card--gold > p:not(.result-number) { color: rgba(5,6,6,.76); }
 .result-card--gold li, .result-card--gold dd { color: #050606; }
+.result-card--gold .snapshot-list div { background: #0b0c0b; }
+.result-card--gold .snapshot-list dd { color: #f2f0e8; }
 .result-card--gold > strong { display: block; margin-top: 2rem; }
 .result-price { display: block; margin-top: 2rem; color: var(--portfolio-gold); font-size: clamp(1.2rem, 2vw, 1.8rem); }
 .snapshot-list { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1px; margin: 3rem 0 0; background: rgba(255,255,255,.14); }
@@ -428,6 +430,20 @@
 .selected-scope-review { margin-top: 1.25rem; padding: 1rem; border: 1px solid rgba(255,211,105,.25); color: var(--portfolio-muted); }
 .selected-scope-review ul { margin-bottom: 0; }
 .result-card--next { background: #11120f; }
+.project-investment { display: grid; min-width: 0; gap: 1.25rem; margin-top: 2rem; overflow-wrap: anywhere; }
+.project-investment-price { display: grid; min-width: 0; gap: .45rem; }
+.project-investment-price del { width: fit-content; color: rgba(5,6,6,.58); font-size: clamp(1.1rem,2vw,1.5rem); font-weight: 700; text-decoration-thickness: 2px; }
+.project-investment-price .result-price { margin: 0; color: #050606; font-size: clamp(2rem,5vw,4.5rem); line-height: 1; }
+.project-investment-price p, .project-investment-price small { margin: 0; color: rgba(5,6,6,.78); }
+.project-coupon { display: grid; min-width: 0; gap: .5rem; padding-top: 1.25rem; border-top: 1px solid rgba(5,6,6,.25); }
+.project-coupon label { font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.project-coupon > div { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .6rem; }
+.project-coupon input { min-width: 0; min-height: 3rem; padding: .7rem .9rem; border: 1px solid rgba(5,6,6,.42); background: rgba(255,255,255,.42); color: #050606; font: inherit; text-transform: uppercase; }
+.project-coupon .quiz-secondary { border-color: #050606; color: #050606; }
+.project-coupon-status { min-height: 1.3rem; margin: 0; color: rgba(5,6,6,.78) !important; }
+.project-confirm { width: fit-content; border-color: #050606; background: #050606; color: var(--portfolio-gold); }
+.result-card, .roadmap-comparison, .roadmap-selection-summary, .selected-roadmap-columns > div { min-width: 0; }
+.roadmap-tier-price strong, .investment-lines strong { flex-shrink: 0; }
 .result-card--next .quiz-primary { margin-top: 1.5rem; }
 .result-control { display: flex; align-items: center; justify-content: space-between; gap: 2rem; padding: clamp(2rem, 4vw, 3.5rem); border: 1px solid rgba(255,255,255,.14); border-top: 0; background: #080908; }
 .result-control h2 { margin: 0; font-size: clamp(1.6rem, 3vw, 2.8rem); letter-spacing: -.04em; }
@@ -457,6 +473,8 @@
   .roadmap-selection-heading { align-items: flex-start; flex-direction: column; }
   .selected-roadmap-offer, .selected-roadmap-columns { grid-template-columns: 1fr; }
   .selected-roadmap-offer div:last-child { text-align: left; }
+  .project-coupon > div { grid-template-columns: 1fr; }
+  .project-coupon button, .project-confirm { width: 100%; }
   .quiz-contact-form { grid-template-columns: 1fr; }
   .quiz-contact > h1 { white-space: normal; text-wrap: balance; }
   .quiz-inline-email, .quiz-consent, .quiz-contact-form > .quiz-validation, .quiz-contact-status, .quiz-contact-form > .quiz-primary { grid-column: auto; }

@@ -1,10 +1,12 @@
 import { RelatedWorkCards } from "./RelatedWorkCards";
 import { RoadmapComparison } from "./RoadmapComparison";
 import { RoadmapSelectionSummary } from "./RoadmapSelectionSummary";
+import { ProjectInvestment } from "./ProjectInvestment";
 import type {
   CortexResult,
   ProposalDraftViewModel,
   ProposalViewModel,
+  ProjectPriceQuote,
   ReadinessLevel,
   RoadmapSelection,
   SolutionType,
@@ -17,6 +19,16 @@ interface QuizResultProps {
   onSelect: (selection: RoadmapSelection) => void;
   onStartOver: () => void;
   onRetryProposal: () => Promise<void>;
+  onApplyCoupon?: () => Promise<void>;
+  onCouponInput?: (value: string) => void;
+  onRemoveCoupon?: () => void;
+  onRetryConversion?: () => Promise<void>;
+  onConfirmProposal?: () => Promise<void>;
+  priceQuote?: ProjectPriceQuote;
+  couponInput?: string;
+  couponMessage?: string | null;
+  countryCode?: string;
+  proposalLocked?: boolean;
   issuing: boolean;
   issueError: string | null;
   persistenceAvailable: boolean;
@@ -56,11 +68,22 @@ export function QuizResult({
   onSelect,
   onStartOver,
   onRetryProposal,
+  onApplyCoupon = async () => undefined,
+  onCouponInput = () => undefined,
+  onRemoveCoupon = () => undefined,
+  onRetryConversion = async () => undefined,
+  onConfirmProposal = async () => undefined,
+  priceQuote,
+  couponInput = "",
+  couponMessage = null,
+  countryCode = "ZZ",
+  proposalLocked = false,
   issuing,
   issueError,
   persistenceAvailable,
 }: QuizResultProps) {
   if (proposal) {
+    const selectedPriceQuote = priceQuote ?? proposal.investment;
     const completeTier = proposal.tiers.find((tier) => tier.tierKey === "complete");
     const completeVariant = completeTier?.variants.find(
       (variant) => variant.platform === selection.platform && variant.feasibility.available,
@@ -73,7 +96,7 @@ export function QuizResult({
           <h1 id="result-title">Hi {proposal.client.firstName}, here&apos;s the roadmap for {proposal.client.businessName}.</h1>
           <p>{proposal.recommendation.title}</p>
           <strong className="result-confidence result-confidence--standard">Server-ready recommendation</strong>
-          <span>Review your path and compare the three working options. Your protected proposal is prepared and emailed automatically.</span>
+          <span>Review your path, compare the three working options, then confirm the roadmap you want emailed.</span>
         </header>
 
         <div className="result-grid">
@@ -141,11 +164,11 @@ export function QuizResult({
           </section>
 
           <div className="result-card result-card--wide result-card--comparison">
-            <RoadmapComparison result={result} selection={selection} onSelect={onSelect} />
+            <RoadmapComparison result={result} selection={selection} onSelect={onSelect} locked={proposalLocked} />
           </div>
 
           <div className="result-card result-card--wide result-card--selection">
-            <RoadmapSelectionSummary result={result} selection={selection} />
+            <RoadmapSelectionSummary result={result} selection={selection} quote={selectedPriceQuote} />
           </div>
 
           <section className="result-card" aria-labelledby="pages-title">
@@ -176,10 +199,19 @@ export function QuizResult({
           <section className="result-card result-card--gold" aria-labelledby="investment-title">
             <p className="result-number">13 · Investment</p>
             <h2 id="investment-title">Project investment</h2>
-            <strong className="result-price">${proposal.investment.finalTotalUsd.toLocaleString("en-US")} USD</strong>
-            {proposal.investment.finalTotalLocal !== null && proposal.investment.localCurrency !== "USD" ? (
-              <p>Approximately {proposal.investment.localSymbol}{proposal.investment.finalTotalLocal.toLocaleString("en-US")} {proposal.investment.localCurrency}. USD remains the source price; conversion is indicative.</p>
-            ) : <p>Displayed in the approved USD source currency.</p>}
+            <ProjectInvestment
+              quote={selectedPriceQuote}
+              couponInput={couponInput}
+              couponMessage={couponMessage}
+              countryCode={countryCode}
+              locked={proposalLocked}
+              busy={issuing}
+              onCouponInput={onCouponInput}
+              onApplyCoupon={onApplyCoupon}
+              onRemoveCoupon={onRemoveCoupon}
+              onRetryConversion={onRetryConversion}
+              onConfirm={onConfirmProposal}
+            />
           </section>
 
           <section className="result-card" aria-labelledby="scope-title">
@@ -268,7 +300,7 @@ export function QuizResult({
               ? `Access expires at ${new Date(proposal.expiresAt).toLocaleString("en-US")}.`
               : issueError
                 ? "The roadmap remains available here. Retry sending its protected access details."
-                : "This happens automatically. Your exact 72-hour access period begins after the email is delivered."}</p>
+                : "Your exact 72-hour access period begins only after you confirm and the email is delivered."}</p>
             {issueError ? <p className="quiz-validation" role="alert">{issueError}</p> : null}
           </div>
           {!proposal.expiresAt && issueError ? (

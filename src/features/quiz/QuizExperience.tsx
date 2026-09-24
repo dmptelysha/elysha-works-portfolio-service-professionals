@@ -9,6 +9,7 @@ import { SITE_CONTENT } from "@/data/site-content";
 import { AudienceSelector } from "./AudienceSelector";
 import { BusinessLocationStep } from "./BusinessLocationStep";
 import { calculateRecommendation } from "./cortex";
+import { isCurrencyQuoteFresh } from "./discounts";
 import { fallbackLocation, type CountryOption } from "./countries";
 import { LeadContactStep } from "./LeadContactStep";
 import {
@@ -21,6 +22,7 @@ import {
 import { QUIZ_DEFINITIONS } from "./questions";
 import {
   defaultQuizService,
+  isProposalServiceError,
   type OwnedQuizContext,
   type QuizService,
 } from "./quiz-service";
@@ -53,9 +55,10 @@ function maskDeliveryEmail(email: string | null) {
 
 interface QuizExperienceProps {
   service?: QuizService;
+  now?: () => Date;
 }
 
-export function QuizExperience({ service = defaultQuizService }: QuizExperienceProps = {}) {
+export function QuizExperience({ service = defaultQuizService, now = () => new Date() }: QuizExperienceProps = {}) {
   const [state, dispatch] = useReducer(quizReducer, undefined, createInitialQuizState);
   const [hydrated, setHydrated] = useState(false);
   const [persistenceAvailable, setPersistenceAvailable] = useState(true);
@@ -78,7 +81,6 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
   const createdAtRef = useRef(new Date().toISOString());
   const ownedContextRef = useRef<OwnedQuizContext | null>(null);
   const contextPromiseRef = useRef<Promise<OwnedQuizContext> | null>(null);
-  const autoIssueAttemptedRef = useRef(false);
   const emailVerifiedRef = useRef(false);
   const proposalDialogRef = useRef<HTMLElement>(null);
   const proposalDialogButtonRef = useRef<HTMLButtonElement>(null);
@@ -226,7 +228,6 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     setSyncMessage(null);
     setIssueError(null);
     setProposalDialog(null);
-    autoIssueAttemptedRef.current = false;
     emailVerifiedRef.current = false;
     setDeliveryEmail(null);
     setSetupError(null);
@@ -297,7 +298,6 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     setSyncMessage(null);
     setIssueError(null);
     setProposalDialog(null);
-    autoIssueAttemptedRef.current = false;
     emailVerifiedRef.current = false;
     setDeliveryEmail(null);
     setSetupError(null);
@@ -404,37 +404,77 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
     }
   };
 
+  const refreshQuote = useCallback(async (force = false) => {
+    if (!state.audienceKey || !state.location) return state.location;
+    if (!force && isCurrencyQuoteFresh(state.location.fxRateTimestamp, now())) return state.location;
+    const context = await ensureOwnedContext(state.audienceKey);
+    try {
+      const location = await service.getCurrencyQuote({
+        name: state.location.businessCountry,
+        code: state.location.countryCode,
+        currency: state.location.displayCurrency,
+        symbol: state.location.currencySymbol,
+      });
+      await service.saveOwnedQuizProgress(context, {
+        answers: state.answers,
+        currentStep: QUIZ_DEFINITIONS[state.audienceKey].questions.length,
+        lastCompletedStep: QUIZ_DEFINITIONS[state.audienceKey].questions.length,
+        location,
+      });
+      dispatch({ type: "REFRESH_LOCATION_QUOTE", location });
+      return location;
+    } catch {
+      const location = { ...state.location, fxRate: null, fxRateTimestamp: null };
+      dispatch({ type: "REFRESH_LOCATION_QUOTE", location });
+      setIssueError("Live conversion is unavailable. USD pricing is still ready to confirm.");
+      return location;
+    }
+  }, [ensureOwnedContext, now, service, state.answers, state.audienceKey, state.location]);
+
+  const applyCoupon = useCallback(async () => {
+    if (!state.audienceKey || !state.roadmapSelection || issuing || state.proposalConfirmationStatus !== "editing") return;
+    setIssuing(true);
+    setIssueError(null);
+    try {
+      const context = await ensureOwnedContext(state.audienceKey);
+      const proposal = await service.previewProposal(context, state.roadmapSelection, state.couponInput);
+      dispatch({ type: "COUPON_APPLIED", proposal });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Coupon validation is temporarily unavailable. Please try again.";
+      dispatch({ type: "COUPON_REJECTED", message });
+    } finally {
+      setIssuing(false);
+    }
+  }, [ensureOwnedContext, issuing, service, state.audienceKey, state.couponInput, state.proposalConfirmationStatus, state.roadmapSelection]);
+
   const issueSelectedProposal = useCallback(async () => {
     if (!state.audienceKey || !state.roadmapSelection || issuing) return;
+    const retryingDelivery = state.proposalConfirmationStatus === "delivery_retry_required";
+    if (!retryingDelivery && state.proposalConfirmationStatus !== "editing") return;
+    dispatch({ type: "PROPOSAL_CONFIRMING" });
     setIssuing(true);
     setIssueError(null);
     setProposalDialog("sending");
     try {
       const context = await ensureOwnedContext(state.audienceKey);
-      const issued = await service.issueProposal(context, state.roadmapSelection);
-      dispatch({ type: "PROPOSAL_ISSUED", proposal: issued.proposal });
+      const location = retryingDelivery ? state.location : await refreshQuote();
+      const issued = await service.issueProposal(context, state.roadmapSelection, state.appliedCampaign?.code);
+      dispatch({ type: "PROPOSAL_ISSUED", proposal: issued.proposal, ...(location ? { location } : {}) });
       setProposalDialog("success");
-    } catch {
-      setIssueError("Your roadmap is ready, but we could not send the proposal email. Please try again.");
-      setProposalDialog("error");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The assessment service is temporarily unavailable. Please try again.";
+      setIssueError(message);
+      if (isProposalServiceError(error, "proposal_delivery_failed")) {
+        dispatch({ type: "PROPOSAL_DELIVERY_RETRY_REQUIRED", message });
+        setProposalDialog("error");
+      } else {
+        dispatch({ type: "PROPOSAL_CONFIRMATION_FAILED", message });
+        setProposalDialog(null);
+      }
     } finally {
       setIssuing(false);
     }
-  }, [ensureOwnedContext, issuing, service, state.audienceKey, state.roadmapSelection]);
-
-  useEffect(() => {
-    if (
-      state.screen !== "result"
-      || !state.result
-      || !state.proposal
-      || state.proposal.expiresAt
-      || !state.roadmapSelection
-      || autoIssueAttemptedRef.current
-    ) return;
-
-    autoIssueAttemptedRef.current = true;
-    void issueSelectedProposal();
-  }, [issueSelectedProposal, state.proposal, state.result, state.roadmapSelection, state.screen]);
+  }, [ensureOwnedContext, issuing, refreshQuote, service, state.appliedCampaign?.code, state.audienceKey, state.location, state.proposalConfirmationStatus, state.roadmapSelection]);
 
   useEffect(() => {
     if (!proposalDialog) return;
@@ -611,14 +651,24 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
           </section>
         ) : null}
 
-        {hydrated && state.screen === "result" && state.result ? (
+        {hydrated && state.screen === "result" && state.result && state.roadmapSelection && state.priceQuote ? (
           <QuizResult
             result={state.result}
             proposal={state.proposal ?? undefined}
-            selection={state.roadmapSelection!}
+            selection={state.roadmapSelection}
             onSelect={(selection) => dispatch({ type: "SELECT_ROADMAP", selection })}
             onStartOver={startOver}
             onRetryProposal={issueSelectedProposal}
+            onApplyCoupon={applyCoupon}
+            onCouponInput={(value) => dispatch({ type: "SET_COUPON_INPUT", value })}
+            onRemoveCoupon={() => dispatch({ type: "REMOVE_COUPON" })}
+            onRetryConversion={() => refreshQuote(true).then(() => undefined)}
+            onConfirmProposal={issueSelectedProposal}
+            priceQuote={state.priceQuote}
+            couponInput={state.couponInput}
+            couponMessage={state.couponMessage}
+            countryCode={state.location?.countryCode ?? state.result.location.countryCode}
+            proposalLocked={["confirming", "issued", "delivery_retry_required"].includes(state.proposalConfirmationStatus)}
             issuing={issuing}
             issueError={issueError}
             persistenceAvailable={persistenceAvailable}

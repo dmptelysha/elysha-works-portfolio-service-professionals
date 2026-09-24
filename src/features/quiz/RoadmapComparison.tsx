@@ -13,6 +13,7 @@ interface RoadmapComparisonProps {
   result: CortexResult;
   selection: RoadmapSelection;
   onSelect: (selection: RoadmapSelection) => void;
+  locked?: boolean;
 }
 
 function chooseVariant(variant: RoadmapVariant, tierKey: RoadmapSelection["tierKey"], onSelect: RoadmapComparisonProps["onSelect"]) {
@@ -20,7 +21,7 @@ function chooseVariant(variant: RoadmapVariant, tierKey: RoadmapSelection["tierK
   onSelect({ tierKey, platform: variant.platform, offerKey: variant.offer.offerKey });
 }
 
-export function RoadmapComparison({ result, selection, onSelect }: RoadmapComparisonProps) {
+export function RoadmapComparison({ result, selection, onSelect, locked = false }: RoadmapComparisonProps) {
   const tiers = buildRoadmapTiers(result);
 
   return (
@@ -44,7 +45,7 @@ export function RoadmapComparison({ result, selection, onSelect }: RoadmapCompar
                   <p>{tier.recommended ? "Recommended tier" : "Available tier"}</p>
                   <h3>{tier.label}</h3>
                 </div>
-                {isSelectedTier ? <strong>Your selection</strong> : null}
+                {isSelectedTier ? <strong>{locked ? "Proposal confirmed" : "Your selection"}</strong> : null}
               </div>
               <p className="roadmap-tier-promise">{tier.promise}</p>
               <div className="roadmap-platforms" role="group" aria-label={`${tier.label} platform`}>
@@ -52,7 +53,7 @@ export function RoadmapComparison({ result, selection, onSelect }: RoadmapCompar
                   <button
                     key={variant.platform}
                     type="button"
-                    disabled={!variant.feasibility.available}
+                    disabled={locked || !variant.feasibility.available}
                     aria-pressed={selection.tierKey === tier.tierKey && selection.platform === variant.platform}
                     onClick={() => chooseVariant(variant, tier.tierKey, onSelect)}
                   >
@@ -71,7 +72,7 @@ export function RoadmapComparison({ result, selection, onSelect }: RoadmapCompar
               <button
                 className="roadmap-choose"
                 type="button"
-                disabled={!selectedVariant.feasibility.available}
+                disabled={locked || !selectedVariant.feasibility.available}
                 onClick={() => chooseVariant(selectedVariant, tier.tierKey, onSelect)}
               >
                 {isSelectedTier ? "Selected roadmap" : "Choose this roadmap"}

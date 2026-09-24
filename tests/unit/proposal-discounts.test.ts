@@ -136,6 +136,19 @@ describe("proposal discount quotes", () => {
     });
   });
 
+  it("turns the $1,500 starter price into $750 with PINOYAKO", () => {
+    expect(calculateProjectPriceQuote({
+      originalTotalUsd: 1500,
+      location: { ...ph, fxRate: 58 },
+      campaign: { campaignKey: "pinoyako", code: "PINOYAKO", percentage: 50 },
+    })).toMatchObject({
+      originalTotalUsd: 1500,
+      discountAmountUsd: 750,
+      finalTotalUsd: 750,
+      finalTotalLocal: 43500,
+    });
+  });
+
   it("uses an exact fifteen-minute freshness boundary", () => {
     const now = new Date("2026-09-24T00:15:00.000Z");
     expect(isCurrencyQuoteFresh(ph.fxRateTimestamp, now)).toBe(true);

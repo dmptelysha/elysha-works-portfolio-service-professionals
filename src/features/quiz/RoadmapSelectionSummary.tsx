@@ -1,5 +1,5 @@
 import { resolveRoadmapSelection } from "./roadmap-options";
-import type { CortexResult, PlatformKey, RoadmapSelection } from "./types";
+import type { CortexResult, PlatformKey, ProjectPriceQuote, RoadmapSelection } from "./types";
 
 const platformNames: Record<PlatformKey, string> = {
   systeme_io: "Systeme.io",
@@ -8,7 +8,7 @@ const platformNames: Record<PlatformKey, string> = {
 };
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
-export function RoadmapSelectionSummary({ result, selection }: { result: CortexResult; selection: RoadmapSelection }) {
+export function RoadmapSelectionSummary({ result, selection, quote }: { result: CortexResult; selection: RoadmapSelection; quote?: ProjectPriceQuote }) {
   const selected = resolveRoadmapSelection(result, selection);
   const includedSupport = selected.selectedSupportItems.filter((item) => item.disposition === "included");
 
@@ -39,7 +39,7 @@ export function RoadmapSelectionSummary({ result, selection }: { result: CortexR
           <div className="investment-lines">
             <div><span>{selected.offer.name}</span><strong>{money.format(selected.basePriceUsd)}</strong></div>
             {selected.pricedAddons.map((addon) => <div key={addon.addonKey}><span>{addon.name}</span><strong>{money.format(addon.priceUsd)}</strong></div>)}
-            <div className="investment-total"><span>Planning estimate</span><strong>{money.format(selected.estimatedProjectInvestmentUsd)}{selected.offer.startingPrice ? "+" : ""}</strong></div>
+            <div className="investment-total"><span>Planning estimate</span><strong>{money.format(quote?.finalTotalUsd ?? selected.estimatedProjectInvestmentUsd)}{selected.offer.startingPrice ? "+" : ""}</strong></div>
           </div>
           {selected.scopeReviewItems.length ? (
             <div className="selected-scope-review"><strong>Confirm during scope review</strong><ul>{selected.scopeReviewItems.map((item) => <li key={item.key}>{item.label}</li>)}</ul></div>

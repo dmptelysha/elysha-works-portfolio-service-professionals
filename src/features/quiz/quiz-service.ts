@@ -1,6 +1,8 @@
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { normalizeCouponCode } from "./discounts";
+import { PROPOSAL_SNAPSHOT_VERSION } from "./types";
 
 import type {
   AudienceKey,
@@ -67,6 +69,34 @@ const SERVICE_ERROR = "The assessment service is temporarily unavailable. Please
 const OTP_ERROR = "We could not verify that code. Check it or request a new one.";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export type ProposalServiceErrorCode =
+  | "coupon_invalid"
+  | "coupon_ineligible"
+  | "coupon_exhausted"
+  | "coupon_already_redeemed"
+  | "coupon_temporarily_unavailable"
+  | "proposal_delivery_failed";
+
+const PROPOSAL_ERROR_MESSAGES: Record<ProposalServiceErrorCode, string> = {
+  coupon_invalid: "That coupon code is not valid.",
+  coupon_ineligible: "This coupon is not available for the selected business location.",
+  coupon_exhausted: "This coupon has reached its client limit.",
+  coupon_already_redeemed: "This verified email has already used this coupon.",
+  coupon_temporarily_unavailable: "Coupon validation is temporarily unavailable. Please try again.",
+  proposal_delivery_failed: "Your roadmap is ready, but we could not send the proposal email. Please try again.",
+};
+
+export class ProposalServiceError extends Error {
+  constructor(public readonly code: ProposalServiceErrorCode) {
+    super(PROPOSAL_ERROR_MESSAGES[code]);
+    this.name = "ProposalServiceError";
+  }
+}
+
+export function isProposalServiceError(error: unknown, code?: ProposalServiceErrorCode): error is ProposalServiceError {
+  return error instanceof ProposalServiceError && (!code || error.code === code);
+}
+
 export const EMAIL_OTP_MODE = "custom_make_otp" as const;
 
 function clientOrDefault(client?: SupabaseClient): SupabaseClient {
@@ -80,6 +110,62 @@ function requireUuid(value: unknown): string {
 
 function safeServiceError(): Error {
   return new Error(SERVICE_ERROR);
+}
+
+function validCampaign(value: unknown): boolean {
+  if (value === null) return true;
+  if (!value || typeof value !== "object") return false;
+  const campaign = value as Record<string, unknown>;
+  return (
+    campaign.campaignKey === "pinoyako" && campaign.code === "PINOYAKO" && campaign.percentage === 50
+  ) || (
+    campaign.campaignKey === "earlybirdworks" && campaign.code === "EARLYBIRDWORKS" && campaign.percentage === 15
+  );
+}
+
+function parseProposal<T extends ProposalDraftViewModel | ProposalViewModel>(value: unknown): T {
+  if (!value || typeof value !== "object") throw safeServiceError();
+  const proposal = value as Record<string, unknown>;
+  const quote = proposal.investment as Record<string, unknown> | null;
+  const selection = proposal.selection as Record<string, unknown> | null;
+  if (
+    proposal.proposalSnapshotVersion !== PROPOSAL_SNAPSHOT_VERSION || !quote || !selection ||
+    !["basic", "advanced", "complete"].includes(String(selection.tierKey)) ||
+    !["systeme_io", "gohighlevel", "custom_app"].includes(String(selection.platform)) ||
+    typeof selection.offerKey !== "string" || !selection.offerKey ||
+    !["originalTotalUsd", "discountAmountUsd", "finalTotalUsd"].every((key) => (
+      typeof quote[key] === "number" && Number.isFinite(quote[key]) && Number(quote[key]) >= 0
+    )) ||
+    Math.round((Number(quote.discountAmountUsd) + Number(quote.finalTotalUsd)) * 100) !== Math.round(Number(quote.originalTotalUsd) * 100) ||
+    typeof quote.localCurrency !== "string" || !/^[A-Z]{3}$/.test(quote.localCurrency) ||
+    typeof quote.localSymbol !== "string" ||
+    !(quote.finalTotalLocal === null || (typeof quote.finalTotalLocal === "number" && Number.isFinite(quote.finalTotalLocal) && quote.finalTotalLocal >= 0)) ||
+    !(quote.fxRate === null || (typeof quote.fxRate === "number" && Number.isFinite(quote.fxRate) && quote.fxRate > 0)) ||
+    !(quote.fxRateTimestamp === null || (typeof quote.fxRateTimestamp === "string" && Number.isFinite(Date.parse(quote.fxRateTimestamp)))) ||
+    !validCampaign(quote.campaign)
+  ) throw safeServiceError();
+  return value as T;
+}
+
+async function throwProposalFailure(response: { data: unknown; error: unknown }): Promise<never> {
+  let code = response.data && typeof response.data === "object" && "error" in response.data
+    ? (response.data as { error?: unknown }).error
+    : undefined;
+  const context = response.error && typeof response.error === "object" && "context" in response.error
+    ? (response.error as { context?: unknown }).context
+    : undefined;
+  if (typeof code !== "string" && context instanceof Response) {
+    try {
+      const body = await context.clone().json() as { error?: unknown };
+      code = body.error;
+    } catch {
+      code = undefined;
+    }
+  }
+  if (typeof code === "string" && code in PROPOSAL_ERROR_MESSAGES) {
+    throw new ProposalServiceError(code as ProposalServiceErrorCode);
+  }
+  throw safeServiceError();
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -347,29 +433,42 @@ export async function saveOwnedQuizProgress(
 
 export async function previewProposal(
   context: OwnedQuizContext,
+  selection?: RoadmapSelection,
+  couponCode?: string,
   client?: SupabaseClient,
 ): Promise<ProposalDraftViewModel> {
+  const normalizedCoupon = couponCode ? normalizeCouponCode(couponCode) : "";
   const response = await clientOrDefault(client).functions.invoke("finalize-proposal", {
-    body: { operation: "preview", quizSessionId: requireUuid(context.quizSessionId) },
+    body: {
+      operation: "preview",
+      quizSessionId: requireUuid(context.quizSessionId),
+      ...(selection ? { selection: { tierKey: selection.tierKey, platform: selection.platform } } : {}),
+      ...(normalizedCoupon ? { couponCode: normalizedCoupon } : {}),
+    },
   });
-  if (response.error || !response.data?.proposal) throw safeServiceError();
-  return response.data.proposal as ProposalDraftViewModel;
+  if (response.error || !response.data?.proposal) return throwProposalFailure(response);
+  return parseProposal<ProposalDraftViewModel>(response.data.proposal);
 }
 
 export async function issueProposal(
   context: OwnedQuizContext,
   selection: RoadmapSelection,
+  couponCode?: string,
   client?: SupabaseClient,
 ): Promise<{ proposal: ProposalViewModel; proposalReference: string }> {
+  const normalizedCoupon = couponCode ? normalizeCouponCode(couponCode) : "";
   const response = await clientOrDefault(client).functions.invoke("finalize-proposal", {
     body: {
       operation: "issue",
       quizSessionId: requireUuid(context.quizSessionId),
       selection: { tierKey: selection.tierKey, platform: selection.platform },
+      ...(normalizedCoupon ? { couponCode: normalizedCoupon } : {}),
     },
   });
-  if (response.error || !response.data?.proposal) throw safeServiceError();
-  return response.data as { proposal: ProposalViewModel; proposalReference: string };
+  if (response.error || !response.data?.proposal) return throwProposalFailure(response);
+  const data = response.data as { proposal: unknown; proposalReference?: unknown };
+  if (typeof data.proposalReference !== "string" || !UUID_PATTERN.test(data.proposalReference)) throw safeServiceError();
+  return { proposal: parseProposal<ProposalViewModel>(data.proposal), proposalReference: data.proposalReference };
 }
 
 export const defaultQuizService: QuizService = {

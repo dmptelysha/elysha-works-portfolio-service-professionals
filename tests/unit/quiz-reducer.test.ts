@@ -11,14 +11,27 @@ import {
 } from "@/features/quiz/types";
 
 const result = {
+  audienceKey: "coaches_educators",
   recommendedSolutionTitle: "Enrollment Funnel",
   recommendedOfferKey: "platform_growth",
   recommendedPlatform: "systeme_io",
   recommendedBuildRoute: "platform",
   technicalConstraintSignals: [],
   selectedSupportOptionKeys: [],
+  location: {
+    businessCountry: "Philippines", countryCode: "PH", displayCurrency: "PHP", currencySymbol: "₱",
+    fxRate: 58, fxRateTimestamp: "2026-09-23T00:00:00.000Z",
+  },
 } as unknown as CortexResult;
-const proposal = { expiresAt: null } as unknown as ProposalDraftViewModel;
+const proposal = {
+  expiresAt: null,
+  selection: { tierKey: "advanced", platform: "systeme_io", offerKey: "platform_growth" },
+  investment: {
+    basePriceUsd: 2500, originalTotalUsd: 2500, discountAmountUsd: 0, finalTotalUsd: 2500,
+    localCurrency: "PHP", localSymbol: "₱", finalTotalLocal: 145000, fxRate: 58,
+    fxRateTimestamp: "2026-09-23T00:00:00.000Z", campaign: null,
+  },
+} as unknown as ProposalDraftViewModel;
 const saved = {
   storageVersion: 4,
   cortexVersion: CORTEX_VERSION,
@@ -215,5 +228,50 @@ describe("quiz reducer", () => {
     expect(state.roadmapSelection).toEqual({ tierKey: "basic", platform: "custom_app", offerKey: "custom_starter" });
     state = quizReducer(state, { type: "START_OVER" });
     expect(state.roadmapSelection).toBeNull();
+  });
+
+  it("recalculates a validated discount when the roadmap changes and locks after confirmation", () => {
+    const discounted = {
+      ...proposal,
+      investment: {
+        ...proposal.investment,
+        discountAmountUsd: 1250,
+        finalTotalUsd: 1250,
+        finalTotalLocal: 72500,
+        campaign: { campaignKey: "pinoyako", code: "PINOYAKO", percentage: 50 } as const,
+      },
+    } as ProposalDraftViewModel;
+    let state = quizReducer({ ...createInitialQuizState(), screen: "calculating" }, {
+      type: "CALCULATION_SUCCESS", result, proposal,
+    });
+    state = quizReducer(state, { type: "SET_COUPON_INPUT", value: " pinoyako " });
+    expect(state.couponInput).toBe(" pinoyako ");
+    state = quizReducer(state, { type: "COUPON_APPLIED", proposal: discounted });
+    expect(state.appliedCampaign?.code).toBe("PINOYAKO");
+    state = quizReducer(state, {
+      type: "SELECT_ROADMAP",
+      selection: { tierKey: "basic", platform: "systeme_io", offerKey: "platform_launch" },
+    });
+    expect(state.priceQuote).toMatchObject({ originalTotalUsd: 1500, finalTotalUsd: 750, finalTotalLocal: 43500 });
+    state = quizReducer(state, { type: "PROPOSAL_CONFIRMING" });
+    expect(state.proposalConfirmationStatus).toBe("confirming");
+    const duplicate = quizReducer(state, { type: "PROPOSAL_CONFIRMING" });
+    expect(duplicate).toBe(state);
+    state = quizReducer(state, { type: "PROPOSAL_CONFIRMATION_FAILED", message: "Try again" });
+    expect(state.proposalConfirmationStatus).toBe("editing");
+  });
+
+  it("locks a delivery retry and clears all coupon state on reset", () => {
+    let state = quizReducer({ ...createInitialQuizState(), screen: "calculating" }, {
+      type: "CALCULATION_SUCCESS", result, proposal,
+    });
+    state = quizReducer(state, { type: "PROPOSAL_CONFIRMING" });
+    state = quizReducer(state, { type: "PROPOSAL_DELIVERY_RETRY_REQUIRED", message: "Retry delivery" });
+    const locked = quizReducer(state, {
+      type: "SELECT_ROADMAP",
+      selection: { tierKey: "basic", platform: "custom_app", offerKey: "custom_starter" },
+    });
+    expect(locked).toBe(state);
+    expect(quizReducer(state, { type: "START_OVER" })).toEqual(createInitialQuizState());
   });
 });

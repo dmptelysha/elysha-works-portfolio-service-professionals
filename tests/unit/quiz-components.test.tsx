@@ -7,7 +7,7 @@ import { calculateRecommendation } from "@/features/quiz/cortex";
 import { calculateProjectPriceQuote } from "@/features/quiz/discounts";
 import { InlineEmailVerification } from "@/features/quiz/InlineEmailVerification";
 import { LeadContactStep } from "@/features/quiz/LeadContactStep";
-import type { OwnedQuizContext } from "@/features/quiz/quiz-service";
+import { ProposalServiceError, type OwnedQuizContext } from "@/features/quiz/quiz-service";
 import { QUIZ_DEFINITIONS } from "@/features/quiz/questions";
 import { QUIZ_STORAGE_KEY, QUIZ_TTL_MS } from "@/features/quiz/persistence";
 import { buildProposalDraft } from "@/features/quiz/proposal-view";
@@ -17,6 +17,7 @@ import {
   CORTEX_VERSION,
   QUESTION_SET_VERSION,
   type CustomEmailOtpChallenge,
+  type BusinessLocation,
   type LeadContactInput,
   type LeadContactSubmissionResult,
   type SavedQuizAttempt,
@@ -64,6 +65,7 @@ const ownedContext: OwnedQuizContext = {
 
 function createFakeQuizService() {
   let answers: Record<string, readonly string[]> = {};
+  let savedLocation: BusinessLocation | undefined;
   let identity = { firstName: "Mara", businessName: "Mara Consulting" };
   const createOwnedQuizContext = vi.fn(async (audienceKey: typeof ownedContext.audienceKey) => ({ ...ownedContext, audienceKey }));
   const submitLeadContact = vi.fn(async (
@@ -74,23 +76,36 @@ function createFakeQuizService() {
     identity = { firstName: contact.firstName, businessName: contact.businessName };
     return { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId };
   });
-  const saveOwnedQuizProgress = vi.fn(async (_context: OwnedQuizContext, progress: { answers: Record<string, readonly string[]> }) => {
+  const saveOwnedQuizProgress = vi.fn(async (_context: OwnedQuizContext, progress: { answers: Record<string, readonly string[]>; location?: BusinessLocation | null }) => {
     answers = progress.answers;
+    if (progress.location) savedLocation = progress.location;
   });
-  const previewProposal = vi.fn(async (context: OwnedQuizContext) => {
-    const result = calculateRecommendation({ audienceKey: context.audienceKey, answers });
-    const selection = defaultRoadmapSelection(result);
+  const previewProposal = vi.fn(async (context: OwnedQuizContext, requestedSelection?: Parameters<typeof resolveRoadmapSelection>[1], couponCode?: string) => {
+    const result = calculateRecommendation({ audienceKey: context.audienceKey, answers, location: savedLocation });
+    const selection = requestedSelection ?? defaultRoadmapSelection(result);
+    const campaign = couponCode?.trim().toUpperCase() === "PINOYAKO"
+      ? { campaignKey: "pinoyako", code: "PINOYAKO", percentage: 50 } as const
+      : couponCode?.trim().toUpperCase() === "EARLYBIRDWORKS"
+        ? { campaignKey: "earlybirdworks", code: "EARLYBIRDWORKS", percentage: 15 } as const
+        : null;
     const quote = calculateProjectPriceQuote({
       originalTotalUsd: resolveRoadmapSelection(result, selection).estimatedProjectInvestmentUsd,
       location: result.location,
+      campaign,
     });
     return buildProposalDraft(identity, answers, result, selection, quote);
   });
-  const issueProposal = vi.fn(async (context: OwnedQuizContext, selection: { tierKey: "basic" | "advanced" | "complete"; platform: "systeme_io" | "gohighlevel" | "custom_app"; offerKey: string }) => {
-    const result = calculateRecommendation({ audienceKey: context.audienceKey, answers });
+  const issueProposal = vi.fn(async (context: OwnedQuizContext, selection: { tierKey: "basic" | "advanced" | "complete"; platform: "systeme_io" | "gohighlevel" | "custom_app"; offerKey: string }, couponCode?: string) => {
+    const result = calculateRecommendation({ audienceKey: context.audienceKey, answers, location: savedLocation });
+    const campaign = couponCode === "PINOYAKO"
+      ? { campaignKey: "pinoyako", code: "PINOYAKO", percentage: 50 } as const
+      : couponCode === "EARLYBIRDWORKS"
+        ? { campaignKey: "earlybirdworks", code: "EARLYBIRDWORKS", percentage: 15 } as const
+        : null;
     const quote = calculateProjectPriceQuote({
       originalTotalUsd: resolveRoadmapSelection(result, selection).estimatedProjectInvestmentUsd,
       location: result.location,
+      campaign,
     });
     return {
       proposalReference: "70000000-0000-4000-8000-000000000001",
@@ -114,9 +129,9 @@ function createFakeQuizService() {
     businessCountry: "Philippines",
     countryCode: "PH",
     displayCurrency: "PHP",
-    currencySymbol: "PHP",
+    currencySymbol: "₱",
     fxRate: 58,
-    fxRateTimestamp: "2026-09-23T00:00:00.000Z",
+    fxRateTimestamp: "2026-09-24T00:00:00.000Z",
   }));
   return { getCurrencyQuote, requestEmailOtp, verifyEmailOtp, createOwnedQuizContext, submitLeadContact, saveOwnedQuizProgress, previewProposal, issueProposal };
 }
@@ -589,7 +604,7 @@ describe("local portfolio quiz", () => {
     expect(screen.getByLabelText(/^email/i)).toHaveValue("Mara@Example.com");
   });
 
-  it("automatically issues and confirms the emailed proposal after calculation", async () => {
+  it("waits for explicit confirmation before issuing the emailed proposal", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
     render(<QuizExperience service={service} />);
@@ -608,9 +623,12 @@ describe("local portfolio quiz", () => {
 
     await waitFor(() => expect(service.previewProposal).toHaveBeenCalledWith(expect.objectContaining({ quizSessionId: ownedContext.quizSessionId })));
     expect(service.saveOwnedQuizProgress).toHaveBeenCalled();
+    expect(service.issueProposal).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
     await waitFor(() => expect(service.issueProposal).toHaveBeenCalledWith(
       expect.objectContaining({ quizSessionId: ownedContext.quizSessionId }),
       expect.objectContaining({ tierKey: expect.any(String), platform: expect.any(String) }),
+      undefined,
     ));
     const issuePayload = service.issueProposal.mock.calls[0][1];
     expect(Object.keys(issuePayload).sort()).toEqual(["offerKey", "platform", "tierKey"]);
@@ -623,6 +641,49 @@ describe("local portfolio quiz", () => {
     expect(screen.queryByRole("dialog", { name: /your proposal is ready/i })).not.toBeInTheDocument();
   });
 
+  it("applies PINOYAKO to the selected tier and updates USD and PHP pricing", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.000Z")} />);
+    await completeServiceBusinessAssessment(user);
+
+    const basicCard = (await screen.findByRole("heading", { name: /^basic$/i })).closest("article")!;
+    await user.click(within(basicCard).getByRole("button", { name: /^systeme\.io$/i }));
+    await user.type(screen.getByLabelText(/coupon code/i), "pinoyako");
+    await user.click(screen.getByRole("button", { name: /apply coupon/i }));
+
+    await waitFor(() => expect(document.querySelector("del")).not.toBeNull());
+    expect(document.querySelector("del")?.textContent).toBe("$2,000");
+    expect(screen.getByText("$1,000 USD")).toBeInTheDocument();
+    expect(screen.getByText(/you save \$1,000 · 50% off/i)).toBeInTheDocument();
+    expect(screen.getByText(/approximately ₱58,000 PHP/i)).toBeInTheDocument();
+    expect(service.previewProposal).toHaveBeenLastCalledWith(
+      expect.anything(),
+      { tierKey: "basic", platform: "systeme_io", offerKey: "platform_launch" },
+      "pinoyako",
+    );
+  });
+
+  it.each([
+    ["2026-09-24T00:15:00.000Z", 0],
+    ["2026-09-24T00:15:00.001Z", 1],
+  ])("refreshes FX only after the exact 15-minute boundary at %s", async (timestamp, expectedCalls) => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} now={() => new Date(timestamp)} />);
+    await completeServiceBusinessAssessment(user);
+    service.getCurrencyQuote.mockClear();
+    service.saveOwnedQuizProgress.mockClear();
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
+    await waitFor(() => expect(service.issueProposal).toHaveBeenCalledOnce());
+    expect(service.getCurrencyQuote).toHaveBeenCalledTimes(expectedCalls);
+    if (expectedCalls) {
+      expect(service.saveOwnedQuizProgress).toHaveBeenCalled();
+      expect(service.getCurrencyQuote.mock.invocationCallOrder[0]).toBeLessThan(service.issueProposal.mock.invocationCallOrder[0]);
+      expect(service.saveOwnedQuizProgress.mock.invocationCallOrder[0]).toBeLessThan(service.issueProposal.mock.invocationCallOrder[0]);
+    }
+  });
+
   it("keeps an undismissable sending dialog open until durable delivery succeeds", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
@@ -632,6 +693,7 @@ describe("local portfolio quiz", () => {
     render(<QuizExperience service={service} />);
 
     await completeServiceBusinessAssessment(user);
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
 
     const sendingDialog = await screen.findByRole("dialog", { name: /preparing and sending your proposal/i });
     expect(within(sendingDialog).getByText(/keep this page open/i)).toBeInTheDocument();
@@ -649,14 +711,15 @@ describe("local portfolio quiz", () => {
     expect(within(successDialog).getByRole("link", { name: /book a discovery call/i })).toHaveAttribute("href", "/booking/");
   });
 
-  it("keeps the roadmap visible and allows a failed automatic email to be retried", async () => {
+  it("keeps the roadmap visible and allows an ambiguous delivery failure to be retried", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
     const successfulIssue = service.issueProposal.getMockImplementation()!;
-    service.issueProposal.mockRejectedValueOnce(new Error("Email delivery unavailable"));
+    service.issueProposal.mockRejectedValueOnce(new ProposalServiceError("proposal_delivery_failed"));
     render(<QuizExperience service={service} />);
 
     await completeServiceBusinessAssessment(user);
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
 
     const errorDialog = await screen.findByRole("dialog", { name: /roadmap is ready, but the email was not sent/i });
     expect(screen.getByRole("heading", { name: /mara.*roadmap/i })).toBeInTheDocument();

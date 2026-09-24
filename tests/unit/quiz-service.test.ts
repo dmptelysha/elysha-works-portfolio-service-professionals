@@ -11,8 +11,9 @@ import {
   submitCustomVerifiedLeadContact,
   verifyCustomEmailOtp,
   type OwnedQuizContext,
+  ProposalServiceError,
 } from "@/features/quiz/quiz-service";
-import type { LeadContactInput } from "@/features/quiz/types";
+import { PROPOSAL_SNAPSHOT_VERSION, type LeadContactInput } from "@/features/quiz/types";
 
 const USER_ID = "10000000-0000-4000-8000-000000000001";
 const DEFINITION_ID = "20000000-0000-4000-8000-000000000001";
@@ -21,6 +22,27 @@ const PORTFOLIO_SESSION_ID = "40000000-0000-4000-8000-000000000001";
 const QUIZ_SESSION_ID = "50000000-0000-4000-8000-000000000001";
 const LEAD_ID = "60000000-0000-4000-8000-000000000001";
 const CHALLENGE_ID = "70000000-0000-4000-8000-000000000001";
+const PROPOSAL_REFERENCE = "80000000-0000-4000-8000-000000000001";
+
+function proposal(expiresAt: string | null = null) {
+  return {
+    proposalSnapshotVersion: PROPOSAL_SNAPSHOT_VERSION,
+    expiresAt,
+    selection: { tierKey: "basic", platform: "systeme_io", offerKey: "platform_starter" },
+    investment: {
+      basePriceUsd: 1500,
+      originalTotalUsd: 1500,
+      discountAmountUsd: 750,
+      finalTotalUsd: 750,
+      localCurrency: "PHP",
+      localSymbol: "₱",
+      finalTotalLocal: 43500,
+      fxRate: 58,
+      fxRateTimestamp: "2026-09-24T00:00:00.000Z",
+      campaign: { campaignKey: "pinoyako", code: "PINOYAKO", percentage: 50 },
+    },
+  };
+}
 
 function thenableBuilder(
   response: { data: unknown; error: unknown },
@@ -74,7 +96,9 @@ function fakeClient(options: {
     data: [{ submission_status: "accepted", lead_id: LEAD_ID, quiz_session_id: QUIZ_SESSION_ID, existing_business_name: null }],
     error: null,
   });
-  const invoke = vi.fn(async () => options.functionResponse ?? { data: { proposal: { expiresAt: null } }, error: null });
+  const invoke = vi.fn(async () => options.functionResponse ?? {
+    data: { proposal: proposal(), proposalReference: PROPOSAL_REFERENCE }, error: null,
+  });
   return {
     client: {
       auth: { getSession, signInAnonymously, signInWithOtp, verifyOtp },
@@ -366,10 +390,10 @@ describe("Supabase quiz service", () => {
 
   it("calls proposal preview and issue with minimal browser-controlled payloads", async () => {
     const fake = fakeClient();
-    await previewProposal(context, fake.client as never);
+    await previewProposal(context, undefined, " ", fake.client as never);
     await issueProposal(context, {
       tierKey: "advanced", platform: "gohighlevel", offerKey: "platform_growth",
-    }, fake.client as never);
+    }, " pinoyako ", fake.client as never);
 
     expect(fake.invoke).toHaveBeenNthCalledWith(1, "finalize-proposal", {
       body: { operation: "preview", quizSessionId: QUIZ_SESSION_ID },
@@ -379,9 +403,37 @@ describe("Supabase quiz service", () => {
         operation: "issue",
         quizSessionId: QUIZ_SESSION_ID,
         selection: { tierKey: "advanced", platform: "gohighlevel" },
+        couponCode: "PINOYAKO",
       },
     });
     expect(JSON.stringify(fake.invoke.mock.calls)).not.toMatch(/score|price|ownerUserId|offerKey/i);
+  });
+
+  it("includes a selected roadmap in preview and rejects malformed V2 pricing", async () => {
+    const fake = fakeClient({ functionResponse: { data: { proposal: { ...proposal(), investment: { finalTotalUsd: 1 } } }, error: null } });
+    await expect(previewProposal(context, {
+      tierKey: "basic", platform: "systeme_io", offerKey: "platform_starter",
+    }, "earlybirdworks", fake.client as never)).rejects.toThrow("temporarily unavailable");
+    expect(fake.invoke).toHaveBeenCalledWith("finalize-proposal", { body: {
+      operation: "preview",
+      quizSessionId: QUIZ_SESSION_ID,
+      selection: { tierKey: "basic", platform: "systeme_io" },
+      couponCode: "EARLYBIRDWORKS",
+    } });
+  });
+
+  it.each([
+    ["coupon_invalid", "That coupon code is not valid."],
+    ["coupon_ineligible", "This coupon is not available for the selected business location."],
+    ["coupon_exhausted", "This coupon has reached its client limit."],
+    ["coupon_already_redeemed", "This verified email has already used this coupon."],
+    ["coupon_temporarily_unavailable", "Coupon validation is temporarily unavailable. Please try again."],
+    ["proposal_delivery_failed", "Your roadmap is ready, but we could not send the proposal email. Please try again."],
+  ])("maps %s to safe public copy", async (code, message) => {
+    const fake = fakeClient({ functionResponse: { data: { error: code }, error: { message: "private details" } } });
+    const failure = await previewProposal(context, undefined, undefined, fake.client as never).catch((error) => error);
+    expect(failure).toBeInstanceOf(ProposalServiceError);
+    expect(failure).toMatchObject({ code, message });
   });
 
   it("returns a generic safe error without leaking credentials or contact PII", async () => {

@@ -1,4 +1,5 @@
 import { QUIZ_DEFINITIONS } from "./questions";
+import { calculateProjectPriceQuote } from "./discounts";
 import { defaultRoadmapSelection, resolveRoadmapSelection } from "./roadmap-options";
 import type {
   AudienceKey,
@@ -10,10 +11,14 @@ import type {
   LeadIdentityInput,
   ProposalDraftViewModel,
   ProposalViewModel,
+  ProjectPriceQuote,
   QuizAnswers,
   RoadmapSelection,
   SavedQuizAttempt,
+  ValidatedDiscountCampaign,
 } from "./types";
+
+export type ProposalConfirmationStatus = "editing" | "confirming" | "issued" | "delivery_retry_required";
 
 export type QuizScreen =
   | "audience"
@@ -42,6 +47,11 @@ export interface QuizState {
   existingBusinessName: string | null;
   clientIdentity: ClientIdentity | null;
   proposal: ProposalDraftViewModel | ProposalViewModel | null;
+  couponInput: string;
+  appliedCampaign: ValidatedDiscountCampaign | null;
+  priceQuote: ProjectPriceQuote | null;
+  proposalConfirmationStatus: ProposalConfirmationStatus;
+  couponMessage: string | null;
   errorMessage: string | null;
   validationMessage: string | null;
   resumeCandidate: SavedQuizAttempt | null;
@@ -67,7 +77,15 @@ export type QuizAction =
   | { type: "NEXT" }
   | { type: "BACK" }
   | { type: "CALCULATION_SUCCESS"; result: CortexResult; proposal: ProposalDraftViewModel }
-  | { type: "PROPOSAL_ISSUED"; proposal: ProposalViewModel }
+  | { type: "SET_COUPON_INPUT"; value: string }
+  | { type: "COUPON_APPLIED"; proposal: ProposalDraftViewModel }
+  | { type: "COUPON_REJECTED"; message: string }
+  | { type: "REMOVE_COUPON" }
+  | { type: "PROPOSAL_CONFIRMING" }
+  | { type: "PROPOSAL_ISSUED"; proposal: ProposalViewModel; location?: BusinessLocation }
+  | { type: "PROPOSAL_CONFIRMATION_FAILED"; message: string }
+  | { type: "PROPOSAL_DELIVERY_RETRY_REQUIRED"; message: string }
+  | { type: "REFRESH_LOCATION_QUOTE"; location: BusinessLocation }
   | { type: "SELECT_ROADMAP"; selection: RoadmapSelection }
   | { type: "CALCULATION_FAILURE"; message: string }
   | { type: "RETRY_CALCULATION" };
@@ -88,6 +106,11 @@ export function createInitialQuizState(): QuizState {
     existingBusinessName: null,
     clientIdentity: null,
     proposal: null,
+    couponInput: "",
+    appliedCampaign: null,
+    priceQuote: null,
+    proposalConfirmationStatus: "editing",
+    couponMessage: null,
     errorMessage: null,
     validationMessage: null,
     resumeCandidate: null,
@@ -119,6 +142,11 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         existingBusinessName: null,
         clientIdentity: null,
         proposal: null,
+        couponInput: "",
+        appliedCampaign: null,
+        priceQuote: null,
+        proposalConfirmationStatus: "editing",
+        couponMessage: null,
         errorMessage: null,
         validationMessage: null,
         resumeCandidate: null,
@@ -277,16 +305,96 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         result: action.result,
         proposal: action.proposal,
         roadmapSelection: defaultRoadmapSelection(action.result),
+        couponInput: action.proposal.investment.campaign?.code ?? "",
+        appliedCampaign: action.proposal.investment.campaign,
+        priceQuote: action.proposal.investment,
+        proposalConfirmationStatus: "editing",
+        couponMessage: null,
         errorMessage: null,
       };
+    case "SET_COUPON_INPUT":
+      if (state.proposalConfirmationStatus !== "editing") return state;
+      return { ...state, couponInput: action.value, couponMessage: null };
+    case "COUPON_APPLIED":
+      if (state.proposalConfirmationStatus !== "editing") return state;
+      return {
+        ...state,
+        proposal: action.proposal,
+        roadmapSelection: action.proposal.selection,
+        appliedCampaign: action.proposal.investment.campaign,
+        priceQuote: action.proposal.investment,
+        couponInput: action.proposal.investment.campaign?.code ?? state.couponInput,
+        couponMessage: action.proposal.investment.campaign
+          ? `${action.proposal.investment.campaign.percentage}% discount applied.`
+          : null,
+      };
+    case "COUPON_REJECTED":
+      if (state.proposalConfirmationStatus !== "editing") return state;
+      return { ...state, couponMessage: action.message };
+    case "REMOVE_COUPON": {
+      if (state.proposalConfirmationStatus !== "editing" || !state.result || !state.roadmapSelection) return state;
+      const variant = resolveRoadmapSelection(state.result, state.roadmapSelection);
+      const location = state.location ?? state.result.location;
+      return {
+        ...state,
+        couponInput: "",
+        appliedCampaign: null,
+        couponMessage: "Coupon removed.",
+        priceQuote: calculateProjectPriceQuote({
+          originalTotalUsd: variant.estimatedProjectInvestmentUsd,
+          location,
+        }),
+      };
+    }
+    case "PROPOSAL_CONFIRMING":
+      if (state.proposalConfirmationStatus !== "editing") return state;
+      return { ...state, proposalConfirmationStatus: "confirming", couponMessage: null };
     case "PROPOSAL_ISSUED":
       if (state.screen !== "result") return state;
-      return { ...state, proposal: action.proposal };
+      return {
+        ...state,
+        proposal: action.proposal,
+        location: action.location ?? state.location,
+        roadmapSelection: action.proposal.selection,
+        appliedCampaign: action.proposal.investment.campaign,
+        priceQuote: action.proposal.investment,
+        couponInput: action.proposal.investment.campaign?.code ?? "",
+        proposalConfirmationStatus: "issued",
+        couponMessage: "Proposal confirmed.",
+      };
+    case "PROPOSAL_CONFIRMATION_FAILED":
+      if (state.proposalConfirmationStatus !== "confirming") return state;
+      return { ...state, proposalConfirmationStatus: "editing", couponMessage: action.message };
+    case "PROPOSAL_DELIVERY_RETRY_REQUIRED":
+      if (state.proposalConfirmationStatus !== "confirming") return state;
+      return { ...state, proposalConfirmationStatus: "delivery_retry_required", couponMessage: action.message };
+    case "REFRESH_LOCATION_QUOTE": {
+      if (!state.result || !state.roadmapSelection || state.proposalConfirmationStatus === "issued") return state;
+      const variant = resolveRoadmapSelection(state.result, state.roadmapSelection);
+      return {
+        ...state,
+        location: action.location,
+        priceQuote: calculateProjectPriceQuote({
+          originalTotalUsd: variant.estimatedProjectInvestmentUsd,
+          location: action.location,
+          campaign: state.appliedCampaign,
+        }),
+      };
+    }
     case "SELECT_ROADMAP":
-      if (!state.result) return state;
+      if (!state.result || state.proposalConfirmationStatus !== "editing") return state;
       try {
-        resolveRoadmapSelection(state.result, action.selection);
-        return { ...state, roadmapSelection: action.selection };
+        const variant = resolveRoadmapSelection(state.result, action.selection);
+        return {
+          ...state,
+          roadmapSelection: action.selection,
+          priceQuote: calculateProjectPriceQuote({
+            originalTotalUsd: variant.estimatedProjectInvestmentUsd,
+            location: state.location ?? state.result.location,
+            campaign: state.appliedCampaign,
+          }),
+          couponMessage: null,
+        };
       } catch {
         return state;
       }
