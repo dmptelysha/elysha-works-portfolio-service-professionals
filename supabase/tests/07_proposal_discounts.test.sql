@@ -109,6 +109,15 @@ select throws_ok(
   'the catch-all ZZ country is not eligible'
 );
 
+select throws_ok(
+  $$select * from public.reserve_proposal_discount(
+    '95000000-0000-4000-8000-000000000001', 'PINOYAKO', repeat('1',64),
+    1500, 100, 1400, now()
+  )$$,
+  'P0001', 'coupon_invalid',
+  'reservation rejects internally consistent totals that do not match the campaign percentage'
+);
+
 select lives_ok(
   $$select * from public.reserve_proposal_discount(
     '95000000-0000-4000-8000-000000000001', 'PINOYAKO', repeat('1',64),

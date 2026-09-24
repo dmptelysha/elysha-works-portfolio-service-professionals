@@ -669,6 +669,7 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
             couponMessage={state.couponMessage}
             countryCode={state.location?.countryCode ?? state.result.location.countryCode}
             proposalLocked={["confirming", "issued", "delivery_retry_required"].includes(state.proposalConfirmationStatus)}
+            deliveryRetryRequired={state.proposalConfirmationStatus === "delivery_retry_required"}
             issuing={issuing}
             issueError={issueError}
             persistenceAvailable={persistenceAvailable}

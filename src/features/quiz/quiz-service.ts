@@ -123,13 +123,23 @@ function validCampaign(value: unknown): boolean {
   );
 }
 
-function parseProposal<T extends ProposalDraftViewModel | ProposalViewModel>(value: unknown): T {
+function parseProposal<T extends ProposalDraftViewModel | ProposalViewModel>(value: unknown, mode: "draft" | "issued"): T {
   if (!value || typeof value !== "object") throw safeServiceError();
   const proposal = value as Record<string, unknown>;
   const quote = proposal.investment as Record<string, unknown> | null;
   const selection = proposal.selection as Record<string, unknown> | null;
+  const fxTupleValid = quote && (
+    quote.fxRate === null && quote.fxRateTimestamp === null && quote.finalTotalLocal === null
+  ) || Boolean(quote &&
+    typeof quote.fxRate === "number" && Number.isFinite(quote.fxRate) && quote.fxRate > 0 &&
+    typeof quote.fxRateTimestamp === "string" && Number.isFinite(Date.parse(quote.fxRateTimestamp)) &&
+    typeof quote.finalTotalLocal === "number" && Number.isFinite(quote.finalTotalLocal) && quote.finalTotalLocal >= 0
+  );
   if (
     proposal.proposalSnapshotVersion !== PROPOSAL_SNAPSHOT_VERSION || !quote || !selection ||
+    (mode === "draft"
+      ? proposal.expiresAt !== null
+      : typeof proposal.expiresAt !== "string" || !Number.isFinite(Date.parse(proposal.expiresAt))) ||
     !["basic", "advanced", "complete"].includes(String(selection.tierKey)) ||
     !["systeme_io", "gohighlevel", "custom_app"].includes(String(selection.platform)) ||
     typeof selection.offerKey !== "string" || !selection.offerKey ||
@@ -139,11 +149,14 @@ function parseProposal<T extends ProposalDraftViewModel | ProposalViewModel>(val
     Math.round((Number(quote.discountAmountUsd) + Number(quote.finalTotalUsd)) * 100) !== Math.round(Number(quote.originalTotalUsd) * 100) ||
     typeof quote.localCurrency !== "string" || !/^[A-Z]{3}$/.test(quote.localCurrency) ||
     typeof quote.localSymbol !== "string" ||
-    !(quote.finalTotalLocal === null || (typeof quote.finalTotalLocal === "number" && Number.isFinite(quote.finalTotalLocal) && quote.finalTotalLocal >= 0)) ||
-    !(quote.fxRate === null || (typeof quote.fxRate === "number" && Number.isFinite(quote.fxRate) && quote.fxRate > 0)) ||
-    !(quote.fxRateTimestamp === null || (typeof quote.fxRateTimestamp === "string" && Number.isFinite(Date.parse(quote.fxRateTimestamp)))) ||
+    !fxTupleValid ||
     !validCampaign(quote.campaign)
   ) throw safeServiceError();
+  const campaign = quote.campaign as { percentage?: number } | null;
+  const expectedDiscount = campaign
+    ? Math.round((Math.round(Number(quote.originalTotalUsd) * 100) * campaign.percentage!) / 100) / 100
+    : 0;
+  if (Math.round(Number(quote.discountAmountUsd) * 100) !== Math.round(expectedDiscount * 100)) throw safeServiceError();
   return value as T;
 }
 
@@ -447,7 +460,7 @@ export async function previewProposal(
     },
   });
   if (response.error || !response.data?.proposal) return throwProposalFailure(response);
-  return parseProposal<ProposalDraftViewModel>(response.data.proposal);
+  return parseProposal<ProposalDraftViewModel>(response.data.proposal, "draft");
 }
 
 export async function issueProposal(
@@ -468,7 +481,7 @@ export async function issueProposal(
   if (response.error || !response.data?.proposal) return throwProposalFailure(response);
   const data = response.data as { proposal: unknown; proposalReference?: unknown };
   if (typeof data.proposalReference !== "string" || !UUID_PATTERN.test(data.proposalReference)) throw safeServiceError();
-  return { proposal: parseProposal<ProposalViewModel>(data.proposal), proposalReference: data.proposalReference };
+  return { proposal: parseProposal<ProposalViewModel>(data.proposal, "issued"), proposalReference: data.proposalReference };
 }
 
 export const defaultQuizService: QuizService = {

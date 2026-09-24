@@ -657,6 +657,8 @@ describe("local portfolio quiz", () => {
     expect(screen.getByText("$1,000 USD")).toBeInTheDocument();
     expect(screen.getByText(/you save \$1,000 · 50% off/i)).toBeInTheDocument();
     expect(screen.getByText(/approximately ₱58,000 PHP/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/coupon code/i)).toBeDisabled();
+    expect(screen.getByRole("button", { name: /remove/i })).toBeEnabled();
     expect(service.previewProposal).toHaveBeenLastCalledWith(
       expect.anything(),
       { tierKey: "basic", platform: "systeme_io", offerKey: "platform_launch" },
@@ -731,6 +733,20 @@ describe("local portfolio quiz", () => {
     expect(await screen.findByRole("dialog", { name: /your proposal is ready/i })).toBeInTheDocument();
     expect(service.issueProposal).toHaveBeenCalledTimes(2);
     expect(service.issueProposal.mock.calls[1]).toEqual(service.issueProposal.mock.calls[0]);
+  });
+
+  it("keeps selection and coupon controls editable after a capacity rejection", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    service.issueProposal.mockRejectedValueOnce(new ProposalServiceError("coupon_exhausted"));
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.000Z")} />);
+    await completeServiceBusinessAssessment(user);
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
+
+    expect(await screen.findByText(/coupon has reached its client limit/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/coupon code/i)).toBeEnabled();
+    expect(screen.getByRole("button", { name: /confirm roadmap and email proposal/i })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /retry sending email/i })).not.toBeInTheDocument();
   });
 
   it("disables duplicate contact submissions while the owned RPC is pending", async () => {

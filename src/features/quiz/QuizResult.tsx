@@ -29,6 +29,7 @@ interface QuizResultProps {
   couponMessage?: string | null;
   countryCode?: string;
   proposalLocked?: boolean;
+  deliveryRetryRequired?: boolean;
   issuing: boolean;
   issueError: string | null;
   persistenceAvailable: boolean;
@@ -78,6 +79,7 @@ export function QuizResult({
   couponMessage = null,
   countryCode = "ZZ",
   proposalLocked = false,
+  deliveryRetryRequired = false,
   issuing,
   issueError,
   persistenceAvailable,
@@ -293,17 +295,17 @@ export function QuizResult({
             <p className="result-number">Proposal access</p>
             <h2>{proposal.expiresAt
               ? "Proposal sent · Available for 72 hours"
-              : issueError
+              : deliveryRetryRequired
                 ? "Your roadmap is ready; email delivery needs attention"
                 : "Choose and confirm your roadmap"}</h2>
             <p>{proposal.expiresAt
               ? `Access expires at ${new Date(proposal.expiresAt).toLocaleString("en-US")}.`
-              : issueError
+              : deliveryRetryRequired
                 ? "The roadmap remains available here. Retry sending its protected access details."
                 : "Your exact 72-hour access period begins only after you confirm and the email is delivered."}</p>
-            {issueError ? <p className="quiz-validation" role="alert">{issueError}</p> : null}
+            {deliveryRetryRequired && issueError ? <p className="quiz-validation" role="alert">{issueError}</p> : null}
           </div>
-          {!proposal.expiresAt && issueError ? (
+          {!proposal.expiresAt && deliveryRetryRequired ? (
             <button className="quiz-primary" disabled={issuing} onClick={() => void onRetryProposal()} type="button">
               {issuing ? "Sending email…" : "Retry sending email"} <span aria-hidden="true">→</span>
             </button>

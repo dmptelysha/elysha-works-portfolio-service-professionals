@@ -96,8 +96,12 @@ function fakeClient(options: {
     data: [{ submission_status: "accepted", lead_id: LEAD_ID, quiz_session_id: QUIZ_SESSION_ID, existing_business_name: null }],
     error: null,
   });
-  const invoke = vi.fn(async () => options.functionResponse ?? {
-    data: { proposal: proposal(), proposalReference: PROPOSAL_REFERENCE }, error: null,
+  const invoke = vi.fn(async (_name: string, invocation?: { body?: { operation?: string } }) => options.functionResponse ?? {
+    data: {
+      proposal: proposal(invocation?.body?.operation === "issue" ? "2026-09-27T00:00:00.000Z" : null),
+      proposalReference: PROPOSAL_REFERENCE,
+    },
+    error: null,
   });
   return {
     client: {
@@ -420,6 +424,23 @@ describe("Supabase quiz service", () => {
       selection: { tierKey: "basic", platform: "systeme_io" },
       couponCode: "EARLYBIRDWORKS",
     } });
+  });
+
+  it("rejects partial FX tuples and invalid draft or issued expiry shapes", async () => {
+    const current = proposal();
+    const partialFx = { ...current, investment: { ...current.investment, fxRateTimestamp: null } };
+    const partial = fakeClient({ functionResponse: { data: { proposal: partialFx }, error: null } });
+    await expect(previewProposal(context, undefined, undefined, partial.client as never)).rejects.toThrow("temporarily unavailable");
+
+    const wrongDraft = fakeClient({ functionResponse: { data: { proposal: proposal("2026-09-27T00:00:00.000Z") }, error: null } });
+    await expect(previewProposal(context, undefined, undefined, wrongDraft.client as never)).rejects.toThrow("temporarily unavailable");
+
+    const wrongIssue = fakeClient({ functionResponse: {
+      data: { proposal: proposal(), proposalReference: PROPOSAL_REFERENCE }, error: null,
+    } });
+    await expect(issueProposal(context, {
+      tierKey: "basic", platform: "systeme_io", offerKey: "platform_starter",
+    }, undefined, wrongIssue.client as never)).rejects.toThrow("temporarily unavailable");
   });
 
   it.each([

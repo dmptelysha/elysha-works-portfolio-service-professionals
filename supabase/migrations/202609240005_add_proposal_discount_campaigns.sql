@@ -117,6 +117,12 @@ begin
   if not found or not v_campaign.active then
     raise exception 'coupon_invalid' using errcode = 'P0001';
   end if;
+  if round(p_discount_amount_usd, 2) <>
+      round(round(p_original_total_usd, 2) * v_campaign.discount_percent / 100.0, 2)
+    or round(p_final_total_usd, 2) <>
+      round(round(p_original_total_usd, 2) - round(p_discount_amount_usd, 2), 2) then
+    raise exception 'coupon_invalid' using errcode = 'P0001';
+  end if;
 
   update private.discount_redemptions
   set status = 'released', released_at = p_at, updated_at = p_at
@@ -398,6 +404,7 @@ begin
       or v_original <> v_redemption.original_total_usd
       or v_discount <> v_redemption.discount_amount_usd
       or v_final <> v_redemption.final_total_usd
+      or v_discount <> round(v_original * v_campaign.discount_percent / 100.0, 2)
       or p_selected_roadmap_snapshot #>> '{investment,campaign,campaignKey}' <> v_campaign.campaign_key
       or p_selected_roadmap_snapshot #>> '{investment,campaign,code}' <> v_campaign.code
       or p_selected_roadmap_snapshot #>> '{investment,campaign,percentage}' <> v_campaign.discount_percent::text then

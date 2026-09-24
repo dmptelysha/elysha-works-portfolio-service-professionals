@@ -249,6 +249,8 @@ test('proposal discount campaigns use a private, row-locked, service-only ledger
   }
   assert.match(sql, /set\s+search_path\s*=\s*''/i);
   assert.match(sql, /select[^;]+from\s+private\.discount_campaigns[^;]+for\s+update/is);
+  assert.match(sql, /p_original_total_usd[\s\S]+v_campaign\.discount_percent\s*\/\s*100\.0/i);
+  assert.match(sql, /v_discount\s*<>\s*round\(v_original\s*\*\s*v_campaign\.discount_percent\s*\/\s*100\.0,\s*2\)/i);
   assert.match(sql, /status\s+in\s*\(\s*'pending'\s*,\s*'redeemed'\s*\)/i);
   assert.match(sql, /reserved_until\s*<=\s*p_at/i);
   assert.match(sql, /release_proposal_discount[\s\S]+status\s*=\s*'pending'/i);

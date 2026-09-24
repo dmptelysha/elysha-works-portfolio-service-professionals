@@ -7,6 +7,7 @@ import {
 import { calculateRecommendation } from "../_shared/quiz-engine/cortex.ts";
 import {
   calculateProjectPriceQuote,
+  isCurrencyQuoteFresh,
   normalizeCouponCode,
 } from "../_shared/quiz-engine/discounts.ts";
 import { buildProposalDraft } from "../_shared/quiz-engine/proposal-view.ts";
@@ -20,6 +21,8 @@ import type {
   BusinessLocation,
   PlatformKey,
   PublicTierKey,
+  ProposalDraftViewModel,
+  ProjectPriceQuote,
   QuizAnswers,
   RoadmapSelection,
   ValidatedDiscountCampaign,
@@ -213,6 +216,31 @@ function validatedCampaign(value: unknown): ValidatedDiscountCampaign {
   throw new Error("invalid campaign response");
 }
 
+function initializedProposal(value: Record<string, unknown>): ProposalDraftViewModel {
+  const selection = value.selection as Record<string, unknown> | null;
+  const investment = value.investment as Record<string, unknown> | null;
+  if (
+    value.proposalSnapshotVersion !== "proposal-snapshot-2026.09-v2" ||
+    value.expiresAt !== null || !selection || !investment ||
+    !TIERS.includes(selection.tierKey as PublicTierKey) ||
+    !PLATFORMS.includes(selection.platform as PlatformKey) ||
+    typeof selection.offerKey !== "string" || !selection.offerKey ||
+    !["originalTotalUsd", "discountAmountUsd", "finalTotalUsd"].every((key) => (
+      typeof investment[key] === "number" && Number.isFinite(investment[key]) && Number(investment[key]) >= 0
+    ))
+  ) throw new PublicHttpError(409, "proposal_unavailable");
+  const campaign = investment.campaign === null ? null : validatedCampaign(investment.campaign);
+  const expectedDiscount = campaign
+    ? Math.round((Math.round(Number(investment.originalTotalUsd) * 100) * campaign.percentage) / 100) / 100
+    : 0;
+  if (
+    Math.round((Number(investment.discountAmountUsd) + Number(investment.finalTotalUsd)) * 100) !==
+      Math.round(Number(investment.originalTotalUsd) * 100) ||
+    Math.round(Number(investment.discountAmountUsd) * 100) !== Math.round(expectedDiscount * 100)
+  ) throw new PublicHttpError(409, "proposal_unavailable");
+  return value as unknown as ProposalDraftViewModel;
+}
+
 function couponFailure(error: unknown): never {
   if (error instanceof PublicHttpError) throw error;
   const message = error instanceof Error ? error.message : String(error);
@@ -262,10 +290,19 @@ export function createFinalizeProposalHandler(
         body.quizSessionId,
       );
       await dependencies.assertApprovedConfiguration(owned.questionSetId);
+      const requestNow = dependencies.now();
+      const authoritativeLocation = owned.location && isCurrencyQuoteFresh(
+          owned.location.fxRateTimestamp,
+          requestNow,
+        )
+        ? owned.location
+        : owned.location
+        ? { ...owned.location, fxRate: null, fxRateTimestamp: null }
+        : undefined;
       const result = calculateRecommendation({
         audienceKey: owned.audienceKey,
         answers: owned.answers,
-        location: owned.location ?? undefined,
+        location: authoritativeLocation,
       });
 
       if (body.operation === "preview") {
@@ -296,7 +333,7 @@ export function createFinalizeProposalHandler(
           selection,
           calculateProjectPriceQuote({
             originalTotalUsd: selected.estimatedProjectInvestmentUsd,
-            location: result.location,
+            location: authoritativeLocation ?? result.location,
             campaign,
           }),
         );
@@ -324,9 +361,18 @@ export function createFinalizeProposalHandler(
         throw new PublicHttpError(409, "proposal_unavailable");
       }
 
-      const selection = selectedRoadmap(result, requestedSelection!);
+      const storedDraft = owned.proposalReference && owned.selectedRoadmapSnapshot
+        ? initializedProposal(owned.selectedRoadmapSnapshot)
+        : null;
+      if (storedDraft && (
+        requestedSelection!.tierKey !== storedDraft.selection.tierKey ||
+        requestedSelection!.platform !== storedDraft.selection.platform ||
+        couponCode !== (storedDraft.investment.campaign?.code ?? null)
+      )) throw new PublicHttpError(409, "proposal_unavailable");
+
+      const selection = storedDraft?.selection ?? selectedRoadmap(result, requestedSelection!);
       const selected = resolveRoadmapSelection(result, selection);
-      let campaign: ValidatedDiscountCampaign | null = null;
+      let campaign: ValidatedDiscountCampaign | null = storedDraft?.investment.campaign ?? null;
       let redemptionId: string | null = null;
       let redeemerDigest: string | null = null;
       if (couponCode) {
@@ -335,19 +381,25 @@ export function createFinalizeProposalHandler(
           dependencies.couponRedemptionSecret,
         );
         try {
-          campaign = validatedCampaign(await dependencies.previewDiscount({
+          const previewedCampaign = validatedCampaign(await dependencies.previewDiscount({
             quizSessionId: owned.quizSessionId,
             couponCode,
             redeemerDigest,
             at: dependencies.now().toISOString(),
           }));
+          if (campaign && (
+            previewedCampaign.campaignKey !== campaign.campaignKey ||
+            previewedCampaign.code !== campaign.code ||
+            previewedCampaign.percentage !== campaign.percentage
+          )) throw new Error("invalid campaign retry");
+          campaign = previewedCampaign;
         } catch (error) {
           couponFailure(error);
         }
       }
-      let priceQuote = calculateProjectPriceQuote({
+      let priceQuote: ProjectPriceQuote = storedDraft?.investment ?? calculateProjectPriceQuote({
         originalTotalUsd: selected.estimatedProjectInvestmentUsd,
-        location: result.location,
+        location: authoritativeLocation ?? result.location,
         campaign,
       });
       if (couponCode && campaign && redeemerDigest) {
@@ -370,16 +422,18 @@ export function createFinalizeProposalHandler(
           ) throw new Error("invalid campaign reservation");
           redemptionId = reservation.redemptionId;
           campaign = reservedCampaign;
-          priceQuote = calculateProjectPriceQuote({
-            originalTotalUsd: selected.estimatedProjectInvestmentUsd,
-            location: result.location,
-            campaign,
-          });
+          if (!storedDraft) {
+            priceQuote = calculateProjectPriceQuote({
+              originalTotalUsd: selected.estimatedProjectInvestmentUsd,
+              location: authoritativeLocation ?? result.location,
+              campaign,
+            });
+          }
         } catch (error) {
           couponFailure(error);
         }
       }
-      const proposalDraft = buildProposalDraft(
+      const proposalDraft = storedDraft ?? buildProposalDraft(
         { firstName: owned.firstName, businessName: owned.businessName },
         owned.answers,
         result,
@@ -395,25 +449,27 @@ export function createFinalizeProposalHandler(
         accessKey,
         dependencies.keyPepper,
       );
-      try {
-        await dependencies.finalize({
-          quizSessionId: owned.quizSessionId,
-          selection,
-          resultSnapshot: result as unknown as Record<string, unknown>,
-          proposalSnapshot: proposalDraft as unknown as Record<string, unknown>,
-          proposalReference,
-          accessKeyHash,
-          redemptionId,
-        });
-      } catch (error) {
-        if (redemptionId) {
-          await dependencies.releaseDiscount({
+      if (!storedDraft) {
+        try {
+          await dependencies.finalize({
             quizSessionId: owned.quizSessionId,
+            selection,
+            resultSnapshot: result as unknown as Record<string, unknown>,
+            proposalSnapshot: proposalDraft as unknown as Record<string, unknown>,
+            proposalReference,
+            accessKeyHash,
             redemptionId,
-            at: dependencies.now().toISOString(),
-          }).catch(() => undefined);
+          });
+        } catch (error) {
+          if (redemptionId) {
+            await dependencies.releaseDiscount({
+              quizSessionId: owned.quizSessionId,
+              redemptionId,
+              at: dependencies.now().toISOString(),
+            }).catch(() => undefined);
+          }
+          throw error;
         }
-        throw error;
       }
 
       const deliveredAt = dependencies.now();
@@ -481,12 +537,23 @@ export function createFinalizeProposalHandler(
         throw new PublicHttpError(502, "proposal_delivery_failed");
       }
 
-      const confirmedExpiry = await dependencies.markDelivered(
-        owned.quizSessionId,
-        proposalReference,
-        redemptionId,
-        deliveredAt.toISOString(),
-      );
+      let confirmedExpiry: string;
+      try {
+        confirmedExpiry = await dependencies.markDelivered(
+          owned.quizSessionId,
+          proposalReference,
+          redemptionId,
+          deliveredAt.toISOString(),
+        );
+      } catch {
+        await dependencies.recordEvent(
+          "proposal_delivery_acknowledgement_failed",
+          owned.quizSessionId,
+          owned.leadId,
+          { tier_key: selection.tierKey, platform: selection.platform },
+        ).catch(() => undefined);
+        throw new PublicHttpError(502, "proposal_delivery_failed");
+      }
       await dependencies.recordEvent(
         "proposal_email_sent",
         owned.quizSessionId,

@@ -437,13 +437,89 @@ Deno.test("ambiguous delivery retry reuses the proposal reference and coupon lif
   };
 
   const first = await handler(proposalRequest(requestBody));
+  const mismatched = await handler(proposalRequest({
+    ...requestBody,
+    selection: { tierKey: "basic", platform: "systeme_io" },
+  }));
   const second = await handler(proposalRequest(requestBody));
 
   assertEquals(first.status, 502);
+  assertEquals(mismatched.status, 409);
+  assertEquals(await mismatched.json(), { error: "proposal_unavailable" });
   assertEquals(second.status, 200);
   assertEquals(reserveCalls, 2);
   assertEquals(operationIds.length, 2);
   assertEquals(operationIds[0], operationIds[1]);
+});
+
+Deno.test("a delivery acknowledgement failure preserves the initialized retry lock and snapshot", async () => {
+  const owned = {
+    ...ownedProposalInput(),
+    location: {
+      businessCountry: "Philippines",
+      countryCode: "PH",
+      displayCurrency: "PHP",
+      currencySymbol: "₱",
+      fxRate: 58,
+      fxRateTimestamp: "2026-09-24T04:55:00.000Z",
+    },
+  };
+  let finalizeCalls = 0;
+  let markCalls = 0;
+  const handler = createFinalizeProposalHandler(discountDependencies({
+    loadOwnedQuiz: async () => ({ ...owned }),
+    finalize: async (input) => {
+      finalizeCalls += 1;
+      owned.proposalReference = input.proposalReference;
+      owned.selectedRoadmapSnapshot = input.proposalSnapshot;
+    },
+    markDelivered: async () => {
+      markCalls += 1;
+      if (markCalls === 1) throw new Error("database acknowledgement unavailable");
+      return "2026-09-27T05:00:00.000Z";
+    },
+  }));
+  const body = {
+    operation: "issue",
+    quizSessionId: owned.quizSessionId,
+    selection: { tierKey: "basic", platform: "systeme_io" },
+    couponCode: "PINOYAKO",
+  };
+
+  const first = await handler(proposalRequest(body));
+  const second = await handler(proposalRequest(body));
+
+  assertEquals(first.status, 502);
+  assertEquals(await first.json(), { error: "proposal_delivery_failed" });
+  assertEquals(second.status, 200);
+  assertEquals(finalizeCalls, 1);
+  assertEquals(markCalls, 2);
+});
+
+Deno.test("stale stored FX is removed server-side before proposal pricing", async () => {
+  const handler = createFinalizeProposalHandler(discountDependencies({
+    loadOwnedQuiz: async () => ({
+      ...ownedProposalInput(),
+      location: {
+        businessCountry: "Philippines",
+        countryCode: "PH",
+        displayCurrency: "PHP",
+        currencySymbol: "₱",
+        fxRate: 58,
+        fxRateTimestamp: "2026-09-24T04:44:59.999Z",
+      },
+    }),
+  }));
+
+  const response = await handler(proposalRequest({
+    operation: "preview",
+    quizSessionId: ownedProposalInput().quizSessionId,
+  }));
+  const body = await response.json();
+  assertEquals(response.status, 200);
+  assertEquals(body.proposal.investment.finalTotalLocal, null);
+  assertEquals(body.proposal.investment.fxRate, null);
+  assertEquals(body.proposal.investment.fxRateTimestamp, null);
 });
 
 Deno.test("known coupon database failures map to approved public responses", async () => {

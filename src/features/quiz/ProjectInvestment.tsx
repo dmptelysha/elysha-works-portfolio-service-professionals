@@ -67,7 +67,7 @@ export function ProjectInvestment({
           <input
             id="proposal-coupon"
             value={couponInput}
-            disabled={locked || busy}
+            disabled={locked || busy || Boolean(quote.campaign)}
             autoComplete="off"
             maxLength={40}
             onChange={(event) => onCouponInput(event.target.value)}
