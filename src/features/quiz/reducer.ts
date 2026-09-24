@@ -308,6 +308,7 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         screen: "result",
         result: action.result,
         proposal: action.proposal,
+        location: action.result.location,
         roadmapSelection: defaultRoadmapSelection(action.result),
         couponInput: action.proposal.investment.campaign?.code ?? "",
         appliedCampaign: action.proposal.investment.campaign,

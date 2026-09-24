@@ -680,6 +680,11 @@ describe("local portfolio quiz", () => {
     expect(within(investment).getByText(/live PHP conversion is unavailable/i)).toBeInTheDocument();
     expect(within(investment).queryByText(/₱[\d,]+ PHP/)).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /try that calculation again/i })).not.toBeInTheDocument();
+
+    const basicCard = screen.getByRole("heading", { name: /^basic$/i }).closest("article")!;
+    await user.click(within(basicCard).getByRole("button", { name: /^systeme\.io$/i }));
+    expect(within(investment).getByText(/live PHP conversion is unavailable/i)).toBeInTheDocument();
+    expect(within(investment).queryByText(/₱[\d,]+ PHP/)).not.toBeInTheDocument();
   });
 
   it("applies a coupon and shows the original and discounted totals only in PHP", async () => {
