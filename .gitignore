@@ -1,5 +1,6 @@
 .tmp/
 .superpowers/
+.worktrees/
 *.log
 .next/
 out/
