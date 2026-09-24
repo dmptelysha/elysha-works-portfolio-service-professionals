@@ -27,6 +27,7 @@ const expectedMigrations = [
   '202609240004_fix_multi_business_assessment.sql',
   '202609240005_add_proposal_discount_campaigns.sql',
   '202609240006_activate_proposal_discount_campaigns.sql',
+  '202609240007_fix_discount_rpc_column_references.sql',
 ];
 
 const phaseOneTables = [
@@ -275,6 +276,15 @@ test('proposal discount activation is additive and pins both approved campaign c
   assert.match(sql, /get\s+diagnostics\s+v_activated\s*=\s*row_count/i);
   assert.match(sql, /v_activated\s*<>\s*2/i);
   assert.match(sql, /raise\s+exception\s+'proposal discount campaign configuration mismatch'/i);
+});
+
+test('proposal discount RPC repair qualifies ledger columns that collide with output variables', () => {
+  const sql = read('supabase/migrations/202609240007_fix_discount_rpc_column_references.sql');
+  assert.doesNotMatch(sql, /drop\s+(?:table|schema|function)\b|truncate\b|delete\s+from\b/i);
+  assert.match(sql, /create\s+or\s+replace\s+function\s+public\.preview_proposal_discount\s*\(/i);
+  assert.match(sql, /create\s+or\s+replace\s+function\s+public\.reserve_proposal_discount\s*\(/i);
+  assert.match(sql, /update\s+private\.discount_redemptions\s+as\s+dr[\s\S]+where\s+dr\.campaign_key\s*=\s*v_campaign\.campaign_key/i);
+  assert.doesNotMatch(sql, /where\s+campaign_key\s*=\s*v_campaign\.campaign_key/i);
 });
 
 test('migrations create exactly the Phase 1 public tables', () => {

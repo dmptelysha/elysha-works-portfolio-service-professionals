@@ -405,9 +405,11 @@ describe("local portfolio quiz", () => {
     await screen.findByTestId("turnstile-runtime");
     expect(turnstileControls.options).toEqual(expect.objectContaining({ appearance: "always", retry: "never" }));
     await act(async () => turnstileControls.onSuccess?.("audience-token"));
+    expect(screen.getByTestId("turnstile-runtime")).not.toBeVisible();
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
     await waitFor(() => expect(service.createOwnedQuizContext).toHaveBeenCalledOnce());
     await waitFor(() => expect(turnstileControls.mounts).toBeGreaterThanOrEqual(2));
+    expect(screen.getByTestId("turnstile-runtime")).toBeInTheDocument();
     await user.type(screen.getByLabelText(/first name/i), "Mara");
     await user.type(screen.getByLabelText(/last name/i), "Santos");
     await user.type(screen.getByLabelText(/business name/i), "Mara Consulting");
@@ -420,6 +422,7 @@ describe("local portfolio quiz", () => {
 
     act(() => turnstileControls.onSuccess?.("valid-turnstile-token"));
     await waitFor(() => expect(submit).toBeEnabled());
+    expect(screen.getByTestId("turnstile-runtime")).not.toBeVisible();
 
     act(() => turnstileControls.onExpire?.());
     await waitFor(() => expect(submit).toBeDisabled());
@@ -665,6 +668,35 @@ describe("local portfolio quiz", () => {
       { tierKey: "basic", platform: "systeme_io", offerKey: "platform_launch" },
       "pinoyako",
     );
+  });
+
+  it("refreshes stale PHP pricing before validating a coupon", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.001Z")} />);
+    await completeServiceBusinessAssessment(user);
+    service.getCurrencyQuote.mockClear();
+    service.getCurrencyQuote.mockResolvedValue({
+      businessCountry: "Philippines",
+      countryCode: "PH",
+      displayCurrency: "PHP",
+      currencySymbol: "₱",
+      fxRate: 58,
+      fxRateTimestamp: "2026-09-24T00:15:00.001Z",
+    });
+    service.saveOwnedQuizProgress.mockClear();
+    service.previewProposal.mockClear();
+
+    await user.type(await screen.findByLabelText(/coupon code/i), "pinoyako");
+    await user.click(screen.getByRole("button", { name: /apply coupon/i }));
+
+    await waitFor(() => expect(document.querySelector("del")).not.toBeNull());
+    expect(service.getCurrencyQuote).toHaveBeenCalledOnce();
+    expect(service.saveOwnedQuizProgress).toHaveBeenCalledOnce();
+    expect(service.previewProposal).toHaveBeenCalledOnce();
+    expect(service.getCurrencyQuote.mock.invocationCallOrder[0]).toBeLessThan(service.previewProposal.mock.invocationCallOrder[0]);
+    expect(service.saveOwnedQuizProgress.mock.invocationCallOrder[0]).toBeLessThan(service.previewProposal.mock.invocationCallOrder[0]);
+    expect(screen.queryByText(/PHP conversion unavailable/i)).not.toBeInTheDocument();
   });
 
   it.each([

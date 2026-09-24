@@ -446,6 +446,10 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
     setIssueError(null);
     try {
       const context = await ensureOwnedContext(state.audienceKey);
+      const location = await refreshQuote();
+      if (!location) {
+        throw new Error(`Live ${state.location?.displayCurrency ?? "local-currency"} conversion is unavailable. Retry before applying your coupon.`);
+      }
       const proposal = await service.previewProposal(context, state.roadmapSelection, state.couponInput);
       dispatch({ type: "COUPON_APPLIED", proposal });
     } catch (error) {
@@ -454,7 +458,7 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
     } finally {
       setIssuing(false);
     }
-  }, [ensureOwnedContext, issuing, service, state.audienceKey, state.couponInput, state.proposalConfirmationStatus, state.roadmapSelection]);
+  }, [ensureOwnedContext, issuing, refreshQuote, service, state.audienceKey, state.couponInput, state.location, state.proposalConfirmationStatus, state.roadmapSelection]);
 
   const issueSelectedProposal = useCallback(async () => {
     if (!state.audienceKey || !state.roadmapSelection || issuing) return;
@@ -698,7 +702,7 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
       </main>
 
       {hydrated && captchaSiteKey ? (
-        <div className="quiz-security-runtime" aria-live="polite">
+        <div className="quiz-security-runtime" aria-live="polite" hidden={Boolean(captchaToken)}>
           <Turnstile
             key={captchaAttempt}
             siteKey={captchaSiteKey}
