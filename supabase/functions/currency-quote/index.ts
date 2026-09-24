@@ -41,9 +41,7 @@ export async function currencyQuoteHandler(request: Request): Promise<Response> 
     if (!response.ok || payload.result !== "success" || typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) {
       throw new Error("currency quote unavailable");
     }
-    const timestamp = typeof payload.time_last_update_utc === "string" && Number.isFinite(Date.parse(payload.time_last_update_utc))
-      ? new Date(payload.time_last_update_utc).toISOString()
-      : new Date().toISOString();
+    const timestamp = new Date().toISOString();
     return jsonResponse({ businessCountry, countryCode, displayCurrency: currency, currencySymbol: symbol, fxRate: rate, fxRateTimestamp: timestamp }, 200, origin);
   } catch (error) {
     return safeErrorResponse(error, origin, "currency_quote_failed");

@@ -644,7 +644,7 @@ describe("local portfolio quiz", () => {
     expect(screen.queryByRole("dialog", { name: /your proposal is ready/i })).not.toBeInTheDocument();
   });
 
-  it("refreshes PHP pricing before the first preview and shows the default package amount", async () => {
+  it("uses the fresh PHP quote for the first preview and shows the default package amount", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
     render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:10:00.000Z")} />);
@@ -654,8 +654,7 @@ describe("local portfolio quiz", () => {
     const investment = (await screen.findByRole("heading", { name: /project investment/i })).closest("section")!;
     expect(within(investment).getByText("₱261,000 PHP")).toBeInTheDocument();
     expect(within(investment).queryByText(/PHP conversion is unavailable/i)).not.toBeInTheDocument();
-    expect(service.getCurrencyQuote).toHaveBeenCalledTimes(2);
-    expect(service.getCurrencyQuote.mock.invocationCallOrder[1]).toBeLessThan(service.previewProposal.mock.invocationCallOrder[0]);
+    expect(service.getCurrencyQuote).toHaveBeenCalledOnce();
     expect(service.saveOwnedQuizProgress.mock.invocationCallOrder.at(-1)!).toBeLessThan(service.previewProposal.mock.invocationCallOrder[0]);
   });
 
@@ -672,7 +671,7 @@ describe("local portfolio quiz", () => {
         fxRateTimestamp: "2026-09-24T00:00:00.000Z",
       })
       .mockRejectedValueOnce(new Error("FX unavailable"));
-    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:10:00.000Z")} />);
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:20:00.000Z")} />);
 
     await completeServiceBusinessAssessment(user);
 

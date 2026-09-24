@@ -58,7 +58,9 @@ interface QuizExperienceProps {
   now?: () => Date;
 }
 
-export function QuizExperience({ service = defaultQuizService, now = () => new Date() }: QuizExperienceProps = {}) {
+const systemNow = () => new Date();
+
+export function QuizExperience({ service = defaultQuizService, now = systemNow }: QuizExperienceProps = {}) {
   const [state, dispatch] = useReducer(quizReducer, undefined, createInitialQuizState);
   const [hydrated, setHydrated] = useState(false);
   const [persistenceAvailable, setPersistenceAvailable] = useState(true);
@@ -206,19 +208,21 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
         const context = await ensureOwnedContext(state.audienceKey!);
         let proposalLocation = state.location;
         if (proposalLocation && proposalLocation.displayCurrency !== "USD") {
-          try {
-            proposalLocation = await service.getCurrencyQuote({
-              name: proposalLocation.businessCountry,
-              code: proposalLocation.countryCode,
-              currency: proposalLocation.displayCurrency,
-              symbol: proposalLocation.currencySymbol,
-            });
-          } catch {
-            proposalLocation = {
-              ...proposalLocation,
-              fxRate: null,
-              fxRateTimestamp: null,
-            };
+          if (!isCurrencyQuoteFresh(proposalLocation.fxRateTimestamp, now())) {
+            try {
+              proposalLocation = await service.getCurrencyQuote({
+                name: proposalLocation.businessCountry,
+                code: proposalLocation.countryCode,
+                currency: proposalLocation.displayCurrency,
+                symbol: proposalLocation.currencySymbol,
+              });
+            } catch {
+              proposalLocation = {
+                ...proposalLocation,
+                fxRate: null,
+                fxRateTimestamp: null,
+              };
+            }
           }
           await service.saveOwnedQuizProgress(context, {
             answers: state.answers,
@@ -242,7 +246,7 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
       }
     })();
     return () => { cancelled = true; };
-  }, [ensureOwnedContext, service, state.answers, state.audienceKey, state.location, state.screen]);
+  }, [ensureOwnedContext, now, service, state.answers, state.audienceKey, state.location, state.screen]);
 
   const startOver = () => {
     const storage = getBrowserStorage();
