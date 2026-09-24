@@ -5,6 +5,12 @@ import { FormEvent, useEffect, useState } from "react";
 
 import type { PlatformKey, ProjectPriceQuote, ProposalViewModel, RoadmapVariant } from "@/features/quiz/types";
 import { RelatedWorkCards } from "@/features/quiz/RelatedWorkCards";
+import {
+  convertUsdToViewerAmount,
+  finalViewerAmount,
+  formatLocalAmount,
+  formatViewerAmount,
+} from "@/features/quiz/viewer-currency";
 
 import { defaultProposalService, isProposalReference, type ProposalService } from "./proposal-service";
 
@@ -48,13 +54,6 @@ function preferredVariant(proposal: ProposalViewModel, variants: readonly Roadma
     ?? variants[0];
 }
 
-const usd = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2,
-});
-
 interface LegacyProposalInvestment {
   estimatedTotalUsd: number;
   currency: string;
@@ -82,6 +81,13 @@ function readProposalInvestment(proposal: ProposalViewModel): ProjectPriceQuote 
 
 function ProposalDocument({ proposal }: { proposal: ProposalViewModel }) {
   const investment = readProposalInvestment(proposal);
+  const originalAmount = convertUsdToViewerAmount(investment.originalTotalUsd, investment);
+  const finalAmount = finalViewerAmount(investment);
+  const original = originalAmount === null ? null : formatLocalAmount(originalAmount, investment);
+  const final = finalAmount === null ? null : formatLocalAmount(finalAmount, investment);
+  const savings = originalAmount !== null && finalAmount !== null
+    ? formatLocalAmount(Math.max(0, originalAmount - finalAmount), investment)
+    : null;
   const expiry = new Intl.DateTimeFormat("en-PH", {
     dateStyle: "long",
     timeStyle: "short",
@@ -120,17 +126,16 @@ function ProposalDocument({ proposal }: { proposal: ProposalViewModel }) {
           <p>{proposal.recommendation.reason}</p>
           <div className="proposal-investment">
             <span>{proposal.recommendation.offerName}</span>
-            {investment.campaign ? (
+            {investment.campaign && original && final && savings ? (
               <div className="proposal-discount-price">
-                <del>{usd.format(investment.originalTotalUsd)}</del>
-                <strong>{usd.format(investment.finalTotalUsd)} USD</strong>
-                <span>You save {usd.format(investment.discountAmountUsd)} · {investment.campaign.percentage}% off</span>
+                <del>{original}</del>
+                <strong>{final}</strong>
+                <span>You save {savings} · {investment.campaign.percentage}% off</span>
               </div>
-            ) : <strong>{usd.format(investment.finalTotalUsd)} USD</strong>}
-            {investment.finalTotalLocal !== null && investment.localCurrency !== "USD" ? (
+            ) : final ? <strong>{final}</strong> : <strong>{investment.localCurrency} conversion unavailable</strong>}
+            {investment.fxRateTimestamp && final && investment.localCurrency !== "USD" ? (
               <small>
-                Approximately {investment.localSymbol}{investment.finalTotalLocal.toLocaleString("en-US")} {investment.localCurrency}
-                {investment.fxRateTimestamp ? ` · quote ${new Date(investment.fxRateTimestamp).toLocaleString("en-PH")}` : ""}
+                Rate checked {new Date(investment.fxRateTimestamp).toLocaleString("en-PH")}
               </small>
             ) : null}
           </div>
@@ -156,7 +161,7 @@ function ProposalDocument({ proposal }: { proposal: ProposalViewModel }) {
                   <strong>{platformNames[variant.platform]}</strong>
                   <div className="proposal-tier-price">
                     <small>Estimated investment</small>
-                    <b>${variant.estimatedProjectInvestmentUsd.toLocaleString("en-US")}</b>
+                    <b>{formatViewerAmount(variant.estimatedProjectInvestmentUsd, investment) ?? `${investment.localCurrency} conversion unavailable`}</b>
                   </div>
                   <ul>{variant.offer.includedFeatures.map((feature) => <li key={feature}>{feature}</li>)}</ul>
                   {!variant.feasibility.available ? <p className="proposal-unavailable">This route requires a different platform to deliver the approved capability.</p> : null}

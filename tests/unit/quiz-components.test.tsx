@@ -641,7 +641,7 @@ describe("local portfolio quiz", () => {
     expect(screen.queryByRole("dialog", { name: /your proposal is ready/i })).not.toBeInTheDocument();
   });
 
-  it("applies PINOYAKO to the selected tier and updates USD and PHP pricing", async () => {
+  it("applies a coupon and shows the original and discounted totals only in PHP", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
     render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.000Z")} />);
@@ -649,14 +649,15 @@ describe("local portfolio quiz", () => {
 
     const basicCard = (await screen.findByRole("heading", { name: /^basic$/i })).closest("article")!;
     await user.click(within(basicCard).getByRole("button", { name: /^systeme\.io$/i }));
+    expect(screen.getByLabelText(/coupon code/i)).toHaveAttribute("placeholder", "Input your coupon code here");
     await user.type(screen.getByLabelText(/coupon code/i), "pinoyako");
     await user.click(screen.getByRole("button", { name: /apply coupon/i }));
 
     await waitFor(() => expect(document.querySelector("del")).not.toBeNull());
-    expect(document.querySelector("del")?.textContent).toBe("$2,000");
-    expect(screen.getByText("$1,000 USD")).toBeInTheDocument();
-    expect(screen.getByText(/you save \$1,000 · 50% off/i)).toBeInTheDocument();
-    expect(screen.getByText(/approximately ₱58,000 PHP/i)).toBeInTheDocument();
+    expect(document.querySelector("del")?.textContent).toBe("₱116,000 PHP");
+    expect(screen.getAllByText("₱58,000 PHP").length).toBeGreaterThan(0);
+    expect(screen.getByText(/you save ₱58,000 PHP.*50% off/i)).toBeInTheDocument();
+    expect(screen.queryByText(/USD/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/coupon code/i)).toBeDisabled();
     expect(screen.getByRole("button", { name: /remove/i })).toBeEnabled();
     expect(service.previewProposal).toHaveBeenLastCalledWith(
@@ -684,6 +685,44 @@ describe("local portfolio quiz", () => {
       expect(service.getCurrencyQuote.mock.invocationCallOrder[0]).toBeLessThan(service.issueProposal.mock.invocationCallOrder[0]);
       expect(service.saveOwnedQuizProgress.mock.invocationCallOrder[0]).toBeLessThan(service.issueProposal.mock.invocationCallOrder[0]);
     }
+  });
+
+  it("blocks proposal issuance when a stale local-currency quote cannot be refreshed", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.001Z")} />);
+    await completeServiceBusinessAssessment(user);
+    service.getCurrencyQuote.mockRejectedValueOnce(new Error("FX unavailable"));
+    service.issueProposal.mockClear();
+
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
+
+    expect((await screen.findAllByText(/live PHP conversion is unavailable/i)).length).toBeGreaterThan(0);
+    expect(service.issueProposal).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /retry conversion/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /confirm roadmap and email proposal/i })).toBeDisabled();
+  });
+
+  it("does not require an FX refresh when USD is the viewer currency", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    service.getCurrencyQuote.mockResolvedValue({
+      businessCountry: "United States",
+      countryCode: "US",
+      displayCurrency: "USD",
+      currencySymbol: "$",
+      fxRate: 1,
+      fxRateTimestamp: "2026-09-24T00:00:00.000Z",
+    });
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.001Z")} />);
+    await completeServiceBusinessAssessment(user);
+    service.getCurrencyQuote.mockClear();
+    service.getCurrencyQuote.mockRejectedValueOnce(new Error("FX unavailable"));
+
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
+
+    await waitFor(() => expect(service.issueProposal).toHaveBeenCalledOnce());
+    expect(service.getCurrencyQuote).not.toHaveBeenCalled();
   });
 
   it("keeps an undismissable sending dialog open until durable delivery succeeds", async () => {
@@ -741,10 +780,15 @@ describe("local portfolio quiz", () => {
     service.issueProposal.mockRejectedValueOnce(new ProposalServiceError("coupon_exhausted"));
     render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.000Z")} />);
     await completeServiceBusinessAssessment(user);
+    await user.type(await screen.findByLabelText(/coupon code/i), "pinoyako");
+    await user.click(screen.getByRole("button", { name: /apply coupon/i }));
+    await waitFor(() => expect(document.querySelector("del")).not.toBeNull());
     await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
 
     expect(await screen.findByText(/coupon has reached its client limit/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/coupon code/i)).toBeEnabled();
+    expect(screen.getByLabelText(/coupon code/i)).toHaveValue("");
+    expect(document.querySelector("del")).toBeNull();
     expect(screen.getByRole("button", { name: /confirm roadmap and email proposal/i })).toBeEnabled();
     expect(screen.queryByRole("button", { name: /retry sending email/i })).not.toBeInTheDocument();
   });
@@ -813,10 +857,10 @@ describe("local portfolio quiz", () => {
     await user.click(screen.getAllByRole("button", { name: /^custom app$/i })[0]);
     const selectedSummary = screen.getByRole("region", { name: /your selected roadmap/i });
     expect(within(selectedSummary).getAllByText("Custom Starter").length).toBeGreaterThan(0);
-    expect(within(selectedSummary).getAllByText("$3,000").length).toBeGreaterThan(0);
+    expect(within(selectedSummary).getAllByText("₱174,000 PHP").length).toBeGreaterThan(0);
     await user.click(screen.getAllByRole("button", { name: /^custom app$/i })[2]);
     expect(within(selectedSummary).getAllByText("Custom Growth").length).toBeGreaterThan(0);
-    expect(within(selectedSummary).getAllByText("$7,500").length).toBeGreaterThan(0);
+    expect(within(selectedSummary).getAllByText("₱435,000 PHP").length).toBeGreaterThan(0);
     for (const heading of [
       /where Mara Consulting is now/i,
       /where the business wants to go/i,
@@ -912,6 +956,49 @@ describe("local portfolio quiz", () => {
     await user.click(within(await screen.findByRole("dialog", { name: /continue your roadmap/i })).getByRole("button", { name: /start over/i }));
     expect(screen.getByRole("heading", { name: /which best describes your business/i })).toBeInTheDocument();
     expect(localStorage.getItem(QUIZ_STORAGE_KEY)).toBeNull();
+  });
+
+  it("resets a resumed assessment when the verified email selects another business", async () => {
+    const user = userEvent.setup();
+    const now = Date.now();
+    const attempt: SavedQuizAttempt = {
+      storageVersion: 4,
+      cortexVersion: CORTEX_VERSION,
+      questionSetVersion: QUESTION_SET_VERSION,
+      catalogVersion: CATALOG_VERSION,
+      status: "in_progress",
+      audienceKey: "service_businesses",
+      answers: { q1_business_model: ["service_model_project"] },
+      currentQuestionIndex: 10,
+      result: null,
+      roadmapSelection: null,
+      location: null,
+      createdAt: new Date(now - 60_000).toISOString(),
+      updatedAt: new Date(now - 30_000).toISOString(),
+      expiresAt: new Date(now + QUIZ_TTL_MS).toISOString(),
+    };
+    localStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(attempt));
+    const service = createFakeQuizService();
+    service.submitLeadContact.mockImplementation(async (_context, _challengeId, contact) => contact.businessScope
+      ? { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId }
+      : {
+        status: "business_scope_required" as const,
+        quizSessionId: ownedContext.quizSessionId,
+        existingBusinessId: "60000000-0000-4000-8000-000000000001",
+        existingBusinessName: "Mara Consulting",
+      } as LeadContactSubmissionResult);
+    render(<QuizExperience service={service} />);
+
+    await user.click(within(await screen.findByRole("dialog", { name: /continue your roadmap/i })).getByRole("button", { name: /resume/i }));
+    await fillContactStep(user, { firstName: "Mara", lastName: "Santos", businessName: "Mara Academy", email: "mara@example.com" });
+    await user.type(await screen.findByLabelText(/verification code/i), "123456");
+    await user.click(screen.getByRole("button", { name: /verify code/i }));
+    await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
+    await user.click(await screen.findByRole("button", { name: /another business/i }));
+    await completeLocationStep(user);
+    await user.click(screen.getByRole("button", { name: /start my assessment/i }));
+
+    expect(screen.getByText("Question 1 of 11")).toBeInTheDocument();
   });
 
   it("renders a contact-qualified personalized proposal without persisting contact identity", async () => {

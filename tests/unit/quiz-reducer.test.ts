@@ -205,6 +205,40 @@ describe("quiz reducer", () => {
     expect(state.result).toBe(result);
   });
 
+  it("starts another business at question one without reusing resumed assessment data", () => {
+    const completed = {
+      ...saved,
+      audienceKey: "service_businesses" as const,
+      currentQuestionIndex: 10,
+      result,
+      roadmapSelection: proposal.selection,
+    } as SavedQuizAttempt;
+    let state = quizReducer(createInitialQuizState(), { type: "LOAD_RESUME", attempt: completed });
+    state = quizReducer(state, { type: "RESUME" });
+    state = quizReducer(state, { type: "OTP_REQUESTED", contact: verifiedContact, challenge });
+    state = quizReducer(state, { type: "OTP_VERIFIED", grantExpiresAt: "2026-09-23T00:20:00.000Z" });
+    state = quizReducer(state, {
+      type: "BUSINESS_SCOPE_REQUIRED",
+      contact: verifiedContact,
+      existingBusinessId: "60000000-0000-4000-8000-000000000001",
+      existingBusinessName: "Existing Business",
+    });
+    state = quizReducer(state, {
+      type: "CONTACT_ACCEPTED",
+      contact: { ...verifiedContact, businessName: "New Business", businessScope: "another_business" },
+      startFresh: true,
+    });
+
+    expect(state.screen).toBe("location");
+    expect(state.clientIdentity).toEqual({ firstName: "Mara", businessName: "New Business" });
+    expect(state.answers).toEqual({});
+    expect(state.currentQuestionIndex).toBe(0);
+    expect(state.result).toBeNull();
+    expect(state.roadmapSelection).toBeNull();
+    expect(state.proposal).toBeNull();
+    expect(state.priceQuote).toBeNull();
+  });
+
   it("preserves answers through calculation failure and retry", () => {
     let state: QuizState = {
       ...createInitialQuizState(),
@@ -259,6 +293,30 @@ describe("quiz reducer", () => {
     expect(duplicate).toBe(state);
     state = quizReducer(state, { type: "PROPOSAL_CONFIRMATION_FAILED", message: "Try again" });
     expect(state.proposalConfirmationStatus).toBe("editing");
+  });
+
+  it("removes a coupon that is rejected during final issuance", () => {
+    const discounted = {
+      ...proposal,
+      investment: {
+        ...proposal.investment,
+        discountAmountUsd: 1250,
+        finalTotalUsd: 1250,
+        finalTotalLocal: 72500,
+        campaign: { campaignKey: "pinoyako", code: "PINOYAKO", percentage: 50 } as const,
+      },
+    } as ProposalDraftViewModel;
+    let state = quizReducer({ ...createInitialQuizState(), screen: "calculating" }, {
+      type: "CALCULATION_SUCCESS", result, proposal: discounted,
+    });
+    state = quizReducer(state, { type: "PROPOSAL_CONFIRMING" });
+    state = quizReducer(state, { type: "COUPON_INVALIDATED", message: "This coupon has reached its client limit." });
+
+    expect(state.proposalConfirmationStatus).toBe("editing");
+    expect(state.appliedCampaign).toBeNull();
+    expect(state.couponInput).toBe("");
+    expect(state.priceQuote).toMatchObject({ discountAmountUsd: 0, finalTotalUsd: 2500, campaign: null });
+    expect(state.couponMessage).toMatch(/client limit/i);
   });
 
   it("locks a delivery retry and clears all coupon state on reset", () => {

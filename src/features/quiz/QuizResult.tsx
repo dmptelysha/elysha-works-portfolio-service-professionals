@@ -2,6 +2,7 @@ import { RelatedWorkCards } from "./RelatedWorkCards";
 import { RoadmapComparison } from "./RoadmapComparison";
 import { RoadmapSelectionSummary } from "./RoadmapSelectionSummary";
 import { ProjectInvestment } from "./ProjectInvestment";
+import { formatViewerAmount, viewerCurrencyFromLocation } from "./viewer-currency";
 import type {
   CortexResult,
   ProposalDraftViewModel,
@@ -86,6 +87,7 @@ export function QuizResult({
 }: QuizResultProps) {
   if (proposal) {
     const selectedPriceQuote = priceQuote ?? proposal.investment;
+    const viewerCurrency = selectedPriceQuote;
     const completeTier = proposal.tiers.find((tier) => tier.tierKey === "complete");
     const completeVariant = completeTier?.variants.find(
       (variant) => variant.platform === selection.platform && variant.feasibility.available,
@@ -123,7 +125,7 @@ export function QuizResult({
             <h2 id="recommended-path-title">{proposal.recommendation.title}</h2>
             <p>{proposal.recommendation.reason}</p>
             <strong className="result-price">
-              {proposal.recommendation.offerName}: ${proposal.recommendation.basePriceUsd.toLocaleString("en-US")}
+              {proposal.recommendation.offerName}: {formatViewerAmount(proposal.recommendation.basePriceUsd, viewerCurrency) ?? `${viewerCurrency.localCurrency} conversion unavailable`}
             </strong>
           </section>
 
@@ -166,7 +168,7 @@ export function QuizResult({
           </section>
 
           <div className="result-card result-card--wide result-card--comparison">
-            <RoadmapComparison result={result} selection={selection} onSelect={onSelect} locked={proposalLocked} />
+            <RoadmapComparison result={result} selection={selection} onSelect={onSelect} locked={proposalLocked} currency={viewerCurrency} />
           </div>
 
           <div className="result-card result-card--wide result-card--selection">
@@ -363,11 +365,11 @@ export function QuizResult({
           <p className="result-number">05 · Cortex recommendation</p>
           <h2 id="cortex-title">{result.recommendedOfferName}</h2>
           <p>{result.recommendationReason}</p>
-          <strong className="result-price">Recommended starting build: ${result.basePriceUsd.toLocaleString("en-US")}{result.recommendedOfferKey === "custom_complete" ? "+" : ""}</strong>
+          <strong className="result-price">Recommended starting build: {formatViewerAmount(result.basePriceUsd, viewerCurrencyFromLocation(result.location)) ?? `${result.location.displayCurrency} conversion unavailable`}{result.recommendedOfferKey === "custom_complete" ? "+" : ""}</strong>
         </section>
 
         <div className="result-card result-card--wide result-card--comparison">
-          <RoadmapComparison result={result} selection={selection} onSelect={onSelect} />
+          <RoadmapComparison result={result} selection={selection} onSelect={onSelect} currency={viewerCurrencyFromLocation(result.location)} />
         </div>
 
         <div className="result-card result-card--wide result-card--selection">

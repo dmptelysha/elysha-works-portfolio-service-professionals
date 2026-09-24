@@ -1,16 +1,21 @@
 import { resolveRoadmapSelection } from "./roadmap-options";
 import type { CortexResult, PlatformKey, ProjectPriceQuote, RoadmapSelection } from "./types";
+import { finalViewerAmount, formatLocalAmount, formatViewerAmount, viewerCurrencyFromLocation } from "./viewer-currency";
 
 const platformNames: Record<PlatformKey, string> = {
   systeme_io: "Systeme.io",
   gohighlevel: "HighLevel",
   custom_app: "Custom App",
 };
-const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-
 export function RoadmapSelectionSummary({ result, selection, quote }: { result: CortexResult; selection: RoadmapSelection; quote?: ProjectPriceQuote }) {
   const selected = resolveRoadmapSelection(result, selection);
   const includedSupport = selected.selectedSupportItems.filter((item) => item.disposition === "included");
+  const currency = quote ?? viewerCurrencyFromLocation(result.location);
+  const displaySourceAmount = (amountUsd: number) => formatViewerAmount(amountUsd, currency) ?? `${currency.localCurrency} conversion unavailable`;
+  const finalAmount = quote ? finalViewerAmount(quote) : null;
+  const planningEstimate = finalAmount === null
+    ? displaySourceAmount(selected.estimatedProjectInvestmentUsd)
+    : formatLocalAmount(finalAmount, currency);
 
   return (
     <section className="roadmap-selection-summary" aria-labelledby="selected-roadmap-title">
@@ -23,7 +28,7 @@ export function RoadmapSelectionSummary({ result, selection, quote }: { result: 
       </div>
       <div className="selected-roadmap-offer">
         <div><span>Approved offer</span><strong>{selected.offer.name}</strong></div>
-        <div><span>Base build</span><strong>{money.format(selected.basePriceUsd)}{selected.offer.startingPrice ? "+" : ""}</strong></div>
+        <div><span>Base build</span><strong>{displaySourceAmount(selected.basePriceUsd)}{selected.offer.startingPrice ? "+" : ""}</strong></div>
       </div>
       <p>{selected.offer.description}</p>
       <div className="selected-roadmap-columns">
@@ -37,9 +42,9 @@ export function RoadmapSelectionSummary({ result, selection, quote }: { result: 
         <div>
           <h3>Estimate</h3>
           <div className="investment-lines">
-            <div><span>{selected.offer.name}</span><strong>{money.format(selected.basePriceUsd)}</strong></div>
-            {selected.pricedAddons.map((addon) => <div key={addon.addonKey}><span>{addon.name}</span><strong>{money.format(addon.priceUsd)}</strong></div>)}
-            <div className="investment-total"><span>Planning estimate</span><strong>{money.format(quote?.finalTotalUsd ?? selected.estimatedProjectInvestmentUsd)}{selected.offer.startingPrice ? "+" : ""}</strong></div>
+            <div><span>{selected.offer.name}</span><strong>{displaySourceAmount(selected.basePriceUsd)}</strong></div>
+            {selected.pricedAddons.map((addon) => <div key={addon.addonKey}><span>{addon.name}</span><strong>{displaySourceAmount(addon.priceUsd)}</strong></div>)}
+            <div className="investment-total"><span>Planning estimate</span><strong>{planningEstimate}{selected.offer.startingPrice ? "+" : ""}</strong></div>
           </div>
           {selected.scopeReviewItems.length ? (
             <div className="selected-scope-review"><strong>Confirm during scope review</strong><ul>{selected.scopeReviewItems.map((item) => <li key={item.key}>{item.label}</li>)}</ul></div>

@@ -16,7 +16,18 @@ const answers: QuizAnswers = Object.fromEntries(
 );
 
 function proposalFixture(discounted = false): ProposalViewModel {
-  const result = calculateRecommendation({ audienceKey: "service_businesses", answers });
+  const result = calculateRecommendation({
+    audienceKey: "service_businesses",
+    answers,
+    location: {
+      businessCountry: "Philippines",
+      countryCode: "PH",
+      displayCurrency: "PHP",
+      currencySymbol: "₱",
+      fxRate: 58,
+      fxRateTimestamp: "2026-09-24T00:00:00.000Z",
+    },
+  });
   const selection = defaultRoadmapSelection(result);
   const quote = calculateProjectPriceQuote({
     originalTotalUsd: resolveRoadmapSelection(result, selection).estimatedProjectInvestmentUsd,
@@ -106,13 +117,12 @@ describe("protected proposal access", () => {
     await user.type(screen.getByLabelText(/proposal access key/i), "ABCD234567");
     await user.click(screen.getByRole("button", { name: /view my proposal/i }));
 
-    const original = await screen.findByText(
-      new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(proposal.investment.originalTotalUsd),
-      { selector: "del" },
-    );
+    const originalLocal = Math.round(proposal.investment.originalTotalUsd * proposal.investment.fxRate!);
+    const original = await screen.findByText(`₱${originalLocal.toLocaleString("en-US")} PHP`, { selector: "del" });
     expect(original).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(`${proposal.investment.finalTotalUsd.toLocaleString("en-US")} USD`))).toBeInTheDocument();
-    expect(screen.getByText(/you save.*50% off/i)).toBeInTheDocument();
+    expect(screen.getByText(`₱${proposal.investment.finalTotalLocal!.toLocaleString("en-US")} PHP`)).toBeInTheDocument();
+    expect(screen.getByText(/you save.*PHP.*50% off/i)).toBeInTheDocument();
+    expect(screen.queryByText(/USD/i)).not.toBeInTheDocument();
   });
 
   it("renders a legacy issued proposal without discount fields", async () => {
@@ -136,7 +146,8 @@ describe("protected proposal access", () => {
     await user.type(screen.getByLabelText(/proposal access key/i), "ABCD234567");
     await user.click(screen.getByRole("button", { name: /view my proposal/i }));
 
-    expect(await screen.findByText(new RegExp(`\\$${current.investment.finalTotalUsd.toLocaleString("en-US")} USD`))).toBeInTheDocument();
+    expect((await screen.findAllByText(`₱${current.investment.finalTotalLocal!.toLocaleString("en-US")} PHP`)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/USD/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/you save/i)).not.toBeInTheDocument();
   });
 

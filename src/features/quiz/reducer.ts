@@ -69,7 +69,7 @@ export type QuizAction =
   | { type: "CHANGE_EMAIL" }
   | { type: "BUSINESS_SCOPE_REQUIRED"; existingBusinessId: string; existingBusinessName: string; contact: LeadContactInput }
   | { type: "EDIT_BUSINESS" }
-  | { type: "CONTACT_ACCEPTED"; contact: LeadContactInput }
+  | { type: "CONTACT_ACCEPTED"; contact: LeadContactInput; startFresh?: boolean }
   | { type: "SELECT_LOCATION"; location: BusinessLocation }
   | { type: "CONTINUE_INTRO" }
   | { type: "ANSWER_SINGLE"; questionKey: string; optionKey: string }
@@ -84,6 +84,7 @@ export type QuizAction =
   | { type: "PROPOSAL_CONFIRMING" }
   | { type: "PROPOSAL_ISSUED"; proposal: ProposalViewModel; location?: BusinessLocation }
   | { type: "PROPOSAL_CONFIRMATION_FAILED"; message: string }
+  | { type: "COUPON_INVALIDATED"; message: string }
   | { type: "PROPOSAL_DELIVERY_RETRY_REQUIRED"; message: string }
   | { type: "REFRESH_LOCATION_QUOTE"; location: BusinessLocation }
   | { type: "SELECT_ROADMAP"; selection: RoadmapSelection }
@@ -237,8 +238,11 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
       const businessName = action.contact.businessName.trim();
       const email = action.contact.email.trim().toLowerCase();
       if (!firstName || !lastName || !businessName || !email || !action.contact.consent) return state;
+      const base = action.startFresh
+        ? { ...createInitialQuizState(), audienceKey: state.audienceKey, emailVerified: true }
+        : state;
       return {
-        ...state,
+        ...base,
         screen: "location",
         contact: null,
         otpChallenge: null,
@@ -365,6 +369,21 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
     case "PROPOSAL_CONFIRMATION_FAILED":
       if (state.proposalConfirmationStatus !== "confirming") return state;
       return { ...state, proposalConfirmationStatus: "editing", couponMessage: action.message };
+    case "COUPON_INVALIDATED": {
+      if (state.proposalConfirmationStatus !== "confirming" || !state.result || !state.roadmapSelection) return state;
+      const variant = resolveRoadmapSelection(state.result, state.roadmapSelection);
+      return {
+        ...state,
+        couponInput: "",
+        appliedCampaign: null,
+        couponMessage: action.message,
+        proposalConfirmationStatus: "editing",
+        priceQuote: calculateProjectPriceQuote({
+          originalTotalUsd: variant.estimatedProjectInvestmentUsd,
+          location: state.location ?? state.result.location,
+        }),
+      };
+    }
     case "PROPOSAL_DELIVERY_RETRY_REQUIRED":
       if (state.proposalConfirmationStatus !== "confirming") return state;
       return { ...state, proposalConfirmationStatus: "delivery_retry_required", couponMessage: action.message };

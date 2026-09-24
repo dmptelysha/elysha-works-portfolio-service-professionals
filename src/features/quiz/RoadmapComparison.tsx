@@ -1,5 +1,6 @@
 import { buildRoadmapTiers } from "./roadmap-options";
 import type { CortexResult, PlatformKey, RoadmapSelection, RoadmapVariant } from "./types";
+import { formatViewerAmount, viewerCurrencyFromLocation, type ViewerCurrency } from "./viewer-currency";
 
 const platformNames: Record<PlatformKey, string> = {
   systeme_io: "Systeme.io",
@@ -7,13 +8,12 @@ const platformNames: Record<PlatformKey, string> = {
   custom_app: "Custom App",
 };
 
-const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-
 interface RoadmapComparisonProps {
   result: CortexResult;
   selection: RoadmapSelection;
   onSelect: (selection: RoadmapSelection) => void;
   locked?: boolean;
+  currency?: ViewerCurrency;
 }
 
 function chooseVariant(variant: RoadmapVariant, tierKey: RoadmapSelection["tierKey"], onSelect: RoadmapComparisonProps["onSelect"]) {
@@ -21,8 +21,9 @@ function chooseVariant(variant: RoadmapVariant, tierKey: RoadmapSelection["tierK
   onSelect({ tierKey, platform: variant.platform, offerKey: variant.offer.offerKey });
 }
 
-export function RoadmapComparison({ result, selection, onSelect, locked = false }: RoadmapComparisonProps) {
+export function RoadmapComparison({ result, selection, onSelect, locked = false, currency }: RoadmapComparisonProps) {
   const tiers = buildRoadmapTiers(result);
+  const viewerCurrency = currency ?? viewerCurrencyFromLocation(result.location);
 
   return (
     <section className="roadmap-comparison" aria-labelledby="roadmap-comparison-title">
@@ -64,7 +65,7 @@ export function RoadmapComparison({ result, selection, onSelect, locked = false 
               {unavailable && !unavailable.feasibility.available ? <p className="roadmap-unavailable">{unavailable.feasibility.reason}</p> : null}
               <div className="roadmap-tier-price">
                 <span>Starting build</span>
-                <strong>{money.format(selectedVariant.offer.basePriceUsd)}{selectedVariant.offer.startingPrice ? "+" : ""}</strong>
+                <strong>{formatViewerAmount(selectedVariant.offer.basePriceUsd, viewerCurrency) ?? `${viewerCurrency.localCurrency} conversion unavailable`}{selectedVariant.offer.startingPrice ? "+" : ""}</strong>
               </div>
               <ul>
                 {selectedVariant.offer.includedFeatures.map((feature) => <li key={feature}>{feature}</li>)}

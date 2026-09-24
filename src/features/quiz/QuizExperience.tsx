@@ -321,7 +321,7 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
       dispatch({ type: "SELECT_LOCATION", location });
     } catch {
       dispatch({ type: "SELECT_LOCATION", location: fallbackLocation(country) });
-      setLocationError("Live conversion was unavailable, so your roadmap will use the approved USD source prices.");
+      setLocationError(`Live ${country.currency} conversion is unavailable. Retry from the investment section before confirming.`);
     } finally {
       setLocationBusy(false);
     }
@@ -364,7 +364,13 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
           existingBusinessName: result.existingBusinessName,
         });
       } else {
-        dispatch({ type: "CONTACT_ACCEPTED", contact });
+        const startFresh = businessScope === "another_business";
+        if (startFresh) {
+          const storage = getBrowserStorage();
+          if (!storage || !clearQuizAttempt(storage)) setPersistenceAvailable(false);
+          createdAtRef.current = new Date().toISOString();
+        }
+        dispatch({ type: "CONTACT_ACCEPTED", contact, startFresh });
       }
     } catch {
       setSetupError("Your email is verified, but we could not prepare the secure assessment. Please retry setup.");
@@ -406,6 +412,9 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
 
   const refreshQuote = useCallback(async (force = false) => {
     if (!state.audienceKey || !state.location) return state.location;
+    if (state.location.displayCurrency === "USD") {
+      return { ...state.location, fxRate: 1 };
+    }
     if (!force && isCurrencyQuoteFresh(state.location.fxRateTimestamp, now())) return state.location;
     const context = await ensureOwnedContext(state.audienceKey);
     try {
@@ -426,8 +435,8 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
     } catch {
       const location = { ...state.location, fxRate: null, fxRateTimestamp: null };
       dispatch({ type: "REFRESH_LOCATION_QUOTE", location });
-      setIssueError("Live conversion is unavailable. USD pricing is still ready to confirm.");
-      return location;
+      setIssueError(`Live ${state.location.displayCurrency} conversion is unavailable. Retry before confirming your proposal.`);
+      return null;
     }
   }, [ensureOwnedContext, now, service, state.answers, state.audienceKey, state.location]);
 
@@ -458,6 +467,9 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
     try {
       const context = await ensureOwnedContext(state.audienceKey);
       const location = retryingDelivery ? state.location : await refreshQuote();
+      if (!retryingDelivery && !location) {
+        throw new Error(`Live ${state.location?.displayCurrency ?? "local-currency"} conversion is unavailable. Retry before confirming your proposal.`);
+      }
       const issued = await service.issueProposal(context, state.roadmapSelection, state.appliedCampaign?.code);
       dispatch({ type: "PROPOSAL_ISSUED", proposal: issued.proposal, ...(location ? { location } : {}) });
       setProposalDialog("success");
@@ -467,6 +479,14 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
       if (isProposalServiceError(error, "proposal_delivery_failed")) {
         dispatch({ type: "PROPOSAL_DELIVERY_RETRY_REQUIRED", message });
         setProposalDialog("error");
+      } else if (isProposalServiceError(error) && [
+        "coupon_invalid",
+        "coupon_ineligible",
+        "coupon_exhausted",
+        "coupon_already_redeemed",
+      ].includes(error.code)) {
+        dispatch({ type: "COUPON_INVALIDATED", message });
+        setProposalDialog(null);
       } else {
         dispatch({ type: "PROPOSAL_CONFIRMATION_FAILED", message });
         setProposalDialog(null);
