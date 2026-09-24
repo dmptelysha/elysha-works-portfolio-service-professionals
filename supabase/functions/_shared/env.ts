@@ -43,6 +43,7 @@ export function getProposalEnv(get: EnvGetter = Deno.env.get) {
   }
   return {
     keyPepper: required(get, "PROPOSAL_KEY_PEPPER", 32),
+    couponRedemptionSecret: required(get, "COUPON_REDEMPTION_SECRET", 32),
     stopSigningSecret: required(get, "PROPOSAL_STOP_SIGNING_SECRET", 32),
     publicBaseUrl: publicBaseUrl.replace(/\/$/u, ""),
   };

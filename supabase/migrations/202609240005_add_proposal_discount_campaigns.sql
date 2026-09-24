@@ -68,6 +68,8 @@ revoke all on private.discount_redemptions from public, anon, authenticated;
 revoke all on private.discount_campaigns from service_role;
 revoke all on private.discount_redemptions from service_role;
 
+grant select (email_verified_at) on public.leads to service_role;
+
 insert into private.discount_campaigns (
   campaign_key, code, discount_percent, eligibility_scope, max_redemptions, active
 ) values

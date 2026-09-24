@@ -11,9 +11,11 @@ import {
 import { ALLOWED_ORIGINS, corsHeaders } from "../_shared/cors.ts";
 import { readJsonObject } from "../_shared/http.ts";
 import { deliverInitialProposal } from "../_shared/proposal-email.ts";
+import { getProposalEnv } from "../_shared/env.ts";
 import { QUIZ_DEFINITIONS } from "../_shared/quiz-engine/questions.ts";
 import {
   createFinalizeProposalHandler,
+  type FinalizeProposalDependencies,
   type OwnedProposalInput,
 } from "../finalize-proposal/index.ts";
 import { createFollowupHandler } from "../make-proposal-followups/index.ts";
@@ -229,17 +231,344 @@ function ownedProposalInput(): OwnedProposalInput {
   };
 }
 
+const pinoyCampaign = {
+  campaignKey: "pinoyako" as const,
+  code: "PINOYAKO" as const,
+  percentage: 50 as const,
+};
+
+function proposalRequest(body: Record<string, unknown>) {
+  return new Request("https://edge.test", {
+    method: "POST",
+    headers: {
+      origin: "https://elyshaworks.com",
+      "content-type": "application/json",
+      authorization: "Bearer visitor",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function discountDependencies(
+  overrides: Partial<FinalizeProposalDependencies> = {},
+): FinalizeProposalDependencies {
+  return {
+    keyPepper: "proposal-pepper-for-tests-1234567890",
+    couponRedemptionSecret: "coupon-redemption-secret-for-tests-123456",
+    stopSigningSecret: "stop-signing-secret-for-tests-123456",
+    publicBaseUrl: "https://elyshaworks.com",
+    supabaseUrl: "https://project.supabase.co",
+    now: () => new Date("2026-09-24T05:00:00.000Z"),
+    loadOwnedQuiz: async () => ({
+      ...ownedProposalInput(),
+      location: {
+        businessCountry: "Philippines",
+        countryCode: "PH",
+        displayCurrency: "PHP",
+        currencySymbol: "₱",
+        fxRate: 58,
+        fxRateTimestamp: "2026-09-24T04:55:00.000Z",
+      },
+    }),
+    assertApprovedConfiguration: async () => undefined,
+    previewDiscount: async () => pinoyCampaign,
+    reserveDiscount: async () => ({
+      redemptionId: "97000000-0000-4000-8000-000000000001",
+      campaign: pinoyCampaign,
+    }),
+    releaseDiscount: async () => undefined,
+    finalize: async () => undefined,
+    deliver: async () => undefined,
+    markDelivered: async () => "2026-09-27T05:00:00.000Z",
+    recordEvent: async () => undefined,
+    ...overrides,
+  };
+}
+
+Deno.test("proposal coupon secret is required and must be at least 32 characters", () => {
+  const base = new Map([
+    ["PUBLIC_PROPOSAL_BASE_URL", "https://elyshaworks.com"],
+    ["PROPOSAL_KEY_PEPPER", "proposal-pepper-for-tests-1234567890"],
+    ["PROPOSAL_STOP_SIGNING_SECRET", "stop-signing-secret-for-tests-123456"],
+  ]);
+  let failed = false;
+  try {
+    getProposalEnv((name) => base.get(name));
+  } catch {
+    failed = true;
+  }
+  assert(failed, "missing coupon redemption secret must fail closed");
+  base.set("COUPON_REDEMPTION_SECRET", "short");
+  failed = false;
+  try {
+    getProposalEnv((name) => base.get(name));
+  } catch {
+    failed = true;
+  }
+  assert(failed, "short coupon redemption secret must fail closed");
+});
+
+Deno.test("proposal requests reject browser-computed pricing before reserving a coupon", async () => {
+  let reserveCalls = 0;
+  const handler = createFinalizeProposalHandler(discountDependencies({
+    reserveDiscount: async () => {
+      reserveCalls += 1;
+      return { redemptionId: crypto.randomUUID(), campaign: pinoyCampaign };
+    },
+  }));
+
+  const response = await handler(proposalRequest({
+    operation: "issue",
+    quizSessionId: "50000000-0000-4000-8000-000000000001",
+    selection: { tierKey: "basic", platform: "systeme_io" },
+    couponCode: "pinoyako",
+    finalTotalUsd: 1,
+  }));
+
+  assertEquals(response.status, 400);
+  assertEquals(reserveCalls, 0);
+});
+
+Deno.test("coupon preview derives the digest from stored canonical email and never reserves", async () => {
+  const previewed: unknown[] = [];
+  let reserveCalls = 0;
+  const secret = "coupon-redemption-secret-for-tests-123456";
+  const handler = createFinalizeProposalHandler(discountDependencies({
+    couponRedemptionSecret: secret,
+    loadOwnedQuiz: async () => ({
+      ...ownedProposalInput(),
+      email: "  Mara@Example.COM ",
+      location: {
+        businessCountry: "Philippines",
+        countryCode: "PH",
+        displayCurrency: "PHP",
+        currencySymbol: "₱",
+        fxRate: 58,
+        fxRateTimestamp: "2026-09-24T04:55:00.000Z",
+      },
+    }),
+    previewDiscount: async (input) => {
+      previewed.push(input);
+      return pinoyCampaign;
+    },
+    reserveDiscount: async () => {
+      reserveCalls += 1;
+      return { redemptionId: crypto.randomUUID(), campaign: pinoyCampaign };
+    },
+  }));
+
+  const response = await handler(proposalRequest({
+    operation: "preview",
+    quizSessionId: "50000000-0000-4000-8000-000000000001",
+    selection: { tierKey: "basic", platform: "systeme_io" },
+    couponCode: " pinoyako ",
+  }));
+  const body = await response.json();
+  const expectedDigest = await hmacSha256Hex("proposal-coupon:mara@example.com", secret);
+
+  assertEquals(response.status, 200);
+  assertEquals(reserveCalls, 0);
+  assertEquals((previewed[0] as Record<string, unknown>).redeemerDigest, expectedDigest);
+  assertEquals(body.proposal.investment.campaign.code, "PINOYAKO");
+  assertEquals(body.proposal.investment.finalTotalUsd, body.proposal.investment.originalTotalUsd / 2);
+});
+
+Deno.test("failed proposal delivery releases its pending coupon reservation", async () => {
+  const released: unknown[] = [];
+  const handler = createFinalizeProposalHandler(discountDependencies({
+    releaseDiscount: async (input) => {
+      released.push(input);
+    },
+    deliver: async () => {
+      throw new Error("delivery rejected");
+    },
+  }));
+
+  const response = await handler(proposalRequest({
+    operation: "issue",
+    quizSessionId: "50000000-0000-4000-8000-000000000001",
+    selection: { tierKey: "basic", platform: "systeme_io" },
+    couponCode: "PINOYAKO",
+  }));
+
+  assertEquals(response.status, 502);
+  assertEquals(await response.json(), { error: "proposal_delivery_failed" });
+  assertEquals(released.length, 1);
+});
+
+Deno.test("ambiguous delivery retry reuses the proposal reference and coupon lifecycle", async () => {
+  const owned = {
+    ...ownedProposalInput(),
+    location: {
+      businessCountry: "United States",
+      countryCode: "US",
+      displayCurrency: "USD",
+      currencySymbol: "$",
+      fxRate: 1,
+      fxRateTimestamp: "2026-09-24T04:55:00.000Z",
+    },
+  };
+  const earlyBird = { campaignKey: "earlybirdworks" as const, code: "EARLYBIRDWORKS" as const, percentage: 15 as const };
+  const operationIds: string[] = [];
+  let deliveryAttempt = 0;
+  let reserveCalls = 0;
+  const handler = createFinalizeProposalHandler(discountDependencies({
+    loadOwnedQuiz: async () => ({ ...owned }),
+    previewDiscount: async () => earlyBird,
+    reserveDiscount: async () => {
+      reserveCalls += 1;
+      return { redemptionId: "97000000-0000-4000-8000-000000000002", campaign: earlyBird };
+    },
+    finalize: async (input) => {
+      owned.proposalReference = input.proposalReference;
+      owned.selectedRoadmapSnapshot = input.proposalSnapshot;
+    },
+    deliver: async (payload) => {
+      operationIds.push(payload.operationId);
+      deliveryAttempt += 1;
+      if (deliveryAttempt === 1) throw new Error("acknowledgement lost");
+    },
+  }));
+  const requestBody = {
+    operation: "issue",
+    quizSessionId: owned.quizSessionId,
+    selection: { tierKey: "advanced", platform: "gohighlevel" },
+    couponCode: "EARLYBIRDWORKS",
+  };
+
+  const first = await handler(proposalRequest(requestBody));
+  const second = await handler(proposalRequest(requestBody));
+
+  assertEquals(first.status, 502);
+  assertEquals(second.status, 200);
+  assertEquals(reserveCalls, 2);
+  assertEquals(operationIds.length, 2);
+  assertEquals(operationIds[0], operationIds[1]);
+});
+
+Deno.test("known coupon database failures map to approved public responses", async () => {
+  const expected: Array<[string, number]> = [
+    ["coupon_invalid", 400],
+    ["coupon_ineligible", 403],
+    ["coupon_exhausted", 409],
+    ["coupon_already_redeemed", 409],
+    ["coupon_temporarily_unavailable", 503],
+  ];
+  for (const [code, status] of expected) {
+    const handler = createFinalizeProposalHandler(discountDependencies({
+      previewDiscount: async () => {
+        throw new Error(code);
+      },
+    }));
+    const response = await handler(proposalRequest({
+      operation: "preview",
+      quizSessionId: "50000000-0000-4000-8000-000000000001",
+      couponCode: "PINOYAKO",
+    }));
+    assertEquals(response.status, status);
+    assertEquals(await response.json(), { error: code });
+  }
+});
+
+Deno.test("parallel last-slot issues produce one success and one exhausted response", async () => {
+  const earlyBird = { campaignKey: "earlybirdworks" as const, code: "EARLYBIRDWORKS" as const, percentage: 15 as const };
+  let claimed = false;
+  const handler = createFinalizeProposalHandler(discountDependencies({
+    loadOwnedQuiz: async (_request, quizSessionId) => ({
+      ...ownedProposalInput(),
+      quizSessionId,
+      email: `${quizSessionId}@example.test`,
+      location: {
+        businessCountry: "United States",
+        countryCode: "US",
+        displayCurrency: "USD",
+        currencySymbol: "$",
+        fxRate: 1,
+        fxRateTimestamp: "2026-09-24T04:55:00.000Z",
+      },
+    }),
+    previewDiscount: async () => earlyBird,
+    reserveDiscount: async (input) => {
+      await Promise.resolve();
+      if (claimed) throw new Error("coupon_exhausted");
+      claimed = true;
+      return {
+        redemptionId: input.quizSessionId.replace(/^50000000/u, "97000000"),
+        campaign: earlyBird,
+      };
+    },
+  }));
+  const issue = (quizSessionId: string) => handler(proposalRequest({
+    operation: "issue",
+    quizSessionId,
+    selection: { tierKey: "advanced", platform: "gohighlevel" },
+    couponCode: "EARLYBIRDWORKS",
+  }));
+
+  const [first, second] = await Promise.all([
+    issue("50000000-0000-4000-8000-000000000001"),
+    issue("50000000-0000-4000-8000-000000000002"),
+  ]);
+
+  assertEquals([first.status, second.status].sort(), [200, 409]);
+  const exhausted = first.status === 409 ? first : second;
+  assertEquals(await exhausted.json(), { error: "coupon_exhausted" });
+});
+
+Deno.test("an active issued proposal returns its immutable snapshot without touching coupon capacity", async () => {
+  let previewCalls = 0;
+  let reserveCalls = 0;
+  const handler = createFinalizeProposalHandler(discountDependencies({
+    loadOwnedQuiz: async () => ({
+      ...ownedProposalInput(),
+      proposalStatus: "active",
+      proposalReference: "70000000-0000-4000-8000-000000000001",
+      proposalExpiresAt: "2026-09-27T05:00:00.000Z",
+      selectedRoadmapSnapshot: { proposalSnapshotVersion: "proposal-snapshot-2026.09-v2", immutable: true },
+    }),
+    previewDiscount: async () => {
+      previewCalls += 1;
+      return pinoyCampaign;
+    },
+    reserveDiscount: async () => {
+      reserveCalls += 1;
+      return { redemptionId: crypto.randomUUID(), campaign: pinoyCampaign };
+    },
+  }));
+
+  const response = await handler(proposalRequest({
+    operation: "issue",
+    quizSessionId: "50000000-0000-4000-8000-000000000001",
+    selection: { tierKey: "basic", platform: "systeme_io" },
+    couponCode: "PINOYAKO",
+  }));
+  const body = await response.json();
+
+  assertEquals(response.status, 200);
+  assertEquals(body.proposal.immutable, true);
+  assertEquals(previewCalls, 0);
+  assertEquals(reserveCalls, 0);
+});
+
 Deno.test("finalization preview and issue recalculate from stored answers and never return the raw key", async () => {
   const finalized: unknown[] = [];
   const deliveries: unknown[] = [];
   const handler = createFinalizeProposalHandler({
     keyPepper: "proposal-pepper-for-tests-1234567890",
+    couponRedemptionSecret: "coupon-redemption-secret-for-tests-123456",
     stopSigningSecret: "stop-signing-secret-for-tests-123456",
     publicBaseUrl: "https://elyshaworks.com",
     supabaseUrl: "https://project.supabase.co",
     now: () => new Date("2026-09-22T05:00:00.000Z"),
     loadOwnedQuiz: async () => ownedProposalInput(),
     assertApprovedConfiguration: async () => undefined,
+    previewDiscount: async () => {
+      throw new Error("unexpected coupon preview");
+    },
+    reserveDiscount: async () => {
+      throw new Error("unexpected coupon reservation");
+    },
+    releaseDiscount: async () => undefined,
     finalize: async (input) => {
       finalized.push(input);
     },

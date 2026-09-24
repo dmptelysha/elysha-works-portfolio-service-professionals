@@ -256,6 +256,7 @@ test('proposal discount campaigns use a private, row-locked, service-only ledger
   assert.match(sql, /'pinoyako'[^;]+50[^;]+50/is);
   assert.match(sql, /'earlybirdworks'[^;]+15[^;]+100/is);
   assert.match(sql, /active[^;]+false/i);
+  assert.match(sql, /grant\s+select\s*\(\s*email_verified_at\s*\)\s+on\s+public\.leads\s+to\s+service_role/i);
   assert.doesNotMatch(sql, /grant\s+(?:select|insert|update|delete|all)[^;]+to\s+(?:anon|authenticated)/i);
 });
 
