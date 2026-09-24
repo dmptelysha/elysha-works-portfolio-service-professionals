@@ -295,7 +295,7 @@ export function QuizResult({
               ? "Proposal sent · Available for 72 hours"
               : issueError
                 ? "Your roadmap is ready; email delivery needs attention"
-                : "Preparing and emailing your proposal…"}</h2>
+                : "Choose and confirm your roadmap"}</h2>
             <p>{proposal.expiresAt
               ? `Access expires at ${new Date(proposal.expiresAt).toLocaleString("en-US")}.`
               : issueError
