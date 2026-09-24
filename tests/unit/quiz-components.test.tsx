@@ -4,13 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QuizExperience } from "@/features/quiz/QuizExperience";
 import { calculateRecommendation } from "@/features/quiz/cortex";
+import { calculateProjectPriceQuote } from "@/features/quiz/discounts";
 import { InlineEmailVerification } from "@/features/quiz/InlineEmailVerification";
 import { LeadContactStep } from "@/features/quiz/LeadContactStep";
 import type { OwnedQuizContext } from "@/features/quiz/quiz-service";
 import { QUIZ_DEFINITIONS } from "@/features/quiz/questions";
 import { QUIZ_STORAGE_KEY, QUIZ_TTL_MS } from "@/features/quiz/persistence";
 import { buildProposalDraft } from "@/features/quiz/proposal-view";
-import { defaultRoadmapSelection } from "@/features/quiz/roadmap-options";
+import { defaultRoadmapSelection, resolveRoadmapSelection } from "@/features/quiz/roadmap-options";
 import {
   CATALOG_VERSION,
   CORTEX_VERSION,
@@ -78,14 +79,23 @@ function createFakeQuizService() {
   });
   const previewProposal = vi.fn(async (context: OwnedQuizContext) => {
     const result = calculateRecommendation({ audienceKey: context.audienceKey, answers });
-    return buildProposalDraft(identity, answers, result, defaultRoadmapSelection(result));
+    const selection = defaultRoadmapSelection(result);
+    const quote = calculateProjectPriceQuote({
+      originalTotalUsd: resolveRoadmapSelection(result, selection).estimatedProjectInvestmentUsd,
+      location: result.location,
+    });
+    return buildProposalDraft(identity, answers, result, selection, quote);
   });
   const issueProposal = vi.fn(async (context: OwnedQuizContext, selection: { tierKey: "basic" | "advanced" | "complete"; platform: "systeme_io" | "gohighlevel" | "custom_app"; offerKey: string }) => {
     const result = calculateRecommendation({ audienceKey: context.audienceKey, answers });
+    const quote = calculateProjectPriceQuote({
+      originalTotalUsd: resolveRoadmapSelection(result, selection).estimatedProjectInvestmentUsd,
+      location: result.location,
+    });
     return {
       proposalReference: "70000000-0000-4000-8000-000000000001",
       accessKey: "ABCD234567",
-      proposal: { ...buildProposalDraft(identity, answers, result, selection), expiresAt: "2026-09-25T05:00:00.000Z" },
+      proposal: { ...buildProposalDraft(identity, answers, result, selection, quote), expiresAt: "2026-09-25T05:00:00.000Z" },
     };
   });
   const requestEmailOtp = vi.fn(async (email: string, _token: string, _visitorId: string): Promise<CustomEmailOtpChallenge> => ({

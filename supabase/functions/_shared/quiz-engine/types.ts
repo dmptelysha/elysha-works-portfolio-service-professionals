@@ -381,6 +381,7 @@ export interface ProposalRecommendationView {
 }
 
 export interface ProposalContentViewModel {
+  proposalSnapshotVersion: typeof PROPOSAL_SNAPSHOT_VERSION;
   audienceKey: AudienceKey;
   client: { firstName: string; businessName: string };
   pointA: PointABSummary["pointA"];
@@ -402,15 +403,7 @@ export interface ProposalContentViewModel {
     domainSetup: string;
     businessEmail: string;
   };
-  investment: {
-    basePriceUsd: number;
-    estimatedTotalUsd: number;
-    currency: string;
-    symbol: string;
-    localTotal: number | null;
-    fxRate: number | null;
-    fxRateTimestamp: string | null;
-  };
+  investment: ProjectPriceQuote & { basePriceUsd: number };
   includedScope: readonly string[];
   optionalEnhancements: readonly string[];
   ongoingCosts: readonly string[];

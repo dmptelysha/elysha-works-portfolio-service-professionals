@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-import type { PlatformKey, ProposalViewModel, RoadmapVariant } from "@/features/quiz/types";
+import type { PlatformKey, ProjectPriceQuote, ProposalViewModel, RoadmapVariant } from "@/features/quiz/types";
 import { RelatedWorkCards } from "@/features/quiz/RelatedWorkCards";
 
 import { defaultProposalService, isProposalReference, type ProposalService } from "./proposal-service";
@@ -48,7 +48,40 @@ function preferredVariant(proposal: ProposalViewModel, variants: readonly Roadma
     ?? variants[0];
 }
 
+const usd = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+interface LegacyProposalInvestment {
+  estimatedTotalUsd: number;
+  currency: string;
+  symbol: string;
+  localTotal: number | null;
+  fxRate: number | null;
+  fxRateTimestamp: string | null;
+}
+
+function readProposalInvestment(proposal: ProposalViewModel): ProjectPriceQuote {
+  const investment = proposal.investment as ProposalViewModel["investment"] | LegacyProposalInvestment;
+  if ("finalTotalUsd" in investment) return investment;
+  return {
+    originalTotalUsd: investment.estimatedTotalUsd,
+    discountAmountUsd: 0,
+    finalTotalUsd: investment.estimatedTotalUsd,
+    localCurrency: investment.currency,
+    localSymbol: investment.symbol,
+    finalTotalLocal: investment.localTotal,
+    fxRate: investment.fxRate,
+    fxRateTimestamp: investment.fxRateTimestamp,
+    campaign: null,
+  };
+}
+
 function ProposalDocument({ proposal }: { proposal: ProposalViewModel }) {
+  const investment = readProposalInvestment(proposal);
   const expiry = new Intl.DateTimeFormat("en-PH", {
     dateStyle: "long",
     timeStyle: "short",
@@ -85,9 +118,22 @@ function ProposalDocument({ proposal }: { proposal: ProposalViewModel }) {
           <p className="proposal-number">03 · Recommended solution</p>
           <h2 id="proposal-recommendation">{proposal.recommendation.title}</h2>
           <p>{proposal.recommendation.reason}</p>
-          <strong className="proposal-investment">
-            {proposal.recommendation.offerName} · ${proposal.recommendation.estimatedProjectInvestmentUsd.toLocaleString("en-US")}
-          </strong>
+          <div className="proposal-investment">
+            <span>{proposal.recommendation.offerName}</span>
+            {investment.campaign ? (
+              <div className="proposal-discount-price">
+                <del>{usd.format(investment.originalTotalUsd)}</del>
+                <strong>{usd.format(investment.finalTotalUsd)} USD</strong>
+                <span>You save {usd.format(investment.discountAmountUsd)} · {investment.campaign.percentage}% off</span>
+              </div>
+            ) : <strong>{usd.format(investment.finalTotalUsd)} USD</strong>}
+            {investment.finalTotalLocal !== null && investment.localCurrency !== "USD" ? (
+              <small>
+                Approximately {investment.localSymbol}{investment.finalTotalLocal.toLocaleString("en-US")} {investment.localCurrency}
+                {investment.fxRateTimestamp ? ` · quote ${new Date(investment.fxRateTimestamp).toLocaleString("en-PH")}` : ""}
+              </small>
+            ) : null}
+          </div>
         </section>
 
         <section className="proposal-comparison" aria-labelledby="proposal-options">

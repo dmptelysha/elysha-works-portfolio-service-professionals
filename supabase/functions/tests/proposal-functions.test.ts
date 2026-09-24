@@ -39,6 +39,22 @@ function assertEquals(
   }
 }
 
+const displayPrice = {
+  originalTotalUsd: 2500,
+  discountAmountUsd: 375,
+  finalTotalUsd: 2125,
+  localCurrency: "PHP",
+  localSymbol: "₱",
+  finalTotalLocal: 123250,
+  fxRate: 58,
+  fxRateTimestamp: "2026-09-24T00:00:00.000Z",
+  campaign: {
+    campaignKey: "earlybirdworks" as const,
+    code: "EARLYBIRDWORKS" as const,
+    percentage: 15 as const,
+  },
+};
+
 Deno.test("proposal access keys are ten non-ambiguous characters and deterministic for retries", async () => {
   const first = await deriveAccessKey(
     "50000000-0000-4000-8000-000000000001",
@@ -402,6 +418,7 @@ Deno.test("Make delivery signs the exact minimum-data body without putting the s
         tierKey: "advanced",
         platform: "gohighlevel",
         offerKey: "platform_growth",
+        price: displayPrice,
       },
     }, async (_input, init) => {
       captured = init;
@@ -428,8 +445,19 @@ Deno.test("Make delivery signs the exact minimum-data body without putting the s
   assertEquals(body.delivery_id, "70000000-0000-4000-8000-000000000001");
   assertEquals(body.access_key, "ABCD234567");
   assertEquals(body.discovery_call_url, "https://elyshaworks.com/booking/");
+  assertEquals(body.original_total_usd, 2500);
+  assertEquals(body.discount_amount_usd, 375);
+  assertEquals(body.final_total_usd, 2125);
+  assertEquals(body.discount_code, "EARLYBIRDWORKS");
+  assertEquals(body.discount_percent, 15);
+  assertEquals(body.local_total, 123250);
+  assertEquals(body.local_currency, "PHP");
   assert(!("recipient" in body));
   assert(!("proposal" in body));
+  assert(!("redemption_id" in body));
+  assert(!("redeemer_digest" in body));
+  assert(!("capacity" in body));
+  assert(!("coupon_redemption_secret" in body));
 });
 
 Deno.test("Make delivery rejects generic or mismatched success responses", async () => {
@@ -453,6 +481,7 @@ Deno.test("Make delivery rejects generic or mismatched success responses", async
       tierKey: "advanced",
       platform: "gohighlevel",
       offerKey: "platform_growth",
+      price: displayPrice,
     },
   };
   try {

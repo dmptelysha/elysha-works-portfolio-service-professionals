@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProposalAccess } from "@/features/proposal/ProposalAccess";
 import { calculateRecommendation } from "@/features/quiz/cortex";
+import { calculateProjectPriceQuote } from "@/features/quiz/discounts";
 import { buildProposalViewModel } from "@/features/quiz/proposal-view";
-import { defaultRoadmapSelection } from "@/features/quiz/roadmap-options";
+import { defaultRoadmapSelection, resolveRoadmapSelection } from "@/features/quiz/roadmap-options";
 import { QUIZ_DEFINITIONS } from "@/features/quiz/questions";
 import type { ProposalViewModel, QuizAnswers } from "@/features/quiz/types";
 
@@ -14,13 +15,20 @@ const answers: QuizAnswers = Object.fromEntries(
   QUIZ_DEFINITIONS.service_businesses.questions.map((question) => [question.key, [question.options[0].key]]),
 );
 
-function proposalFixture(): ProposalViewModel {
+function proposalFixture(discounted = false): ProposalViewModel {
   const result = calculateRecommendation({ audienceKey: "service_businesses", answers });
+  const selection = defaultRoadmapSelection(result);
+  const quote = calculateProjectPriceQuote({
+    originalTotalUsd: resolveRoadmapSelection(result, selection).estimatedProjectInvestmentUsd,
+    location: result.location,
+    campaign: discounted ? { campaignKey: "pinoyako", code: "PINOYAKO", percentage: 50 } : null,
+  });
   return buildProposalViewModel(
     { firstName: "Mara", businessName: "Mara Consulting" },
     answers,
     result,
-    defaultRoadmapSelection(result),
+    selection,
+    quote,
     "2030-01-04T00:00:00.000Z",
   );
 }
@@ -88,6 +96,48 @@ describe("protected proposal access", () => {
       }
     }
     expect(verify).toHaveBeenCalledWith(reference, "ABCD234567");
+  });
+
+  it("renders the immutable discount breakdown with semantic original pricing", async () => {
+    const user = userEvent.setup();
+    const proposal = proposalFixture(true);
+    render(<ProposalAccess service={{ verify: vi.fn(async () => proposal) }} now={() => new Date("2030-01-01T00:00:00.000Z")} />);
+
+    await user.type(screen.getByLabelText(/proposal access key/i), "ABCD234567");
+    await user.click(screen.getByRole("button", { name: /view my proposal/i }));
+
+    const original = await screen.findByText(
+      new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(proposal.investment.originalTotalUsd),
+      { selector: "del" },
+    );
+    expect(original).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`${proposal.investment.finalTotalUsd.toLocaleString("en-US")} USD`))).toBeInTheDocument();
+    expect(screen.getByText(/you save.*50% off/i)).toBeInTheDocument();
+  });
+
+  it("renders a legacy issued proposal without discount fields", async () => {
+    const user = userEvent.setup();
+    const current = proposalFixture();
+    const legacy = {
+      ...current,
+      proposalSnapshotVersion: undefined,
+      investment: {
+        basePriceUsd: current.investment.basePriceUsd,
+        estimatedTotalUsd: current.investment.finalTotalUsd,
+        currency: current.investment.localCurrency,
+        symbol: current.investment.localSymbol,
+        localTotal: current.investment.finalTotalLocal,
+        fxRate: current.investment.fxRate,
+        fxRateTimestamp: current.investment.fxRateTimestamp,
+      },
+    } as unknown as ProposalViewModel;
+    render(<ProposalAccess service={{ verify: vi.fn(async () => legacy) }} now={() => new Date("2030-01-01T00:00:00.000Z")} />);
+
+    await user.type(screen.getByLabelText(/proposal access key/i), "ABCD234567");
+    await user.click(screen.getByRole("button", { name: /view my proposal/i }));
+
+    expect(await screen.findByText(new RegExp(`\\$${current.investment.finalTotalUsd.toLocaleString("en-US")} USD`))).toBeInTheDocument();
+    expect(screen.queryByText(/you save/i)).not.toBeInTheDocument();
   });
 
   it("keeps only the verified view model in session storage and never stores the key", async () => {

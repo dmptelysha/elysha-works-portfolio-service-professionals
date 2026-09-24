@@ -5,6 +5,7 @@ import {
   PACKAGE_CATALOG,
 } from "../_shared/quiz-engine/catalog.ts";
 import { calculateRecommendation } from "../_shared/quiz-engine/cortex.ts";
+import { calculateProjectPriceQuote } from "../_shared/quiz-engine/discounts.ts";
 import { buildProposalDraft } from "../_shared/quiz-engine/proposal-view.ts";
 import {
   buildRoadmapTiers,
@@ -179,11 +180,17 @@ export function createFinalizeProposalHandler(
       });
 
       if (body.operation === "preview") {
+        const selection = defaultRoadmapSelection(result);
+        const selected = resolveRoadmapSelection(result, selection);
         const proposal = buildProposalDraft(
           { firstName: owned.firstName, businessName: owned.businessName },
           owned.answers,
           result,
-          defaultRoadmapSelection(result),
+          selection,
+          calculateProjectPriceQuote({
+            originalTotalUsd: selected.estimatedProjectInvestmentUsd,
+            location: result.location,
+          }),
         );
         return jsonResponse({ proposal }, 200, origin);
       }
@@ -214,11 +221,16 @@ export function createFinalizeProposalHandler(
       }
 
       const selection = selectedRoadmap(result, requestedSelection);
+      const selected = resolveRoadmapSelection(result, selection);
       const proposalDraft = buildProposalDraft(
         { firstName: owned.firstName, businessName: owned.businessName },
         owned.answers,
         result,
         selection,
+        calculateProjectPriceQuote({
+          originalTotalUsd: selected.estimatedProjectInvestmentUsd,
+          location: result.location,
+        }),
       );
       const proposalReference = owned.proposalReference ?? crypto.randomUUID();
       const accessKey = await deriveAccessKey(
@@ -271,6 +283,7 @@ export function createFinalizeProposalHandler(
           tierKey: selection.tierKey,
           platform: selection.platform,
           offerKey: selection.offerKey,
+          price: proposalDraft.investment,
         },
       };
 

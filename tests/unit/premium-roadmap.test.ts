@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { calculateRecommendation } from "@/features/quiz/cortex";
+import { calculateProjectPriceQuote } from "@/features/quiz/discounts";
 import { buildProposalDraft } from "@/features/quiz/proposal-view";
-import { defaultRoadmapSelection } from "@/features/quiz/roadmap-options";
-import type { CortexInput } from "@/features/quiz/types";
+import { defaultRoadmapSelection, resolveRoadmapSelection } from "@/features/quiz/roadmap-options";
+import type { CortexInput, RoadmapSelection, ValidatedDiscountCampaign } from "@/features/quiz/types";
 
 const input = {
   audienceKey: "service_businesses",
@@ -30,14 +31,28 @@ const input = {
   },
 } satisfies CortexInput;
 
+function quoteFor(
+  result: ReturnType<typeof calculateRecommendation>,
+  selection: RoadmapSelection,
+  campaign: ValidatedDiscountCampaign | null = null,
+) {
+  return calculateProjectPriceQuote({
+    originalTotalUsd: resolveRoadmapSelection(result, selection).estimatedProjectInvestmentUsd,
+    location: result.location,
+    campaign,
+  });
+}
+
 describe("premium roadmap proposal model", () => {
   it("contains the complete client-facing strategic roadmap without recalculating the result", () => {
     const result = calculateRecommendation(input);
+    const selection = defaultRoadmapSelection(result);
     const proposal = buildProposalDraft(
       { firstName: "Mara", businessName: "Mara Consulting" },
       input.answers,
       result,
-      defaultRoadmapSelection(result),
+      selection,
+      quoteFor(result, selection),
     );
 
     expect(proposal.pointA.summary).toMatch(/social media|phone calls|direct messages/i);
@@ -61,17 +76,48 @@ describe("premium roadmap proposal model", () => {
 
   it("keeps local display pricing tied to the stored USD base and supplied FX metadata", () => {
     const result = calculateRecommendation(input);
+    const selection = defaultRoadmapSelection(result);
     const proposal = buildProposalDraft(
       { firstName: "Mara", businessName: "Mara Consulting" },
       input.answers,
       result,
-      defaultRoadmapSelection(result),
+      selection,
+      quoteFor(result, selection),
     );
     expect(proposal.investment.basePriceUsd).toBe(result.basePriceUsd);
-    expect(proposal.investment.currency).toBe("PHP");
-    expect(proposal.investment.localTotal).toBe(result.estimatedProjectInvestmentUsd * 58);
-    expect(proposal.investment.localTotal).not.toBeNull();
-    if (proposal.investment.localTotal === null) throw new Error("Expected local pricing");
-    expect(proposal.paymentSchedule.depositAmount).toBe(proposal.investment.localTotal / 2);
+    expect(proposal.investment.localCurrency).toBe("PHP");
+    expect(proposal.investment.finalTotalLocal).toBe(result.estimatedProjectInvestmentUsd * 58);
+    expect(proposal.investment.finalTotalLocal).not.toBeNull();
+    if (proposal.investment.finalTotalLocal === null) throw new Error("Expected local pricing");
+    expect(proposal.paymentSchedule.depositAmount).toBe(proposal.investment.finalTotalLocal / 2);
+  });
+
+  it("stores the selected discounted estimate in a V2 proposal snapshot", () => {
+    const result = calculateRecommendation(input);
+    const selection = { tierKey: "basic", platform: "systeme_io", offerKey: "platform_launch" } as const;
+    const quote = quoteFor(result, selection, {
+      campaignKey: "pinoyako",
+      code: "PINOYAKO",
+      percentage: 50,
+    });
+
+    const proposal = buildProposalDraft(
+      { firstName: "Mara", businessName: "Mara Consulting" },
+      input.answers,
+      result,
+      selection,
+      quote,
+    );
+
+    expect(proposal.proposalSnapshotVersion).toBe("proposal-snapshot-2026.09-v2");
+    expect(proposal.investment).toMatchObject({
+      originalTotalUsd: 2000,
+      discountAmountUsd: 1000,
+      finalTotalUsd: 1000,
+      finalTotalLocal: 58000,
+      campaign: { code: "PINOYAKO", percentage: 50 },
+    });
+    expect(proposal.recommendation.offerKey).toBe("platform_launch");
+    expect(proposal.recommendation.estimatedProjectInvestmentUsd).toBe(1000);
   });
 });

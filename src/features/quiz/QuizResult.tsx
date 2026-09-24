@@ -176,9 +176,9 @@ export function QuizResult({
           <section className="result-card result-card--gold" aria-labelledby="investment-title">
             <p className="result-number">13 · Investment</p>
             <h2 id="investment-title">Project investment</h2>
-            <strong className="result-price">${proposal.investment.estimatedTotalUsd.toLocaleString("en-US")} USD</strong>
-            {proposal.investment.localTotal !== null && proposal.investment.currency !== "USD" ? (
-              <p>Approximately {proposal.investment.symbol}{proposal.investment.localTotal.toLocaleString("en-US")} {proposal.investment.currency}. USD remains the source price; conversion is indicative.</p>
+            <strong className="result-price">${proposal.investment.finalTotalUsd.toLocaleString("en-US")} USD</strong>
+            {proposal.investment.finalTotalLocal !== null && proposal.investment.localCurrency !== "USD" ? (
+              <p>Approximately {proposal.investment.localSymbol}{proposal.investment.finalTotalLocal.toLocaleString("en-US")} {proposal.investment.localCurrency}. USD remains the source price; conversion is indicative.</p>
             ) : <p>Displayed in the approved USD source currency.</p>}
           </section>
 
