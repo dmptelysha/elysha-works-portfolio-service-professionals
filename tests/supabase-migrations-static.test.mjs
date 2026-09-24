@@ -25,6 +25,7 @@ const expectedMigrations = [
   '202609240002_update_proposal_snapshot_versions.sql',
   '202609240003_reuse_owner_verified_email.sql',
   '202609240004_fix_multi_business_assessment.sql',
+  '202609240005_add_proposal_discount_campaigns.sql',
 ];
 
 const phaseOneTables = [
@@ -48,6 +49,9 @@ const requiredFunctions = [
   'acknowledge_proposal_work', 'stop_proposal_followups',
   'record_trusted_proposal_event',
   'reuse_verified_email_challenge',
+  'preview_proposal_discount', 'reserve_proposal_discount',
+  'release_proposal_discount', 'finalize_quiz_proposal_v2',
+  'mark_proposal_delivered_v2',
 ];
 
 function read(path) {
@@ -69,6 +73,7 @@ test('Supabase scaffold has the ordered reproducible assets', () => {
   assert.ok(read('supabase/tests/04_proposal_flow.test.sql').length > 0);
   assert.ok(read('supabase/tests/05_custom_email_otp.test.sql').length > 0);
   assert.ok(read('supabase/tests/06_multi_business_assessment.test.sql').length > 0);
+  assert.ok(read('supabase/tests/07_proposal_discounts.test.sql').length > 0);
   const config = read('supabase/config.toml');
   assert.match(config, /\[auth\.email\]/);
   assert.match(config, /otp_expiry\s*=\s*600/);
@@ -226,6 +231,34 @@ test('multi-business assessment selection binds the displayed record to the veri
   assert.match(sql, /grant\s+execute[^;]+to\s+authenticated/is);
 });
 
+test('proposal discount campaigns use a private, row-locked, service-only ledger', () => {
+  const sql = read('supabase/migrations/202609240005_add_proposal_discount_campaigns.sql');
+  assert.doesNotMatch(sql, /drop\s+(?:table|schema|function)\b|truncate\b|delete\s+from\s+public\./i);
+  for (const table of ['discount_campaigns', 'discount_redemptions']) {
+    assert.match(sql, new RegExp(`create\\s+table\\s+private\\.${table}\\b`, 'i'), table);
+    assert.match(sql, new RegExp(`alter\\s+table\\s+private\\.${table}\\s+enable\\s+row\\s+level\\s+security`, 'i'), `${table} RLS`);
+    assert.match(sql, new RegExp(`revoke\\s+all\\s+on\\s+private\\.${table}\\s+from\\s+public,\\s*anon,\\s*authenticated`, 'i'), `${table} browser revoke`);
+  }
+  for (const fn of [
+    'preview_proposal_discount', 'reserve_proposal_discount', 'release_proposal_discount',
+    'finalize_quiz_proposal_v2', 'mark_proposal_delivered_v2',
+  ]) {
+    assert.match(sql, new RegExp(`function\\s+public\\.${fn}\\s*\\(`, 'i'), fn);
+    assert.match(sql, new RegExp(`revoke\\s+execute\\s+on\\s+function\\s+public\\.${fn}\\s*\\([^;]+from\\s+public,\\s*anon,\\s*authenticated`, 'is'), `${fn} browser revoke`);
+    assert.match(sql, new RegExp(`grant\\s+execute\\s+on\\s+function\\s+public\\.${fn}\\s*\\([^;]+to\\s+service_role`, 'is'), `${fn} service grant`);
+  }
+  assert.match(sql, /set\s+search_path\s*=\s*''/i);
+  assert.match(sql, /select[^;]+from\s+private\.discount_campaigns[^;]+for\s+update/is);
+  assert.match(sql, /status\s+in\s*\(\s*'pending'\s*,\s*'redeemed'\s*\)/i);
+  assert.match(sql, /reserved_until\s*<=\s*p_at/i);
+  assert.match(sql, /release_proposal_discount[\s\S]+status\s*=\s*'pending'/i);
+  assert.match(sql, /mark_proposal_delivered_v2[\s\S]+status\s+not\s+in\s*\(\s*'pending'\s*,\s*'redeemed'\s*\)/i);
+  assert.match(sql, /'pinoyako'[^;]+50[^;]+50/is);
+  assert.match(sql, /'earlybirdworks'[^;]+15[^;]+100/is);
+  assert.match(sql, /active[^;]+false/i);
+  assert.doesNotMatch(sql, /grant\s+(?:select|insert|update|delete|all)[^;]+to\s+(?:anon|authenticated)/i);
+});
+
 test('migrations create exactly the Phase 1 public tables', () => {
   const sql = allMigrations();
   for (const table of phaseOneTables) {
@@ -237,8 +270,8 @@ test('migrations create exactly the Phase 1 public tables', () => {
   }
   assert.equal(
     (sql.match(/create\s+table\s+(?:public|private)\.[a-z_]+/gi) ?? []).length,
-    12,
-    'the custom OTP challenge is the only twelfth runtime table',
+    14,
+    'the custom OTP challenge and two private discount tables are the only additional runtime tables',
   );
 });
 
