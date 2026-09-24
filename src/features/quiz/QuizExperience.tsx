@@ -474,7 +474,7 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
     } finally {
       setIssuing(false);
     }
-  }, [ensureOwnedContext, issuing, refreshQuote, service, state.appliedCampaign?.code, state.audienceKey, state.location, state.proposalConfirmationStatus, state.roadmapSelection]);
+  }, [ensureOwnedContext, issuing, refreshQuote, service, state.appliedCampaign, state.audienceKey, state.location, state.proposalConfirmationStatus, state.roadmapSelection]);
 
   useEffect(() => {
     if (!proposalDialog) return;
