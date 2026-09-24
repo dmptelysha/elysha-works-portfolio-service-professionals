@@ -644,36 +644,73 @@ describe("local portfolio quiz", () => {
     expect(screen.queryByRole("dialog", { name: /your proposal is ready/i })).not.toBeInTheDocument();
   });
 
+  it("refreshes PHP pricing before the first preview and shows the default package amount", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:10:00.000Z")} />);
+
+    await completeServiceBusinessAssessment(user);
+
+    const investment = (await screen.findByRole("heading", { name: /project investment/i })).closest("section")!;
+    expect(within(investment).getByText("₱261,000 PHP")).toBeInTheDocument();
+    expect(within(investment).queryByText(/PHP conversion is unavailable/i)).not.toBeInTheDocument();
+    expect(service.getCurrencyQuote).toHaveBeenCalledTimes(2);
+    expect(service.getCurrencyQuote.mock.invocationCallOrder[1]).toBeLessThan(service.previewProposal.mock.invocationCallOrder[0]);
+    expect(service.saveOwnedQuizProgress.mock.invocationCallOrder.at(-1)!).toBeLessThan(service.previewProposal.mock.invocationCallOrder[0]);
+  });
+
+  it("still shows the roadmap without fabricated PHP amounts when the initial refresh fails", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    service.getCurrencyQuote
+      .mockResolvedValueOnce({
+        businessCountry: "Philippines",
+        countryCode: "PH",
+        displayCurrency: "PHP",
+        currencySymbol: "₱",
+        fxRate: 58,
+        fxRateTimestamp: "2026-09-24T00:00:00.000Z",
+      })
+      .mockRejectedValueOnce(new Error("FX unavailable"));
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:10:00.000Z")} />);
+
+    await completeServiceBusinessAssessment(user);
+
+    const investment = (await screen.findByRole("heading", { name: /project investment/i })).closest("section")!;
+    expect(within(investment).getByText(/live PHP conversion is unavailable/i)).toBeInTheDocument();
+    expect(within(investment).queryByText(/₱[\d,]+ PHP/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /try that calculation again/i })).not.toBeInTheDocument();
+  });
+
   it("applies a coupon and shows the original and discounted totals only in PHP", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
     render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.000Z")} />);
     await completeServiceBusinessAssessment(user);
 
-    const basicCard = (await screen.findByRole("heading", { name: /^basic$/i })).closest("article")!;
-    await user.click(within(basicCard).getByRole("button", { name: /^systeme\.io$/i }));
-    expect(screen.getByLabelText(/coupon code/i)).toHaveAttribute("placeholder", "Input your coupon code here");
-    await user.type(screen.getByLabelText(/coupon code/i), "pinoyako");
+    const couponInput = await screen.findByLabelText(/coupon code/i);
+    expect(couponInput).toHaveAttribute("placeholder", "Input your coupon code here");
+    await user.type(couponInput, "pinoyako");
     await user.click(screen.getByRole("button", { name: /apply coupon/i }));
 
     await waitFor(() => expect(document.querySelector("del")).not.toBeNull());
-    expect(document.querySelector("del")?.textContent).toBe("₱116,000 PHP");
-    expect(screen.getAllByText("₱58,000 PHP").length).toBeGreaterThan(0);
-    expect(screen.getByText(/you save ₱58,000 PHP.*50% off/i)).toBeInTheDocument();
+    expect(document.querySelector("del")?.textContent).toBe("₱261,000 PHP");
+    expect(screen.getAllByText("₱130,500 PHP").length).toBeGreaterThan(0);
+    expect(screen.getByText(/you save ₱130,500 PHP.*50% off/i)).toBeInTheDocument();
     expect(screen.queryByText(/USD/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/coupon code/i)).toBeDisabled();
     expect(screen.getByRole("button", { name: /remove/i })).toBeEnabled();
     expect(service.previewProposal).toHaveBeenLastCalledWith(
       expect.anything(),
-      { tierKey: "basic", platform: "systeme_io", offerKey: "platform_launch" },
+      { tierKey: "complete", platform: "gohighlevel", offerKey: "platform_scale" },
       "pinoyako",
     );
   });
 
-  it("refreshes stale PHP pricing before validating a coupon", async () => {
+  it("refreshes PHP pricing before coupon validation even when the current quote is fresh", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
-    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.001Z")} />);
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:10:00.000Z")} />);
     await completeServiceBusinessAssessment(user);
     service.getCurrencyQuote.mockClear();
     service.getCurrencyQuote.mockResolvedValue({

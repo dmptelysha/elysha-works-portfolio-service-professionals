@@ -204,10 +204,35 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
     void (async () => {
       try {
         const context = await ensureOwnedContext(state.audienceKey!);
-        const [result, proposal] = await Promise.all([
-          Promise.resolve(calculateRecommendation({ audienceKey: state.audienceKey!, answers: state.answers, location: state.location ?? undefined })),
-          service.previewProposal(context),
-        ]);
+        let proposalLocation = state.location;
+        if (proposalLocation && proposalLocation.displayCurrency !== "USD") {
+          try {
+            proposalLocation = await service.getCurrencyQuote({
+              name: proposalLocation.businessCountry,
+              code: proposalLocation.countryCode,
+              currency: proposalLocation.displayCurrency,
+              symbol: proposalLocation.currencySymbol,
+            });
+          } catch {
+            proposalLocation = {
+              ...proposalLocation,
+              fxRate: null,
+              fxRateTimestamp: null,
+            };
+          }
+          await service.saveOwnedQuizProgress(context, {
+            answers: state.answers,
+            currentStep: QUIZ_DEFINITIONS[state.audienceKey!].questions.length,
+            lastCompletedStep: QUIZ_DEFINITIONS[state.audienceKey!].questions.length,
+            location: proposalLocation,
+          });
+        }
+        const result = calculateRecommendation({
+          audienceKey: state.audienceKey!,
+          answers: state.answers,
+          location: proposalLocation ?? undefined,
+        });
+        const proposal = await service.previewProposal(context);
         if (!cancelled) dispatch({ type: "CALCULATION_SUCCESS", result, proposal });
       } catch {
         if (!cancelled) dispatch({
@@ -446,7 +471,7 @@ export function QuizExperience({ service = defaultQuizService, now = () => new D
     setIssueError(null);
     try {
       const context = await ensureOwnedContext(state.audienceKey);
-      const location = await refreshQuote();
+      const location = await refreshQuote(true);
       if (!location) {
         throw new Error(`Live ${state.location?.displayCurrency ?? "local-currency"} conversion is unavailable. Retry before applying your coupon.`);
       }
