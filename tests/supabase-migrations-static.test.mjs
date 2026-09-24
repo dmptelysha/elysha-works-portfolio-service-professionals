@@ -26,6 +26,7 @@ const expectedMigrations = [
   '202609240003_reuse_owner_verified_email.sql',
   '202609240004_fix_multi_business_assessment.sql',
   '202609240005_add_proposal_discount_campaigns.sql',
+  '202609240006_activate_proposal_discount_campaigns.sql',
 ];
 
 const phaseOneTables = [
@@ -263,6 +264,17 @@ test('proposal discount campaigns use a private, row-locked, service-only ledger
   assert.match(sql, /active[^;]+false/i);
   assert.match(sql, /grant\s+select\s*\(\s*email_verified_at\s*\)\s+on\s+public\.leads\s+to\s+service_role/i);
   assert.doesNotMatch(sql, /grant\s+(?:select|insert|update|delete|all)[^;]+to\s+(?:anon|authenticated)/i);
+});
+
+test('proposal discount activation is additive and pins both approved campaign configurations', () => {
+  const sql = read('supabase/migrations/202609240006_activate_proposal_discount_campaigns.sql');
+  assert.doesNotMatch(sql, /drop\s+(?:table|schema|function)\b|truncate\b|delete\s+from\b/i);
+  assert.match(sql, /update\s+private\.discount_campaigns[\s\S]+set\s+active\s*=\s*true/i);
+  assert.match(sql, /campaign_key\s*=\s*'pinoyako'[\s\S]+code\s*=\s*'PINOYAKO'[\s\S]+discount_percent\s*=\s*50[\s\S]+eligibility_scope\s*=\s*'philippines'[\s\S]+max_redemptions\s*=\s*50/i);
+  assert.match(sql, /campaign_key\s*=\s*'earlybirdworks'[\s\S]+code\s*=\s*'EARLYBIRDWORKS'[\s\S]+discount_percent\s*=\s*15[\s\S]+eligibility_scope\s*=\s*'international'[\s\S]+max_redemptions\s*=\s*100/i);
+  assert.match(sql, /get\s+diagnostics\s+v_activated\s*=\s*row_count/i);
+  assert.match(sql, /v_activated\s*<>\s*2/i);
+  assert.match(sql, /raise\s+exception\s+'proposal discount campaign configuration mismatch'/i);
 });
 
 test('migrations create exactly the Phase 1 public tables', () => {
