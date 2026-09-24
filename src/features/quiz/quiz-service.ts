@@ -277,7 +277,7 @@ export async function submitCustomVerifiedLeadContact(
   client?: SupabaseClient,
 ): Promise<LeadContactSubmissionResult> {
   const supabase = clientOrDefault(client);
-  const response = await supabase.rpc("begin_custom_verified_qualified_quiz", {
+  const response = await supabase.rpc("begin_custom_verified_qualified_quiz_v2", {
     p_visitor_id: requireUuid(context.visitorId),
     p_portfolio_session_id: requireUuid(context.portfolioSessionId),
     p_quiz_session_id: requireUuid(context.quizSessionId),
@@ -289,18 +289,26 @@ export async function submitCustomVerifiedLeadContact(
     p_consent: contact.consent === true,
     p_consent_version: "proposal_followup_v1",
     p_business_scope: contact.businessScope ?? null,
+    p_selected_business_id: contact.selectedBusinessId ? requireUuid(contact.selectedBusinessId) : null,
   });
   const row = Array.isArray(response.data) ? response.data[0] : response.data;
   if (response.error || !row || typeof row !== "object") throw new Error(CONTACT_ERROR);
   const record = row as Record<string, unknown>;
   const quizSessionId = requireUuid(record.quiz_session_id);
+  if (record.submission_status === "different_business_name_required") {
+    return { status: "different_business_name_required", quizSessionId };
+  }
   if (record.submission_status === "business_scope_required") {
-    if (typeof record.existing_business_name !== "string" || !record.existing_business_name.trim()) {
+    if (
+      typeof record.existing_business_name !== "string" || !record.existing_business_name.trim() ||
+      typeof record.existing_business_id !== "string"
+    ) {
       throw new Error(CONTACT_ERROR);
     }
     return {
       status: "business_scope_required",
       quizSessionId,
+      existingBusinessId: requireUuid(record.existing_business_id),
       existingBusinessName: record.existing_business_name.trim(),
     };
   }

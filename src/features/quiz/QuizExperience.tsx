@@ -340,11 +340,29 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
         throw new Error("verified challenge required");
       }
       const contact: LeadContactInput = businessScope
-        ? { ...currentContact, consent: true, businessScope }
+        ? {
+          ...currentContact,
+          businessName: businessScope === "same_business" && state.existingBusinessName
+            ? state.existingBusinessName
+            : currentContact.businessName,
+          consent: true,
+          businessScope,
+          ...(businessScope === "same_business" && state.existingBusinessId
+            ? { selectedBusinessId: state.existingBusinessId }
+            : {}),
+        }
         : { ...currentContact, consent: true };
       const result = await service.submitLeadContact(context, state.otpChallenge.id, contact);
-      if (result.status === "business_scope_required") {
-        dispatch({ type: "BUSINESS_SCOPE_REQUIRED", contact, existingBusinessName: result.existingBusinessName });
+      if (result.status === "different_business_name_required") {
+        dispatch({ type: "EDIT_BUSINESS" });
+        setSetupError("Enter a different business name to continue with this verified email.");
+      } else if (result.status === "business_scope_required") {
+        dispatch({
+          type: "BUSINESS_SCOPE_REQUIRED",
+          contact,
+          existingBusinessId: result.existingBusinessId,
+          existingBusinessName: result.existingBusinessName,
+        });
       } else {
         dispatch({ type: "CONTACT_ACCEPTED", contact });
       }
@@ -471,7 +489,10 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
               setSetupError(null);
               dispatch({ type: "OTP_RESET" });
             }}
-            onContinue={(contact) => finishVerifiedSetup(undefined, contact)}
+            onContinue={(contact) => finishVerifiedSetup(
+              state.existingBusinessId ? "another_business" : undefined,
+              contact,
+            )}
             onRequestCode={async (contact) => {
               setDeliveryEmail(contact.email.trim().toLowerCase());
               try {
@@ -506,18 +527,25 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
           />
         ) : null}
 
-        {hydrated && state.screen === "business_scope" && state.contact && state.existingBusinessName ? (
+        {hydrated && state.screen === "business_scope" && state.contact && state.existingBusinessId && state.existingBusinessName ? (
           <section className="quiz-stage quiz-business-scope" aria-labelledby="quiz-business-scope-title">
             <p className="quiz-kicker">Verified identity</p>
-            <h1 id="quiz-business-scope-title">Is this assessment for {state.existingBusinessName}?</h1>
+            <h1 id="quiz-business-scope-title">Hi {state.contact.firstName}, is this assessment for {state.existingBusinessName}?</h1>
             <p className="quiz-lede">Choose how this assessment should be organized under your verified email.</p>
             {setupError ? <p className="quiz-validation" role="alert">{setupError}</p> : null}
             <div className="quiz-business-scope-actions">
               <button className="quiz-primary" disabled={setupBusy} onClick={() => void finishVerifiedSetup("same_business")} type="button">Same business</button>
-              <button className="quiz-secondary" disabled={setupBusy} onClick={() => void finishVerifiedSetup("another_business")} type="button">Another business</button>
+              <button className="quiz-secondary" disabled={setupBusy} onClick={() => {
+                const enteredName = state.contact?.businessName.trim().toLocaleLowerCase();
+                const existingName = state.existingBusinessName?.trim().toLocaleLowerCase();
+                if (!enteredName || enteredName === existingName) {
+                  dispatch({ type: "EDIT_BUSINESS" });
+                  return;
+                }
+                void finishVerifiedSetup("another_business");
+              }} type="button">Another business</button>
               <button className="quiz-back" disabled={setupBusy} onClick={() => {
-                emailVerifiedRef.current = false;
-                dispatch({ type: "CHANGE_EMAIL" });
+                dispatch({ type: "EDIT_BUSINESS" });
               }} type="button">Change business details</button>
             </div>
           </section>
@@ -527,10 +555,10 @@ export function QuizExperience({ service = defaultQuizService }: QuizExperienceP
           <BusinessLocationStep busy={locationBusy} error={locationError} onContinue={selectLocation} />
         ) : null}
 
-        {hydrated && state.screen === "intro" && definition ? (
+        {hydrated && state.screen === "intro" && definition && state.clientIdentity ? (
           <section className="quiz-stage quiz-intro" aria-labelledby="quiz-intro-title">
             <p className="quiz-kicker">{definition.label}</p>
-            <h1 id="quiz-intro-title">Your roadmap starts with context.</h1>
+            <h1 id="quiz-intro-title">Hi {state.clientIdentity.firstName}, let&apos;s start your assessment.</h1>
             <p className="quiz-lede">
               Eleven focused questions will identify the clearest system, platform route, and planning investment for your business.
             </p>

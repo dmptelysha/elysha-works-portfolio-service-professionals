@@ -12,6 +12,7 @@ import {
   verifyCustomEmailOtp,
   type OwnedQuizContext,
 } from "@/features/quiz/quiz-service";
+import type { LeadContactInput } from "@/features/quiz/types";
 
 const USER_ID = "10000000-0000-4000-8000-000000000001";
 const DEFINITION_ID = "20000000-0000-4000-8000-000000000001";
@@ -297,7 +298,7 @@ describe("Supabase quiz service", () => {
       firstName: " Mara ", lastName: " Santos ", businessName: " Mara Consulting ", email: "MARA@EXAMPLE.COM", consent: true,
     }, fake.client as never)).resolves.toEqual({ status: "accepted", leadId: LEAD_ID, quizSessionId: QUIZ_SESSION_ID });
 
-    expect(fake.rpc).toHaveBeenCalledWith("begin_custom_verified_qualified_quiz", {
+    expect(fake.rpc).toHaveBeenCalledWith("begin_custom_verified_qualified_quiz_v2", {
       p_visitor_id: VISITOR_ID,
       p_portfolio_session_id: PORTFOLIO_SESSION_ID,
       p_quiz_session_id: QUIZ_SESSION_ID,
@@ -309,6 +310,7 @@ describe("Supabase quiz service", () => {
       p_consent: true,
       p_consent_version: "proposal_followup_v1",
       p_business_scope: null,
+      p_selected_business_id: null,
     });
     expect(JSON.stringify(fake.rpc.mock.calls)).not.toContain("owner_user_id");
   });
@@ -320,6 +322,7 @@ describe("Supabase quiz service", () => {
           submission_status: "business_scope_required",
           lead_id: null,
           quiz_session_id: QUIZ_SESSION_ID,
+          existing_business_id: LEAD_ID,
           existing_business_name: "Mara Consulting",
         }],
         error: null,
@@ -331,12 +334,18 @@ describe("Supabase quiz service", () => {
     await expect(submitCustomVerifiedLeadContact(context, CHALLENGE_ID, contact, fake.client as never)).resolves.toEqual({
       status: "business_scope_required",
       quizSessionId: QUIZ_SESSION_ID,
+      existingBusinessId: LEAD_ID,
       existingBusinessName: "Mara Consulting",
     });
 
-    await submitCustomVerifiedLeadContact(context, CHALLENGE_ID, { ...contact, businessScope: "same_business" }, fake.client as never);
-    expect(fake.rpc).toHaveBeenLastCalledWith("begin_custom_verified_qualified_quiz", expect.objectContaining({
+    await submitCustomVerifiedLeadContact(context, CHALLENGE_ID, {
+      ...contact,
+      businessScope: "same_business",
+      selectedBusinessId: LEAD_ID,
+    } as LeadContactInput, fake.client as never);
+    expect(fake.rpc).toHaveBeenLastCalledWith("begin_custom_verified_qualified_quiz_v2", expect.objectContaining({
       p_business_scope: "same_business",
+      p_selected_business_id: LEAD_ID,
     }));
   });
 

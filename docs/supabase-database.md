@@ -92,7 +92,7 @@ The qualified quiz is verified-email-first. After an owned anonymous quiz contex
 
 Make decrypts the authenticated AES-256-GCM envelope and sends the transactional code through the owner-approved Gmail OAuth connection. The code has a **10-minute OTP expiry** and a **60-second resend** interval. Make never verifies codes and receives no database authority. The full inactive scenario contract is documented in `docs/make-email-otp-scenario.md`.
 
-`verify-email-otp` performs the atomic digest comparison, attempt counting, expiry check, and single-use grant issuance. The browser then calls `begin_custom_verified_qualified_quiz` with the challenge UUID; the RPC consumes the grant atomically and creates or reuses the lead. It receives no browser-supplied email argument. The exact verified address comes from the private challenge row.
+`verify-email-otp` performs the atomic digest comparison, attempt counting, expiry check, and single-use grant issuance. The browser then calls `begin_custom_verified_qualified_quiz_v2` with the challenge UUID; the RPC consumes the grant atomically and creates or reuses the lead. It receives no browser-supplied email argument. The exact verified address comes from the private challenge row.
 
 The legacy Supabase Auth email-OTP templates and SMTP sender are not part of this quiz verification path. Anonymous Auth remains responsible only for browser ownership and RLS. Any cached client still using an earlier Auth-OTP build must be upgraded; do not run both verification authorities as interchangeable production paths.
 
@@ -104,7 +104,7 @@ The legacy Supabase Auth email-OTP templates and SMTP sender are not part of thi
 
 Visitor-callable security-definer functions validate `auth.uid()`, ownership of every referenced row, bounded scalar/JSON inputs, and fixed `search_path = ''`. They assign CRM state, ownership, prices, timestamps, proposal state, and orchestration values internally.
 
-Existing restricted functions include lead/booking/analytics/linking operations. The connected flow uses `begin_custom_verified_qualified_quiz`; it requires the owning anonymous JWT and a valid custom verification grant, consumes that grant atomically, derives the canonical email from the private challenge, returns a minimal same/another-business decision, reuses the stable lead for the same business, and creates a separate lead for another business. Legacy quiz-start functions are not verification authorities for the new client. Trusted proposal state functions are service-role-only, and the former browser-wide result persistence grant is revoked.
+Existing restricted functions include lead/booking/analytics/linking operations. The connected flow uses `begin_custom_verified_qualified_quiz_v2`; it requires the owning anonymous JWT and a valid custom verification grant, consumes that grant atomically, derives the canonical email from the private challenge, and binds a same-business confirmation to the exact displayed lead while treating its UUID only as a selector. Another-business submissions create a separate lead for a new normalized business name or reuse an existing second business under the same verified email without duplication. Legacy quiz-start functions are not verification authorities for the new client. Trusted proposal state functions are service-role-only, and the former browser-wide result persistence grant is revoked.
 
 Seven Edge Functions form the external boundary:
 

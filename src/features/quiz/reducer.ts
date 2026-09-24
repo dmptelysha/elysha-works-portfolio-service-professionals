@@ -38,6 +38,7 @@ export interface QuizState {
   contact: LeadIdentityInput | null;
   otpChallenge: CustomEmailOtpChallenge | null;
   emailVerified: boolean;
+  existingBusinessId: string | null;
   existingBusinessName: string | null;
   clientIdentity: ClientIdentity | null;
   proposal: ProposalDraftViewModel | ProposalViewModel | null;
@@ -56,7 +57,8 @@ export type QuizAction =
   | { type: "OTP_VERIFIED"; grantExpiresAt: string }
   | { type: "OTP_RESET" }
   | { type: "CHANGE_EMAIL" }
-  | { type: "BUSINESS_SCOPE_REQUIRED"; existingBusinessName: string; contact: LeadContactInput }
+  | { type: "BUSINESS_SCOPE_REQUIRED"; existingBusinessId: string; existingBusinessName: string; contact: LeadContactInput }
+  | { type: "EDIT_BUSINESS" }
   | { type: "CONTACT_ACCEPTED"; contact: LeadContactInput }
   | { type: "SELECT_LOCATION"; location: BusinessLocation }
   | { type: "CONTINUE_INTRO" }
@@ -82,6 +84,7 @@ export function createInitialQuizState(): QuizState {
     contact: null,
     otpChallenge: null,
     emailVerified: false,
+    existingBusinessId: null,
     existingBusinessName: null,
     clientIdentity: null,
     proposal: null,
@@ -112,6 +115,7 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         contact: null,
         otpChallenge: null,
         emailVerified: false,
+        existingBusinessId: null,
         existingBusinessName: null,
         clientIdentity: null,
         proposal: null,
@@ -151,6 +155,7 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         contact,
         otpChallenge: action.challenge,
         emailVerified: action.challenge.verified,
+        existingBusinessId: null,
         existingBusinessName: null,
       };
     }
@@ -175,11 +180,28 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         contact: null,
         otpChallenge: null,
         emailVerified: false,
+        existingBusinessId: null,
         existingBusinessName: null,
       };
     case "BUSINESS_SCOPE_REQUIRED":
       if (!state.emailVerified || !state.contact) return state;
-      return { ...state, screen: "business_scope", contact: action.contact, existingBusinessName: action.existingBusinessName };
+      return {
+        ...state,
+        screen: "business_scope",
+        contact: action.contact,
+        existingBusinessId: action.existingBusinessId,
+        existingBusinessName: action.existingBusinessName,
+      };
+    case "EDIT_BUSINESS":
+      if (
+        !["business_scope", "contact"].includes(state.screen) ||
+        !state.emailVerified || !state.contact || !state.existingBusinessId
+      ) return state;
+      return {
+        ...state,
+        screen: "contact",
+        contact: { ...state.contact, businessName: "" },
+      };
     case "CONTACT_ACCEPTED": {
       if (!state.audienceKey || !state.emailVerified || !["verify_email", "business_scope"].includes(state.screen)) return state;
       const firstName = action.contact.firstName.trim();
@@ -193,6 +215,7 @@ export function quizReducer(state: QuizState, action: QuizAction): QuizState {
         contact: null,
         otpChallenge: null,
         clientIdentity: { firstName, businessName },
+        existingBusinessId: null,
         existingBusinessName: null,
       };
     }

@@ -82,6 +82,7 @@ export interface LeadContactInput {
   email: string;
   consent: true;
   businessScope?: "same_business" | "another_business";
+  selectedBusinessId?: string;
 }
 
 export interface EmailOtpChallenge {
@@ -99,7 +100,12 @@ export type LeadContactSubmissionResult =
   | {
     status: "business_scope_required";
     quizSessionId: string;
+    existingBusinessId: string;
     existingBusinessName: string;
+  }
+  | {
+    status: "different_business_name_required";
+    quizSessionId: string;
   };
 
 export interface ClientIdentity {

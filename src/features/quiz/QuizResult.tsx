@@ -70,7 +70,7 @@ export function QuizResult({
       <article className="quiz-result" aria-labelledby="result-title">
         <header className="result-hero result-hero--client">
           <p className="quiz-kicker">Your personalized roadmap</p>
-          <h1 id="result-title">{proposal.client.firstName}’s roadmap for {proposal.client.businessName}</h1>
+          <h1 id="result-title">Hi {proposal.client.firstName}, here&apos;s the roadmap for {proposal.client.businessName}.</h1>
           <p>{proposal.recommendation.title}</p>
           <strong className="result-confidence result-confidence--standard">Server-ready recommendation</strong>
           <span>Review your path and compare the three working options. Your protected proposal is prepared and emailed automatically.</span>

@@ -151,7 +151,7 @@ Selecting a card:
 - Require a consent checkbox using the approved `proposal_followup_v1` copy before continuing. The copy explains the initial proposal email and up to three proposal-related follow-ups unless the visitor books or stops them.
 - Place **Verify Email** beside the email field. Keep the name, business, consent, and email controls mounted while the six-digit code panel expands below; do not navigate to a separate verification page.
 - Generate the six-digit OTP in `request-email-otp`, store only its HMAC digest in the private Supabase schema, and deliver its authenticated AES-256-GCM envelope through the inactive Make/Gmail scenario. Use a **10-minute OTP expiry** and a **60-second resend** interval. Never store the plaintext OTP.
-- A verified email is required before lead creation. `begin_custom_verified_qualified_quiz` consumes the short-lived challenge grant and derives the canonical email from the private challenge; the browser cannot supply or override it.
+- A verified email is required before lead creation. `begin_custom_verified_qualified_quiz_v2` consumes the short-lived challenge grant and derives the canonical email from the private challenge; the browser cannot supply or override it.
 - Trim all values, normalize email to lowercase, keep form values after a backend error, and show a retry action.
 - Do not store contact fields in local storage, URLs, analytics, or client logs.
 - One question per screen.
@@ -1258,7 +1258,8 @@ The connected client state carries the Supabase anonymous user ID, owned visitor
 - Update remote progress after each completed step or in safe batches and refresh `last_activity_at`.
 - Mark previous remote attempts `restarted` or `expired` rather than overwriting analytics history.
 - Create or reuse and link a lead after the required contact-and-consent step succeeds through `begin_qualified_quiz_v2`.
-- When the same anonymous owner reuses an email already linked to that owner's visitor record, pause before Question 1 and ask whether the assessment is for the same business or another business. Same-business retakes reuse the stable lead ID without replacing its original source IDs; another-business retakes create a separate lead even when the contact email is shared.
+- When the same anonymous owner reuses an email already linked to that owner's visitor record, pause before Question 1 and ask, “Hi {first name}, is this assessment for {business name}?” Same-business retakes reuse the exact displayed lead ID without replacing its original source IDs. Another-business retakes preserve email verification, request a distinct name when needed, create a separate lead for a new business, and reuse an existing second business under that verified email without creating a duplicate.
+- After verified setup, greet the owner with “Hi {first name}, let’s start your assessment.” The report opens with “Hi {first name}, here’s the roadmap for {business name}.”
 - Never disclose that an email exists under another owner. Cross-device email recognition requires a future verified email OTP flow; an email address alone is not proof of identity.
 - Use server-side `finalize-proposal` preview and issue operations for protected scoring, prices, selections, proposal issuance, and Make delivery; never trust client-calculated totals.
 - Use only public/publishable Supabase credentials with tested RLS and narrowly scoped RPC functions; the `service_role` key never appears in browser code.

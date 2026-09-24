@@ -133,13 +133,13 @@ async function completeContactStep(
   await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
   await screen.findByRole("heading", { name: /where does your business operate/i });
   await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
-  await screen.findByRole("heading", { name: /your roadmap starts with context/i });
+  await screen.findByRole("heading", { name: /hi mara, let.s start your assessment/i });
 }
 
 async function completeLocationStep(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByRole("heading", { name: /where does your business operate/i });
   await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
-  await screen.findByRole("heading", { name: /your roadmap starts with context/i });
+  await screen.findByRole("heading", { name: /hi mara, let.s start your assessment/i });
 }
 
 async function completeServiceBusinessAssessment(user: ReturnType<typeof userEvent.setup>) {
@@ -485,7 +485,12 @@ describe("local portfolio quiz", () => {
     const service = createFakeQuizService();
     service.submitLeadContact.mockImplementation(async (_context, _challengeId, contact) => contact.businessScope
       ? { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId }
-      : { status: "business_scope_required" as const, quizSessionId: ownedContext.quizSessionId, existingBusinessName: "Mara Consulting" });
+      : {
+        status: "business_scope_required" as const,
+        quizSessionId: ownedContext.quizSessionId,
+        existingBusinessId: "60000000-0000-4000-8000-000000000001",
+        existingBusinessName: "Mara Consulting",
+      } as LeadContactSubmissionResult);
     render(<QuizExperience service={service} />);
 
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
@@ -493,10 +498,14 @@ describe("local portfolio quiz", () => {
     await user.type(await screen.findByLabelText(/verification code/i), "123456");
     await user.click(screen.getByRole("button", { name: /verify code/i }));
     await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
-    expect(await screen.findByRole("heading", { name: /is this assessment for mara consulting/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /hi mara, is this assessment for mara consulting/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /same business/i }));
     await waitFor(() => expect(service.submitLeadContact).toHaveBeenLastCalledWith(
-      expect.anything(), "70000000-0000-4000-8000-000000000001", expect.objectContaining({ businessScope: "same_business" }),
+      expect.anything(), "70000000-0000-4000-8000-000000000001", expect.objectContaining({
+        businessName: "Mara Consulting",
+        businessScope: "same_business",
+        selectedBusinessId: "60000000-0000-4000-8000-000000000001",
+      }),
     ));
     await completeLocationStep(user);
   });
@@ -506,7 +515,12 @@ describe("local portfolio quiz", () => {
     const service = createFakeQuizService();
     service.submitLeadContact.mockImplementation(async (_context, _challengeId, contact) => contact.businessScope
       ? { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId }
-      : { status: "business_scope_required" as const, quizSessionId: ownedContext.quizSessionId, existingBusinessName: "Mara Consulting" });
+      : {
+        status: "business_scope_required" as const,
+        quizSessionId: ownedContext.quizSessionId,
+        existingBusinessId: "60000000-0000-4000-8000-000000000001",
+        existingBusinessName: "Mara Consulting",
+      } as LeadContactSubmissionResult);
     render(<QuizExperience service={service} />);
 
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
@@ -519,6 +533,33 @@ describe("local portfolio quiz", () => {
       businessName: "Mara Academy",
       businessScope: "another_business",
     })));
+  });
+
+  it("keeps verification while asking for a distinct name when another business matches the displayed business", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    service.submitLeadContact.mockImplementation(async (_context, _challengeId, contact) => contact.businessScope
+      ? { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId }
+      : {
+        status: "business_scope_required" as const,
+        quizSessionId: ownedContext.quizSessionId,
+        existingBusinessId: "60000000-0000-4000-8000-000000000001",
+        existingBusinessName: "Mara Consulting",
+      } as LeadContactSubmissionResult);
+    render(<QuizExperience service={service} />);
+
+    await user.click(await screen.findByRole("button", { name: /service-based business/i }));
+    await fillContactStep(user);
+    await user.type(await screen.findByLabelText(/verification code/i), "123456");
+    await user.click(screen.getByRole("button", { name: /verify code/i }));
+    await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
+    await user.click(await screen.findByRole("button", { name: /another business/i }));
+
+    expect(await screen.findByRole("heading", { name: /where should we send your proposal/i })).toBeInTheDocument();
+    expect(screen.getByText(/email verified/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/business name/i)).toHaveValue("");
+    expect(screen.getByLabelText(/^email/i)).toHaveValue("mara@example.com");
+    expect(service.submitLeadContact).toHaveBeenCalledOnce();
   });
 
   it("retains contact fields and announces a submission failure", async () => {
@@ -659,7 +700,7 @@ describe("local portfolio quiz", () => {
     await user.click(screen.getByRole("button", { name: /service-based business/i }));
     expect(screen.getByRole("heading", { name: /where should we send your proposal/i })).toBeInTheDocument();
     await completeContactStep(user);
-    expect(screen.getByRole("heading", { name: /your roadmap starts with context/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /hi mara, let.s start your assessment/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /start my assessment/i }));
 
     const definition = QUIZ_DEFINITIONS.service_businesses;
@@ -672,7 +713,7 @@ describe("local portfolio quiz", () => {
       await user.click(screen.getByRole("button", { name: index === definition.questions.length - 1 ? /see my roadmap/i : /continue/i }));
     }
 
-    expect(await screen.findByRole("heading", { name: /Mara.*Mara Consulting/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /hi mara, here.s the roadmap for mara consulting/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /compare your roadmap options/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^basic$/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^advanced$/i })).toBeInTheDocument();
@@ -796,7 +837,7 @@ describe("local portfolio quiz", () => {
       await user.click(screen.getByRole(question.selection === "single" ? "radio" : "button", { name: question.options[0].label }));
       await user.click(screen.getByRole("button", { name: index === definition.questions.length - 1 ? /see my roadmap/i : /continue/i }));
     }
-    expect(await screen.findByRole("heading", { name: /Mara.*La Jaysiedel Cakes/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /hi mara, here.s the roadmap for la jaysiedel cakes/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /where La Jaysiedel Cakes is now/i })).toBeInTheDocument();
 
     const saved = localStorage.getItem(QUIZ_STORAGE_KEY);

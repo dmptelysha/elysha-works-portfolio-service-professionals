@@ -24,6 +24,7 @@ const expectedMigrations = [
   '202609240001_grant_quiz_location_read.sql',
   '202609240002_update_proposal_snapshot_versions.sql',
   '202609240003_reuse_owner_verified_email.sql',
+  '202609240004_fix_multi_business_assessment.sql',
 ];
 
 const phaseOneTables = [
@@ -67,6 +68,7 @@ test('Supabase scaffold has the ordered reproducible assets', () => {
   assert.ok(read('supabase/tests/03_rpc_and_integrity.test.sql').length > 0);
   assert.ok(read('supabase/tests/04_proposal_flow.test.sql').length > 0);
   assert.ok(read('supabase/tests/05_custom_email_otp.test.sql').length > 0);
+  assert.ok(read('supabase/tests/06_multi_business_assessment.test.sql').length > 0);
   const config = read('supabase/config.toml');
   assert.match(config, /\[auth\.email\]/);
   assert.match(config, /otp_expiry\s*=\s*600/);
@@ -207,6 +209,21 @@ test('verified-email reuse is service-only and scoped to the same owner and visi
   assert.match(sql, /l\.email_verified_at\s*>=\s*p_now\s*-\s*interval\s*'30 days'/i);
   assert.match(sql, /revoke\s+execute[^;]+from\s+public,\s*anon,\s*authenticated/is);
   assert.match(sql, /grant\s+execute[^;]+to\s+service_role/is);
+});
+
+test('multi-business assessment selection binds the displayed record to the verified email', () => {
+  const sql = read('supabase/migrations/202609240004_fix_multi_business_assessment.sql');
+  assert.match(sql, /function\s+public\.begin_custom_verified_qualified_quiz_v2\s*\(/i);
+  assert.match(sql, /p_selected_business_id\s+uuid/i);
+  assert.match(sql, /existing_business_id\s+uuid/i);
+  assert.match(sql, /l\.id\s*=\s*p_selected_business_id/i);
+  assert.match(sql, /lower\(btrim\(l\.email\)\)\s*=\s*v_challenge\.email/i);
+  assert.match(sql, /different_business_name_required/i);
+  assert.match(sql, /pg_advisory_xact_lock\s*\(\s*hashtextextended\s*\(/i);
+  assert.match(sql, /verified-business:.*v_challenge\.email.*lower\(v_business_name\)/is);
+  assert.match(sql, /v_matching_business_lead_id\s+is\s+not\s+null/i);
+  assert.match(sql, /v_lead_id\s*:=\s*v_matching_business_lead_id/i);
+  assert.match(sql, /grant\s+execute[^;]+to\s+authenticated/is);
 });
 
 test('migrations create exactly the Phase 1 public tables', () => {

@@ -136,7 +136,7 @@ async function mockSupabaseQuiz(
     if (url.pathname.endsWith("/rest/v1/portfolio_sessions") && request.method() === "POST") return json({ id: ids.portfolioSession });
     if (url.pathname.endsWith("/rest/v1/quiz_sessions") && request.method() === "POST") return json({ id: ids.quiz });
     if (url.pathname.endsWith("/rest/v1/quiz_sessions") && request.method() === "PATCH") return json(null, 204);
-    if (url.pathname.endsWith("/rest/v1/rpc/begin_custom_verified_qualified_quiz")) {
+    if (url.pathname.endsWith("/rest/v1/rpc/begin_custom_verified_qualified_quiz_v2")) {
       leadRpcPayloads.push(request.postDataJSON() as Record<string, unknown>);
       return json([{ submission_status: "accepted", lead_id: ids.lead, quiz_session_id: ids.quiz }]);
     }
@@ -170,7 +170,7 @@ async function fillQuizContact(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: /continue to assessment/i }).click();
   await expect(page.getByRole("heading", { name: /where does your business operate/i })).toBeVisible();
   await page.getByRole("button", { name: /continue to assessment/i }).click();
-  await expect(page.getByRole("heading", { name: /your roadmap starts with context/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /hi mara, let.s start your assessment/i })).toBeVisible();
 }
 
 test("contact and inline OTP fit the laptop viewport without requiring consent to verify", async ({ page }, testInfo) => {
@@ -312,14 +312,15 @@ test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or 
     await page.getByRole("button", { name: index === 10 ? /see my roadmap/i : /^continue/i }).click();
   }
 
-  await expect(page.getByRole("heading", { name: /Mara.*roadmap for Mara Consulting/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /hi mara, here.s the roadmap for mara consulting/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: /compare your roadmap options/i })).toBeVisible();
   const pointBListColor = await page.locator(".result-card--gold li").first().evaluate((element) => getComputedStyle(element).color);
   expect(pointBListColor).toBe("rgb(5, 6, 6)");
   const successDialog = page.getByRole("dialog", { name: /your proposal is ready/i });
   await expect(successDialog).toBeVisible();
   await expect(successDialog.getByText(/sent.*m\*\*\*@example\.com/i)).toBeVisible();
-  await successDialog.getByRole("button", { name: /view my roadmap/i }).click();
+  const viewRoadmap = successDialog.getByRole("button", { name: /view my roadmap/i });
+  await viewRoadmap.click();
   const selectedRoadmap = page.locator(".roadmap-selection-summary");
   await expect(selectedRoadmap.getByRole("heading", { name: /your selected roadmap/i })).toBeVisible();
   await expect(selectedRoadmap.getByText(/planning estimate/i)).toBeVisible();
@@ -331,7 +332,7 @@ test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or 
   expect(supabaseRequests.some((entry) => entry.includes("/auth/v1/otp"))).toBe(false);
   expect(supabaseRequests.some((entry) => entry.includes("/auth/v1/verify"))).toBe(false);
   expect(supabaseRequests.some((entry) => entry.includes("/rest/v1/quiz_sessions"))).toBe(true);
-  expect(supabaseRequests.some((entry) => entry.includes("/rpc/begin_custom_verified_qualified_quiz"))).toBe(true);
+  expect(supabaseRequests.some((entry) => entry.includes("/rpc/begin_custom_verified_qualified_quiz_v2"))).toBe(true);
   expect(leadRpcPayloads).not.toHaveLength(0);
   expect(leadRpcPayloads[0]).toEqual(expect.objectContaining({ p_challenge_id: ids.challenge }));
   expect(leadRpcPayloads[0]).not.toHaveProperty("p_email");
