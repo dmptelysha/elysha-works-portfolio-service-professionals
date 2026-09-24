@@ -4,6 +4,7 @@ import {
   createOwnedQuizContext,
   EMAIL_OTP_MODE,
   ensureAnonymousSession,
+  getCurrencyQuote,
   issueProposal,
   previewProposal,
   requestCustomEmailOtp,
@@ -390,6 +391,24 @@ describe("Supabase quiz service", () => {
       { method: "eq", args: ["id", QUIZ_SESSION_ID] },
       { method: "eq", args: ["owner_user_id", USER_ID] },
     ]));
+  });
+
+  it("rejects a standalone currency quote when its FX timestamp is missing", async () => {
+    const fake = fakeClient({ functionResponse: {
+      data: {
+        businessCountry: "Philippines",
+        countryCode: "PH",
+        displayCurrency: "PHP",
+        currencySymbol: "PHP",
+        fxRate: 58,
+        fxRateTimestamp: null,
+      },
+      error: null,
+    } });
+
+    await expect(getCurrencyQuote({
+      name: "Philippines", code: "PH", currency: "PHP", symbol: "PHP",
+    }, fake.client as never)).rejects.toThrow("temporarily unavailable");
   });
 
   it("calls proposal preview and issue with minimal browser-controlled payloads", async () => {

@@ -117,12 +117,6 @@ begin
   if not found or not v_campaign.active then
     raise exception 'coupon_invalid' using errcode = 'P0001';
   end if;
-  if round(p_discount_amount_usd, 2) <>
-      round(round(p_original_total_usd, 2) * v_campaign.discount_percent / 100.0, 2)
-    or round(p_final_total_usd, 2) <>
-      round(round(p_original_total_usd, 2) - round(p_discount_amount_usd, 2), 2) then
-    raise exception 'coupon_invalid' using errcode = 'P0001';
-  end if;
 
   update private.discount_redemptions
   set status = 'released', released_at = p_at, updated_at = p_at
@@ -209,6 +203,12 @@ begin
   where dc.code = upper(btrim(p_coupon_code))
   for update;
   if not found or not v_campaign.active then
+    raise exception 'coupon_invalid' using errcode = 'P0001';
+  end if;
+  if round(p_discount_amount_usd, 2) <>
+      round(round(p_original_total_usd, 2) * v_campaign.discount_percent / 100.0, 2)
+    or round(p_final_total_usd, 2) <>
+      round(round(p_original_total_usd, 2) - round(p_discount_amount_usd, 2), 2) then
     raise exception 'coupon_invalid' using errcode = 'P0001';
   end if;
 

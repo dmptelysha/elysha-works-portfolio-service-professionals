@@ -233,6 +233,8 @@ test('multi-business assessment selection binds the displayed record to the veri
 
 test('proposal discount campaigns use a private, row-locked, service-only ledger', () => {
   const sql = read('supabase/migrations/202609240005_add_proposal_discount_campaigns.sql');
+  const previewFunction = sql.match(/create\s+function\s+public\.preview_proposal_discount\s*\([\s\S]*?\n\$\$;/i)?.[0] ?? '';
+  const reserveFunction = sql.match(/create\s+function\s+public\.reserve_proposal_discount\s*\([\s\S]*?\n\$\$;/i)?.[0] ?? '';
   assert.doesNotMatch(sql, /drop\s+(?:table|schema|function)\b|truncate\b|delete\s+from\s+public\./i);
   for (const table of ['discount_campaigns', 'discount_redemptions']) {
     assert.match(sql, new RegExp(`create\\s+table\\s+private\\.${table}\\b`, 'i'), table);
@@ -249,7 +251,8 @@ test('proposal discount campaigns use a private, row-locked, service-only ledger
   }
   assert.match(sql, /set\s+search_path\s*=\s*''/i);
   assert.match(sql, /select[^;]+from\s+private\.discount_campaigns[^;]+for\s+update/is);
-  assert.match(sql, /p_original_total_usd[\s\S]+v_campaign\.discount_percent\s*\/\s*100\.0/i);
+  assert.doesNotMatch(previewFunction, /p_original_total_usd|p_discount_amount_usd|p_final_total_usd/i);
+  assert.match(reserveFunction, /p_original_total_usd[\s\S]+v_campaign\.discount_percent\s*\/\s*100\.0/i);
   assert.match(sql, /v_discount\s*<>\s*round\(v_original\s*\*\s*v_campaign\.discount_percent\s*\/\s*100\.0,\s*2\)/i);
   assert.match(sql, /status\s+in\s*\(\s*'pending'\s*,\s*'redeemed'\s*\)/i);
   assert.match(sql, /reserved_until\s*<=\s*p_at/i);

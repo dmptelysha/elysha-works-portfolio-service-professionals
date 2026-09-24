@@ -58,7 +58,7 @@ export async function getCurrencyQuote(
     typeof data.businessCountry !== "string" || typeof data.countryCode !== "string" ||
     typeof data.displayCurrency !== "string" || typeof data.currencySymbol !== "string" ||
     typeof data.fxRate !== "number" || !Number.isFinite(data.fxRate) || data.fxRate <= 0 ||
-    (data.fxRateTimestamp !== null && (typeof data.fxRateTimestamp !== "string" || !Number.isFinite(Date.parse(data.fxRateTimestamp))))
+    typeof data.fxRateTimestamp !== "string" || !Number.isFinite(Date.parse(data.fxRateTimestamp))
   ) throw safeServiceError();
   return data as unknown as BusinessLocation;
 }
