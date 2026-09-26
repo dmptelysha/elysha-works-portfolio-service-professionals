@@ -131,36 +131,20 @@
 .hero-benefits {
   display: flex;
   align-items: center;
-  width: min(100%, 32rem);
+  justify-content: center;
+  width: min(100%, 40rem);
   min-height: clamp(2.35rem, min(3.1vw, 5.3svh), 3.25rem);
-  gap: clamp(.7rem, 1vw, 1rem);
   margin: clamp(1.3rem, 2.8svh, 2.1rem) 0 0;
-  color: var(--hero-ivory);
-  font: 400 clamp(.9rem, min(1.12vw, 2.15svh), 1.4rem)/1.35 Inter, Arial, sans-serif;
-  text-align: left;
+  color: #f4cf75;
+  font: 650 clamp(1.3rem, min(1.8vw, 4svh), 2rem)/1.2 Inter, Arial, sans-serif;
+  letter-spacing: -.015em;
+  text-align: center;
 }
-
-.hero-benefit-icon {
-  width: clamp(1.75rem, min(2.15vw, 3.8svh), 2.5rem);
-  height: clamp(1.75rem, min(2.15vw, 3.8svh), 2.5rem);
-  flex: 0 0 auto;
-  overflow: visible;
-  color: #ffd130;
-  filter: drop-shadow(0 0 8px rgba(255, 209, 48, .38));
-}
-
-.hero-benefit-icon circle,
-.hero-benefit-icon path {
-  fill: none;
-  stroke: currentColor;
-}
-
-.hero-benefit-icon circle { stroke-width: 1.5; }
-.hero-benefit-icon path { stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 .hero-benefit-visual {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-width: 0;
   white-space: nowrap;
 }
@@ -307,8 +291,8 @@
   .hero-trust p { max-width: 14rem; }
 
   .hero-benefits {
-    width: min(100%, 24rem);
-    font-size: clamp(.9rem, 4vw, 1.05rem);
+    width: 100%;
+    font-size: clamp(1rem, 5vw, 1.35rem);
   }
   .hero-roadmap-cta {
     width: 100%;
@@ -346,8 +330,7 @@
   .hero-roadmap-intro { margin-top: .6rem; font-size: .8rem; }
   .hero-trust { margin-top: 1.125rem; font-size: .7rem; }
   .hero-stars { font-size: 1rem; }
-  .hero-benefits { margin-top: .65rem; gap: .45rem; font-size: .72rem; }
-  .hero-benefit-icon { width: 1.35rem; height: 1.35rem; }
+  .hero-benefits { margin-top: .65rem; font-size: clamp(.95rem, 4.7vw, 1.15rem); }
   .hero-roadmap .button-row { margin-top: .7rem; }
   .hero-roadmap-cta { min-height: 3rem; font-size: .7rem; }
 }

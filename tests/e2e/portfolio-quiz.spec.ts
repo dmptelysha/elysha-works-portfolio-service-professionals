@@ -277,6 +277,34 @@ test("hero centers the roadmap CTA and preserves spacious desktop rhythm", async
   expect(gaps[3]).toBeGreaterThanOrEqual(25);
 });
 
+test("hero centers and emphasizes the rotating benefit without an icon", async ({ page }) => {
+  await page.goto("/");
+
+  const treatment = await page.evaluate(() => {
+    const benefits = document.querySelector<HTMLElement>(".hero-benefits")!;
+    const intro = document.querySelector<HTMLElement>(".hero-roadmap-intro")!;
+    const benefitText = document.querySelector<HTMLElement>(".hero-benefit-text")!;
+    const bounds = benefits.getBoundingClientRect();
+    const color = getComputedStyle(benefitText).color.match(/\d+/g)?.map(Number) ?? [];
+    return {
+      center: bounds.left + bounds.width / 2,
+      viewportCenter: document.documentElement.clientWidth / 2,
+      fontSize: Number.parseFloat(getComputedStyle(benefitText).fontSize),
+      introFontSize: Number.parseFloat(getComputedStyle(intro).fontSize),
+      fontWeight: Number.parseInt(getComputedStyle(benefitText).fontWeight, 10),
+      color,
+      iconCount: benefits.querySelectorAll("svg").length,
+    };
+  });
+
+  expect(treatment.iconCount).toBe(0);
+  expect(Math.abs(treatment.center - treatment.viewportCenter)).toBeLessThanOrEqual(1);
+  expect(treatment.fontSize).toBeGreaterThan(treatment.introFontSize);
+  expect(treatment.fontWeight).toBeGreaterThanOrEqual(600);
+  expect(treatment.color[0]).toBeGreaterThan(treatment.color[1]);
+  expect(treatment.color[1]).toBeGreaterThan(treatment.color[2]);
+});
+
 test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or page navigation", async ({ page }) => {
   const forbiddenRequests: string[] = [];
   const supabaseRequests: string[] = [];

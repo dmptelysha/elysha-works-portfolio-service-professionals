@@ -75,10 +75,6 @@ export function HeroBenefitRotator({ benefits }: HeroBenefitRotatorProps) {
       role="group"
       aria-label={accessibleLabel}
     >
-      <svg className="hero-benefit-icon" viewBox="0 0 32 32" aria-hidden="true">
-        <circle cx="16" cy="16" r="14.5" />
-        <path d="m10.5 16.2 3.5 3.5 7.8-8" />
-      </svg>
       <span className="hero-benefit-visual" aria-hidden="true">
         <span className="hero-benefit-text" data-testid="hero-benefit-text">{visibleText}</span>
         <span className="hero-benefit-cursor" />

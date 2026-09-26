@@ -23,11 +23,11 @@ describe("portfolio hero", () => {
     expect(within(hero).getByRole("heading", { level: 1 })).toHaveTextContent(
       "Before investing in a website, funnel, or automation, discover exactly what your business needs to grow.",
     );
-    expect(
-      within(hero).getByRole("group", {
-        name: "What your personalized roadmap includes: 100% Free, Personalized recommendations, Clear next steps, No sales pressure",
-      }),
-    ).toBeInTheDocument();
+    const benefitGroup = within(hero).getByRole("group", {
+      name: "What your personalized roadmap includes: 100% Free, Personalized recommendations, Clear next steps, No sales pressure",
+    });
+    expect(benefitGroup).toBeInTheDocument();
+    expect(benefitGroup.querySelector("svg")).not.toBeInTheDocument();
     const cta = within(hero).getByRole("link", { name: /get my personalized roadmap/i });
     const strategy = within(hero).getByText("Strategy-first guidance for growing businesses.");
     expect(cta).toHaveAttribute("href", "/quiz");
