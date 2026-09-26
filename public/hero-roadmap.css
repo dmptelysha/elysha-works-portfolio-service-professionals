@@ -65,12 +65,10 @@
   font: 750 clamp(2.8rem, min(4.45vw, 8.5svh), 5.35rem)/.98 Inter, Arial, sans-serif;
   letter-spacing: -.045em;
   text-wrap: balance;
-}
-
-.hero-roadmap h1.hero-promise > span {
-  display: block;
   white-space: nowrap;
 }
+
+.hero-mobile-line { display: contents; }
 
 .hero-roadmap h1.hero-promise .hero-promise-accent {
   background: linear-gradient(180deg, #ffe69f 0%, var(--hero-gold) 48%, #d7a22d 100%);
@@ -93,22 +91,19 @@
   color: var(--hero-muted);
   font: 400 clamp(1rem, min(1.55vw, 2.9svh), 1.85rem)/1.45 Inter, Arial, sans-serif;
   letter-spacing: -.02em;
-}
-
-.hero-roadmap-intro span {
-  display: block;
   white-space: nowrap;
 }
 
 .hero-trust {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(.7rem, 1.15vw, 1.1rem);
+  gap: clamp(.35rem, .8svh, .55rem);
   margin-top: clamp(2.5rem, 4.5svh, 3rem);
   color: var(--hero-ivory);
   font: 400 clamp(.78rem, min(1.02vw, 1.95svh), 1.3rem)/1.3 Inter, Arial, sans-serif;
-  text-align: left;
+  text-align: center;
 }
 
 .hero-trust p { margin: 0; }
@@ -120,12 +115,6 @@
   letter-spacing: .03em;
   white-space: nowrap;
   text-shadow: 0 0 12px rgba(255, 209, 48, .28);
-}
-
-.hero-trust-divider {
-  width: 1px;
-  height: clamp(2.2rem, 5.3svh, 3.45rem);
-  background: rgba(248, 247, 243, .42);
 }
 
 .hero-benefits {
@@ -254,8 +243,8 @@
   .hero-roadmap { padding-inline: clamp(1.5rem, 5vw, 3rem); }
   .hero-roadmap .eyebrow { white-space: normal; }
   .hero-roadmap h1.hero-promise { font-size: clamp(2.45rem, 7.3vw, 4.25rem); }
-  .hero-roadmap h1.hero-promise > span { white-space: normal; }
-  .hero-roadmap-intro span { white-space: normal; }
+  .hero-mobile-line { display: block; white-space: nowrap; }
+  .hero-desktop-break { display: none; }
 }
 
 @media (max-width: 640px) {
@@ -271,24 +260,21 @@
   }
 
   .hero-roadmap h1.hero-promise {
-    font-size: clamp(2rem, 9.7vw, 3rem);
+    font-size: clamp(1.75rem, 8.45vw, 2.5rem);
     line-height: 1.02;
   }
 
-  .hero-roadmap h1.hero-promise > span { display: inline; }
   .hero-roadmap-intro { font-size: clamp(.92rem, 4.1vw, 1.08rem); }
 
   .hero-trust {
-    display: flex;
-    gap: .65rem;
+    gap: .35rem;
     width: min(100%, 23rem);
     max-width: 23rem;
     font-size: clamp(.75rem, 3.4vw, .92rem);
-    text-align: left;
+    text-align: center;
   }
 
-  .hero-trust-divider { height: 2.65rem; }
-  .hero-trust p { max-width: 14rem; }
+  .hero-trust p { max-width: none; }
 
   .hero-benefits {
     width: 100%;
@@ -308,7 +294,7 @@
 
 @media (max-width: 370px) {
   .hero-roadmap { padding-inline: .9rem; }
-  .hero-roadmap h1.hero-promise { font-size: clamp(1.82rem, 9.4vw, 2.15rem); }
+  .hero-roadmap h1.hero-promise { font-size: clamp(1.68rem, 8.35vw, 1.95rem); }
   .hero-roadmap-cta { font-size: .76rem; }
 }
 

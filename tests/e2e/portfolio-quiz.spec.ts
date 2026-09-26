@@ -305,6 +305,62 @@ test("hero centers and emphasizes the rotating benefit without an icon", async (
   expect(treatment.color[1]).toBeGreaterThan(treatment.color[2]);
 });
 
+test("mobile hero preserves the approved line composition", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "Mobile line composition is asserted once.");
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto("/");
+
+  const composition = await page.evaluate(() => {
+    const inspectLines = (selector: string) =>
+      [...document.querySelectorAll<HTMLElement>(`${selector} > .hero-mobile-line`)].map((line) => {
+        const range = document.createRange();
+        range.selectNodeContents(line);
+        const textBounds = range.getBoundingClientRect();
+        const lineBounds = line.getBoundingClientRect();
+        return {
+          text: line.textContent?.replace(/\s+/g, " ").trim(),
+          height: lineBounds.height,
+          lineHeight: Number.parseFloat(getComputedStyle(line).lineHeight),
+          left: textBounds.left,
+          right: textBounds.right,
+        };
+      });
+    const stars = document.querySelector<HTMLElement>(".hero-stars")!.getBoundingClientRect();
+    const strategy = document.querySelector<HTMLElement>(".hero-trust p")!.getBoundingClientRect();
+    return {
+      headline: inspectLines(".hero-promise"),
+      intro: inspectLines(".hero-roadmap-intro"),
+      dividerCount: document.querySelectorAll(".hero-trust-divider").length,
+      trustIsStacked: strategy.top >= stars.bottom,
+      trustCenters: [stars.left + stars.width / 2, strategy.left + strategy.width / 2],
+      viewportWidth: document.documentElement.clientWidth,
+      documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+
+  expect(composition.headline.map(({ text }) => text)).toEqual([
+    "Before investing in a",
+    "website, funnel, or",
+    "automation, discover",
+    "exactly what your",
+    "business needs to grow.",
+  ]);
+  expect(composition.intro.map(({ text }) => text)).toEqual([
+    "In just 2 minutes, you'll receive a",
+    "personalized roadmap showing the",
+    "best solution for your goals.",
+  ]);
+  for (const line of [...composition.headline, ...composition.intro]) {
+    expect(line.height).toBeLessThanOrEqual(line.lineHeight + 1);
+    expect(line.left).toBeGreaterThanOrEqual(0);
+    expect(line.right).toBeLessThanOrEqual(composition.viewportWidth);
+  }
+  expect(composition.dividerCount).toBe(0);
+  expect(composition.trustIsStacked).toBe(true);
+  expect(Math.abs(composition.trustCenters[0] - composition.trustCenters[1])).toBeLessThanOrEqual(1);
+  expect(composition.documentOverflow).toBeLessThanOrEqual(0);
+});
+
 test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or page navigation", async ({ page }) => {
   const forbiddenRequests: string[] = [];
   const supabaseRequests: string[] = [];

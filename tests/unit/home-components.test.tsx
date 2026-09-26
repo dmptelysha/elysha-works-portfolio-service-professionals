@@ -33,10 +33,9 @@ describe("portfolio hero", () => {
     expect(cta).toHaveAttribute("href", "/quiz");
     const trust = hero.querySelector(".hero-trust")!;
     const stars = within(hero).getByLabelText("Five out of five stars");
-    const divider = trust.querySelector(".hero-trust-divider")!;
     expect(within(hero).queryByRole("img", { name: "Elysha Dumpit" })).not.toBeInTheDocument();
-    expect(stars.compareDocumentPosition(divider) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(divider.compareDocumentPosition(strategy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(trust.querySelector(".hero-trust-divider")).not.toBeInTheDocument();
+    expect(stars.compareDocumentPosition(strategy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(cta.compareDocumentPosition(strategy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(hero).queryByRole("link", { name: /see how the assessment works/i })).not.toBeInTheDocument();
     expect(within(hero).queryByText(/trusted by/i)).not.toBeInTheDocument();
