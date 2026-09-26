@@ -14,7 +14,7 @@ export const SITE_CONTENT = {
     headlineAccent: "exactly what your business needs to grow.",
     support: "In just 2 minutes, you'll receive a personalized roadmap showing the best solution for your goals.",
     trust: "Strategy-first guidance for growing businesses.",
-    benefits: ["Personalized recommendations", "Clear next steps", "No sales pressure", "100% Free"],
+    benefits: ["100% Free", "Personalized recommendations", "Clear next steps", "No sales pressure"],
     primaryCta: "Get My Personalized Roadmap",
   },
   projects: {

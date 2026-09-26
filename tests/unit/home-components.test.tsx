@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ContextualNav } from "@/components/home/ContextualNav";
 import { Hero } from "@/components/home/Hero";
@@ -11,6 +11,11 @@ import { FounderSection } from "@/components/home/FounderSection";
 import { SiteFooter } from "@/components/home/SiteFooter";
 import { TestimonialSection } from "@/components/home/TestimonialSection";
 
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
 describe("portfolio hero", () => {
   it("places Elysha's strategy-first endorsement below the only assessment action", () => {
     render(<Hero />);
@@ -18,26 +23,93 @@ describe("portfolio hero", () => {
     expect(within(hero).getByRole("heading", { level: 1 })).toHaveTextContent(
       "Before investing in a website, funnel, or automation, discover exactly what your business needs to grow.",
     );
-    for (const benefit of [
-      "Personalized recommendations",
-      "Clear next steps",
-      "No sales pressure",
-      "100% Free",
-    ]) {
-      expect(within(hero).getByText(benefit)).toBeInTheDocument();
-    }
+    expect(
+      within(hero).getByRole("group", {
+        name: "What your personalized roadmap includes: 100% Free, Personalized recommendations, Clear next steps, No sales pressure",
+      }),
+    ).toBeInTheDocument();
     const cta = within(hero).getByRole("link", { name: /get my personalized roadmap/i });
     const strategy = within(hero).getByText("Strategy-first guidance for growing businesses.");
     expect(cta).toHaveAttribute("href", "/quiz");
-    expect(within(hero).getByRole("img", { name: "Elysha Dumpit" })).toHaveAttribute(
-      "src",
-      "/assets/v3-hero/elysha-portrait-cutout.png",
-    );
+    const trust = hero.querySelector(".hero-trust")!;
+    const stars = within(hero).getByLabelText("Five out of five stars");
+    const divider = trust.querySelector(".hero-trust-divider")!;
+    expect(within(hero).queryByRole("img", { name: "Elysha Dumpit" })).not.toBeInTheDocument();
+    expect(stars.compareDocumentPosition(divider) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(divider.compareDocumentPosition(strategy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(cta.compareDocumentPosition(strategy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(hero).queryByRole("link", { name: /see how the assessment works/i })).not.toBeInTheDocument();
     expect(within(hero).queryByText(/trusted by/i)).not.toBeInTheDocument();
     expect(within(hero).queryByRole("navigation")).not.toBeInTheDocument();
     expect(within(hero).queryByText("Elysha Works")).not.toBeInTheDocument();
+  });
+
+  it("types each benefit in order, holds it for four seconds, and loops", async () => {
+    vi.useFakeTimers();
+    render(<Hero />);
+
+    const benefit = screen.getByTestId("hero-benefit-text");
+    const advanceSteps = async (count: number, milliseconds: number) => {
+      for (let step = 0; step < count; step += 1) {
+        await act(() => vi.advanceTimersByTimeAsync(milliseconds));
+      }
+    };
+    expect(benefit).toHaveTextContent("");
+
+    await advanceSteps(9, 55);
+    expect(benefit).toHaveTextContent("100% Free");
+
+    await act(() => vi.advanceTimersByTimeAsync(3999));
+    expect(benefit).toHaveTextContent("100% Free");
+
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    expect(benefit).toHaveTextContent("100% Free");
+    await act(() => vi.advanceTimersByTimeAsync(30));
+    expect(benefit).not.toHaveTextContent("100% Free");
+
+    await advanceSteps(8, 30);
+    await act(() => vi.advanceTimersByTimeAsync(180));
+    await advanceSteps(28, 55);
+    expect(benefit).toHaveTextContent("Personalized recommendations");
+
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    await advanceSteps(28, 30);
+    await act(() => vi.advanceTimersByTimeAsync(180));
+    await advanceSteps(16, 55);
+    expect(benefit).toHaveTextContent("Clear next steps");
+
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    await advanceSteps(16, 30);
+    await act(() => vi.advanceTimersByTimeAsync(180));
+    await advanceSteps(17, 55);
+    expect(benefit).toHaveTextContent("No sales pressure");
+
+    await act(() => vi.advanceTimersByTimeAsync(4000));
+    await advanceSteps(17, 30);
+    await act(() => vi.advanceTimersByTimeAsync(180));
+    await advanceSteps(9, 55);
+    expect(benefit).toHaveTextContent("100% Free");
+  });
+
+  it("keeps the first benefit static when reduced motion is requested", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("matchMedia", () => ({
+      matches: true,
+      media: "(prefers-reduced-motion: reduce)",
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    render(<Hero />);
+    const benefit = screen.getByTestId("hero-benefit-text");
+    expect(benefit).toHaveTextContent("100% Free");
+
+    await act(() => vi.advanceTimersByTimeAsync(20_000));
+    expect(benefit).toHaveTextContent("100% Free");
   });
 });
 

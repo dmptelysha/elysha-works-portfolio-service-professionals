@@ -84,7 +84,7 @@ test("the homepage exposes the approved roadmap hero hierarchy", () => {
 
   assert.match(snapshot, /hero-promise-accent/);
   assert.match(snapshot, /hero-trust/);
-  assert.match(snapshot, /elysha-portrait-cutout\.png/);
+  assert.doesNotMatch(snapshot, /elysha-portrait-cutout\.png/);
   assert.match(content, /Strategy-first guidance for growing businesses\./);
   assert.match(content, /Get My Personalized Roadmap/);
   assert.doesNotMatch(content, /See how the assessment works/);

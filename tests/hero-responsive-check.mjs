@@ -27,24 +27,17 @@ try {
       const cta = document.querySelector(".hero-roadmap-cta");
       const launcher = document.querySelector(".portfolio-chat-launcher");
       const accentLines = [...document.querySelectorAll(".hero-promise-accent")];
-      const benefitItems = [...document.querySelectorAll(".hero-benefits > li")];
+      const benefits = document.querySelector(".hero-benefits");
       const heroRect = hero.getBoundingClientRect();
       const contentRect = content.getBoundingClientRect();
       const ctaRect = cta.getBoundingClientRect();
       const launcherStyle = launcher ? getComputedStyle(launcher) : null;
-      const benefitVisualBounds = benefitItems.map((item) => {
-        const range = document.createRange();
-        range.selectNodeContents(item);
-        const textRect = range.getBoundingClientRect();
-        const itemRect = item.getBoundingClientRect();
-        return { left: itemRect.left, right: textRect.right };
-      });
-      const benefitVisualLeft = Math.min(...benefitVisualBounds.map(({ left }) => left));
-      const benefitVisualRight = Math.max(...benefitVisualBounds.map(({ right }) => right));
+      const benefitsRect = benefits.getBoundingClientRect();
 
       return {
         viewportWidth: document.documentElement.clientWidth,
-        documentWidth: document.documentElement.scrollWidth,
+        heroClientWidth: hero.clientWidth,
+        heroScrollWidth: hero.scrollWidth,
         heroHeight: heroRect.height,
         contentTop: contentRect.top,
         contentBottom: contentRect.bottom,
@@ -56,8 +49,8 @@ try {
         accentIsClipped: accentLines.some(
           (element) => element.scrollHeight > element.clientHeight + 1,
         ),
-        firstBenefitLeft: benefitItems[0].getBoundingClientRect().left,
-        benefitVisualCenter: (benefitVisualLeft + benefitVisualRight) / 2,
+        firstBenefitLeft: benefitsRect.left,
+        benefitVisualCenter: (benefitsRect.left + benefitsRect.right) / 2,
         ctaCenter: (ctaRect.left + ctaRect.right) / 2,
         launcherHidden:
           !launcher ||
@@ -66,8 +59,8 @@ try {
       };
     });
 
-    if (metrics.documentWidth > metrics.viewportWidth + 1) {
-      throw new Error(`${name}: horizontal overflow of ${metrics.documentWidth - metrics.viewportWidth}px`);
+    if (metrics.heroScrollWidth > metrics.heroClientWidth + 1) {
+      throw new Error(`${name}: hero overflows horizontally by ${metrics.heroScrollWidth - metrics.heroClientWidth}px`);
     }
     if (metrics.heroHeight < height - 1) {
       throw new Error(`${name}: hero does not fill the first viewport`);

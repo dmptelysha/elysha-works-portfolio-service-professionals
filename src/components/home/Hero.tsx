@@ -1,6 +1,6 @@
 import Link from "next/link";
-import Image from "next/image";
 
+import { HeroBenefitRotator } from "@/components/home/HeroBenefitRotator";
 import { SITE_CONTENT } from "@/data/site-content";
 
 export function Hero() {
@@ -19,11 +19,7 @@ export function Hero() {
           <span>In just 2 minutes, you&apos;ll receive a personalized roadmap</span>
           <span>showing the best solution for your goals.</span>
         </p>
-        <ul className="hero-benefits" aria-label="What your personalized roadmap includes">
-          {hero.benefits.map((benefit) => (
-            <li key={benefit}>{benefit}</li>
-          ))}
-        </ul>
+        <HeroBenefitRotator benefits={hero.benefits} />
         <div className="button-row">
           <Link className="button button-signal hero-roadmap-cta" href="/quiz">
             <span>{hero.primaryCta}</span>
@@ -31,21 +27,11 @@ export function Hero() {
           </Link>
         </div>
         <div className="hero-trust">
-          <Image
-            className="hero-trust-avatar"
-            src="/assets/v3-hero/elysha-portrait-cutout.png"
-            alt="Elysha Dumpit"
-            width={68}
-            height={68}
-            unoptimized
-          />
+          <span className="hero-stars" aria-label="Five out of five stars">
+            <span aria-hidden="true">★★★★★</span>
+          </span>
           <span className="hero-trust-divider" aria-hidden="true" />
-          <div className="hero-trust-copy">
-            <span className="hero-stars" aria-label="Five out of five stars">
-              <span aria-hidden="true">★★★★★</span>
-            </span>
-            <p>{hero.trust}</p>
-          </div>
+          <p>{hero.trust}</p>
         </div>
       </div>
     </section>

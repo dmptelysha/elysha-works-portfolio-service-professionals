@@ -345,8 +345,22 @@ test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or 
 test("hero presents one assessment action and a strategy-first founder cue", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: /see how the assessment works/i })).toHaveCount(0);
-  await expect(page.getByRole("img", { name: "Elysha Dumpit", exact: true })).toBeVisible();
-  await expect(page.getByText("Strategy-first guidance for growing businesses.")).toBeVisible();
+  await expect(page.locator(".hero-roadmap").getByRole("img", { name: "Elysha Dumpit", exact: true })).toHaveCount(0);
+  const strategy = page.getByText("Strategy-first guidance for growing businesses.");
+  await expect(strategy).toBeVisible();
+  if (await page.evaluate(() => window.innerWidth <= 640)) {
+    const layout = await page.evaluate(() => {
+      const cta = document.querySelector<HTMLElement>(".hero-roadmap-cta")!.getBoundingClientRect();
+      const trust = document.querySelector<HTMLElement>(".hero-trust")!.getBoundingClientRect();
+      return {
+        gap: trust.top - cta.bottom,
+        strategyCenter: trust.left + trust.width / 2,
+        viewportCenter: document.documentElement.clientWidth / 2,
+      };
+    });
+    expect(layout.gap).toBeGreaterThanOrEqual(28);
+    expect(Math.abs(layout.strategyCenter - layout.viewportCenter)).toBeLessThanOrEqual(1);
+  }
   await page.locator(".hero-roadmap").getByRole("link", { name: /get my personalized roadmap/i }).click();
   await expect(page).toHaveURL(/\/quiz\/?$/);
   await expect(page.getByRole("heading", { name: /which best describes your business/i })).toBeInViewport();
