@@ -16,7 +16,6 @@ export const SITE_CONTENT = {
     trust: "Strategy-first guidance for growing businesses.",
     benefits: ["Personalized recommendations", "Clear next steps", "No sales pressure", "100% Free"],
     primaryCta: "Get My Personalized Roadmap",
-    secondaryCta: "See how the assessment works",
   },
   projects: {
     eyebrow: "Selected systems",

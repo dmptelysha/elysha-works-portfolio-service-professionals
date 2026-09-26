@@ -254,10 +254,9 @@ test("hero centers the roadmap CTA and preserves spacious desktop rhythm", async
     const selectors = [
       ".hero-promise",
       ".hero-roadmap-intro",
-      ".hero-trust",
       ".hero-benefits",
       ".hero-roadmap .button-row",
-      ".hero-assessment-link",
+      ".hero-trust",
     ];
     return {
       inner: rect(".hero-roadmap-inner"),
@@ -276,7 +275,6 @@ test("hero centers the roadmap CTA and preserves spacious desktop rhythm", async
   expect(gaps[1]).toBeGreaterThanOrEqual(15);
   expect(gaps[2]).toBeGreaterThanOrEqual(21);
   expect(gaps[3]).toBeGreaterThanOrEqual(25);
-  expect(gaps[4]).toBeGreaterThanOrEqual(19);
 });
 
 test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or page navigation", async ({ page }) => {
@@ -344,9 +342,12 @@ test("quiz uses mocked Supabase ownership without Firebase, Make, analytics, or 
   expect(saved.roadmapSelection).toEqual(expect.objectContaining({ tierKey: expect.any(String), platform: expect.any(String) }));
 });
 
-test("hero secondary action opens the audience selector", async ({ page }) => {
+test("hero presents one assessment action and a strategy-first founder cue", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: /see how the assessment works/i }).click();
+  await expect(page.getByRole("link", { name: /see how the assessment works/i })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: "Elysha Dumpit", exact: true })).toBeVisible();
+  await expect(page.getByText("Strategy-first guidance for growing businesses.")).toBeVisible();
+  await page.locator(".hero-roadmap").getByRole("link", { name: /get my personalized roadmap/i }).click();
   await expect(page).toHaveURL(/\/quiz\/?$/);
   await expect(page.getByRole("heading", { name: /which best describes your business/i })).toBeInViewport();
   await expect(page.getByText(/a clear roadmap in three steps/i)).toHaveCount(0);

@@ -12,7 +12,7 @@ import { SiteFooter } from "@/components/home/SiteFooter";
 import { TestimonialSection } from "@/components/home/TestimonialSection";
 
 describe("portfolio hero", () => {
-  it("preserves the approved hero and routes both assessment actions to /quiz", () => {
+  it("places Elysha's strategy-first endorsement below the only assessment action", () => {
     render(<Hero />);
     const hero = screen.getByRole("region", { name: /before investing/i });
     expect(within(hero).getByRole("heading", { level: 1 })).toHaveTextContent(
@@ -26,11 +26,16 @@ describe("portfolio hero", () => {
     ]) {
       expect(within(hero).getByText(benefit)).toBeInTheDocument();
     }
-    expect(within(hero).getByRole("link", { name: /get my personalized roadmap/i })).toHaveAttribute("href", "/quiz");
-    expect(within(hero).getByRole("link", { name: /see how the assessment works/i })).toHaveAttribute(
-      "href",
-      "/quiz",
+    const cta = within(hero).getByRole("link", { name: /get my personalized roadmap/i });
+    const strategy = within(hero).getByText("Strategy-first guidance for growing businesses.");
+    expect(cta).toHaveAttribute("href", "/quiz");
+    expect(within(hero).getByRole("img", { name: "Elysha Dumpit" })).toHaveAttribute(
+      "src",
+      "/assets/v3-hero/elysha-portrait-cutout.png",
     );
+    expect(cta.compareDocumentPosition(strategy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(hero).queryByRole("link", { name: /see how the assessment works/i })).not.toBeInTheDocument();
+    expect(within(hero).queryByText(/trusted by/i)).not.toBeInTheDocument();
     expect(within(hero).queryByRole("navigation")).not.toBeInTheDocument();
     expect(within(hero).queryByText("Elysha Works")).not.toBeInTheDocument();
   });

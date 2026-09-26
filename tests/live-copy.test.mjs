@@ -80,12 +80,16 @@ test("the Next homepage composes the approved seven-section React experience", (
 test("the homepage exposes the approved roadmap hero hierarchy", () => {
   const snapshot = readFileSync(fromRoot("src/components/home/Hero.tsx"), "utf8");
   const content = readFileSync(fromRoot("src/data/site-content.ts"), "utf8");
+  const styles = readFileSync(fromRoot("public/hero-roadmap.css"), "utf8");
 
   assert.match(snapshot, /hero-promise-accent/);
   assert.match(snapshot, /hero-trust/);
+  assert.match(snapshot, /elysha-portrait-cutout\.png/);
   assert.match(content, /Strategy-first guidance for growing businesses\./);
   assert.match(content, /Get My Personalized Roadmap/);
-  assert.match(content, /See how the assessment works/);
+  assert.doesNotMatch(content, /See how the assessment works/);
+  assert.match(styles, /@keyframes\s+hero-cta-border-orbit/);
+  assert.match(styles, /prefers-reduced-motion:\s*reduce/);
 });
 
 test("the static booking route uses a plain anchor instead of Next route prefetching", () => {
