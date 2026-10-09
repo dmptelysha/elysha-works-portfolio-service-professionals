@@ -22,7 +22,7 @@ export function BusinessLocationStep({ busy, error, onContinue }: BusinessLocati
       <p className="quiz-kicker">Business location</p>
       <h1 id="quiz-location-title">Where does your business operate?</h1>
       <p className="quiz-lede">
-        We use this only to show a helpful local-currency estimate and the payment options relevant to your market. USD remains the source price.
+        We use this only to show your roadmap estimate in the currency relevant to your market and the payment options available there.
       </p>
       <form onSubmit={(event) => event.preventDefault()}>
         <label htmlFor="business-country">Country</label>

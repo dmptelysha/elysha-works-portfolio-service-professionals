@@ -56,7 +56,13 @@
 .proposal-panel > p:not(.proposal-number), .proposal-panel li, .proposal-comparison header > p:last-child, .proposal-next > p:not(.proposal-number) { max-width: 58rem; color: #aaa99f; font-size: clamp(.95rem, 1.4vw, 1.15rem); line-height: 1.7; }
 .proposal-panel--gold > p:not(.proposal-number), .proposal-panel--gold li { color: rgba(5, 6, 6, .72); }
 .proposal-panel ul { display: grid; gap: .65rem; max-width: 58rem; margin: 2rem 0 0; padding-left: 1.2rem; }
-.proposal-investment { display: block; margin-top: 2rem; color: #ffd369; font-size: clamp(1.25rem, 2.6vw, 2.5rem); }
+.proposal-investment { display: grid; min-width: 0; gap: .55rem; margin-top: 2rem; color: #ffd369; overflow-wrap: anywhere; }
+.proposal-investment > span { color: #aaa99f; font-size: .78rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.proposal-investment > strong, .proposal-discount-price > strong { font-size: clamp(1.55rem, 3vw, 3rem); line-height: 1; }
+.proposal-investment small { color: #aaa99f; font-size: .78rem; font-weight: 500; line-height: 1.5; }
+.proposal-discount-price { display: flex; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: .55rem 1rem; }
+.proposal-discount-price del { color: #aaa99f; font-size: clamp(1rem, 1.8vw, 1.35rem); }
+.proposal-discount-price span { flex-basis: 100%; color: #f7f5ef; font-size: .82rem; font-weight: 700; }
 .proposal-comparison { padding: clamp(2rem, 6vw, 6rem); border-top: 1px solid rgba(255, 255, 255, .14); }
 .proposal-tier-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: clamp(2.5rem, 5vw, 4.5rem); }
 .proposal-tier { display: flex; min-width: 0; flex-direction: column; padding: clamp(1.25rem, 2.5vw, 2.25rem); border: 1px solid rgba(255, 255, 255, .14); background: #090a09; }
@@ -89,6 +95,7 @@
   .proposal-hero { padding-inline: 1rem; }
   .proposal-panel, .proposal-comparison, .proposal-related, .proposal-next { min-height: 0; padding: 2rem 1.25rem; }
   .proposal-primary { width: 100%; }
+  .proposal-discount-price { align-items: start; flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {

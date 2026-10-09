@@ -41,12 +41,13 @@ export const COUNTRY_OPTIONS: readonly CountryOption[] = Object.freeze([
 ]);
 
 export function fallbackLocation(country: CountryOption): BusinessLocation {
+  const isUsd = country.currency === "USD";
   return {
     businessCountry: country.name,
     countryCode: country.code,
-    displayCurrency: "USD",
-    currencySymbol: "$",
-    fxRate: 1,
+    displayCurrency: country.currency,
+    currencySymbol: country.symbol,
+    fxRate: isUsd ? 1 : null,
     fxRateTimestamp: null,
   };
 }

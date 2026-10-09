@@ -3,14 +3,16 @@ import { createElement } from "react";
 import { render, screen } from "@testing-library/react";
 
 import { calculateRecommendation } from "@/features/quiz/cortex";
+import { calculateProjectPriceQuote } from "@/features/quiz/discounts";
 import { QuizResult } from "@/features/quiz/QuizResult";
 import {
   buildProposalDraft,
   buildProposalViewModel,
 } from "@/features/quiz/proposal-view";
-import { defaultRoadmapSelection } from "@/features/quiz/roadmap-options";
+import { defaultRoadmapSelection, resolveRoadmapSelection } from "@/features/quiz/roadmap-options";
 import type {
   LeadContactInput,
+  RoadmapSelection,
 } from "@/features/quiz/types";
 import { quizV2Input } from "./quiz-v2-fixtures";
 
@@ -43,10 +45,18 @@ const fixtures = [
   },
 ] as const;
 
+function quoteFor(result: ReturnType<typeof calculateRecommendation>, selection: RoadmapSelection) {
+  return calculateProjectPriceQuote({
+    originalTotalUsd: resolveRoadmapSelection(result, selection).estimatedProjectInvestmentUsd,
+    location: result.location,
+  });
+}
+
 describe("proposal view model", () => {
   it.each(fixtures)("derives approved Point A and Point B evidence for $name", ({ input, pointA, pointB }) => {
     const result = calculateRecommendation(input);
-    const draft = buildProposalDraft(contact, input.answers, result, defaultRoadmapSelection(result));
+    const selection = defaultRoadmapSelection(result);
+    const draft = buildProposalDraft(contact, input.answers, result, selection, quoteFor(result, selection));
 
     expect(draft.client).toEqual({ firstName: "Ely", businessName: "La Jaysiedel Cakes" });
     expect(draft.pointA.heading).toBe("Where La Jaysiedel Cakes is now");
@@ -60,7 +70,14 @@ describe("proposal view model", () => {
     const input = fixtures[1].input;
     const result = calculateRecommendation(input);
     const selection = defaultRoadmapSelection(result);
-    const view = buildProposalViewModel(contact, input.answers, result, selection, "2026-09-25T05:30:00.000Z");
+    const view = buildProposalViewModel(
+      contact,
+      input.answers,
+      result,
+      selection,
+      quoteFor(result, selection),
+      "2026-09-25T05:30:00.000Z",
+    );
 
     expect(view.recommendation.offerKey).toBe(result.recommendedOfferKey);
     expect(view.selection).toEqual(selection);
@@ -81,15 +98,16 @@ describe("proposal view model", () => {
     const input = fixtures[0].input;
     const result = calculateRecommendation(input);
     const tampered = { ...input.answers, q3_current_journey: ["browser_supplied_label"] };
+    const selection = defaultRoadmapSelection(result);
 
-    expect(() => buildProposalDraft(contact, tampered, result, defaultRoadmapSelection(result))).toThrow(/unknown option key/i);
+    expect(() => buildProposalDraft(contact, tampered, result, selection, quoteFor(result, selection))).toThrow(/unknown option key/i);
   });
 
   it("renders client, Point A, Point B, recommendation, comparison, relevant work, and discovery call in order", () => {
     const input = fixtures[1].input;
     const result = calculateRecommendation(input);
     const selection = defaultRoadmapSelection(result);
-    const proposal = buildProposalDraft(contact, input.answers, result, selection);
+    const proposal = buildProposalDraft(contact, input.answers, result, selection, quoteFor(result, selection));
     const { container } = render(createElement(QuizResult, {
       result,
       proposal,

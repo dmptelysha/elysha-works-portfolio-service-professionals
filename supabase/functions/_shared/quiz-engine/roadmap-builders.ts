@@ -24,12 +24,13 @@ export function normalizeLocation(location?: BusinessLocation): BusinessLocation
   const currency = location.displayCurrency.trim().toUpperCase();
   const validRate = typeof location.fxRate === "number" && Number.isFinite(location.fxRate) && location.fxRate > 0;
   if (!/^[A-Z]{2}$/.test(countryCode) || !/^[A-Z]{3}$/.test(currency)) return DEFAULT_LOCATION;
+  const fxRate = validRate ? location.fxRate : currency === "USD" ? 1 : null;
   return Object.freeze({
     businessCountry: location.businessCountry.trim() || "Not specified",
     countryCode,
-    displayCurrency: validRate ? currency : "USD",
-    currencySymbol: validRate ? location.currencySymbol.trim() || currency : "$",
-    fxRate: validRate ? location.fxRate : 1,
+    displayCurrency: currency,
+    currencySymbol: location.currencySymbol.trim() || currency,
+    fxRate,
     fxRateTimestamp: validRate && location.fxRateTimestamp && Number.isFinite(Date.parse(location.fxRateTimestamp))
       ? new Date(location.fxRateTimestamp).toISOString()
       : null,

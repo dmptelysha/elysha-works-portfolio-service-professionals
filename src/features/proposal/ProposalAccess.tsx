@@ -3,8 +3,14 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-import type { PlatformKey, ProposalViewModel, RoadmapVariant } from "@/features/quiz/types";
+import type { PlatformKey, ProjectPriceQuote, ProposalViewModel, RoadmapVariant } from "@/features/quiz/types";
 import { RelatedWorkCards } from "@/features/quiz/RelatedWorkCards";
+import {
+  convertUsdToViewerAmount,
+  finalViewerAmount,
+  formatLocalAmount,
+  formatViewerAmount,
+} from "@/features/quiz/viewer-currency";
 
 import { defaultProposalService, isProposalReference, type ProposalService } from "./proposal-service";
 
@@ -48,7 +54,40 @@ function preferredVariant(proposal: ProposalViewModel, variants: readonly Roadma
     ?? variants[0];
 }
 
+interface LegacyProposalInvestment {
+  estimatedTotalUsd: number;
+  currency: string;
+  symbol: string;
+  localTotal: number | null;
+  fxRate: number | null;
+  fxRateTimestamp: string | null;
+}
+
+function readProposalInvestment(proposal: ProposalViewModel): ProjectPriceQuote {
+  const investment = proposal.investment as ProposalViewModel["investment"] | LegacyProposalInvestment;
+  if ("finalTotalUsd" in investment) return investment;
+  return {
+    originalTotalUsd: investment.estimatedTotalUsd,
+    discountAmountUsd: 0,
+    finalTotalUsd: investment.estimatedTotalUsd,
+    localCurrency: investment.currency,
+    localSymbol: investment.symbol,
+    finalTotalLocal: investment.localTotal,
+    fxRate: investment.fxRate,
+    fxRateTimestamp: investment.fxRateTimestamp,
+    campaign: null,
+  };
+}
+
 function ProposalDocument({ proposal }: { proposal: ProposalViewModel }) {
+  const investment = readProposalInvestment(proposal);
+  const originalAmount = convertUsdToViewerAmount(investment.originalTotalUsd, investment);
+  const finalAmount = finalViewerAmount(investment);
+  const original = originalAmount === null ? null : formatLocalAmount(originalAmount, investment);
+  const final = finalAmount === null ? null : formatLocalAmount(finalAmount, investment);
+  const savings = originalAmount !== null && finalAmount !== null
+    ? formatLocalAmount(Math.max(0, originalAmount - finalAmount), investment)
+    : null;
   const expiry = new Intl.DateTimeFormat("en-PH", {
     dateStyle: "long",
     timeStyle: "short",
@@ -85,9 +124,21 @@ function ProposalDocument({ proposal }: { proposal: ProposalViewModel }) {
           <p className="proposal-number">03 · Recommended solution</p>
           <h2 id="proposal-recommendation">{proposal.recommendation.title}</h2>
           <p>{proposal.recommendation.reason}</p>
-          <strong className="proposal-investment">
-            {proposal.recommendation.offerName} · ${proposal.recommendation.estimatedProjectInvestmentUsd.toLocaleString("en-US")}
-          </strong>
+          <div className="proposal-investment">
+            <span>{proposal.recommendation.offerName}</span>
+            {investment.campaign && original && final && savings ? (
+              <div className="proposal-discount-price">
+                <del>{original}</del>
+                <strong>{final}</strong>
+                <span>You save {savings} · {investment.campaign.percentage}% off</span>
+              </div>
+            ) : final ? <strong>{final}</strong> : <strong>{investment.localCurrency} conversion unavailable</strong>}
+            {investment.fxRateTimestamp && final && investment.localCurrency !== "USD" ? (
+              <small>
+                Rate checked {new Date(investment.fxRateTimestamp).toLocaleString("en-PH")}
+              </small>
+            ) : null}
+          </div>
         </section>
 
         <section className="proposal-comparison" aria-labelledby="proposal-options">
@@ -110,7 +161,7 @@ function ProposalDocument({ proposal }: { proposal: ProposalViewModel }) {
                   <strong>{platformNames[variant.platform]}</strong>
                   <div className="proposal-tier-price">
                     <small>Estimated investment</small>
-                    <b>${variant.estimatedProjectInvestmentUsd.toLocaleString("en-US")}</b>
+                    <b>{formatViewerAmount(variant.estimatedProjectInvestmentUsd, investment) ?? `${investment.localCurrency} conversion unavailable`}</b>
                   </div>
                   <ul>{variant.offer.includedFeatures.map((feature) => <li key={feature}>{feature}</li>)}</ul>
                   {!variant.feasibility.available ? <p className="proposal-unavailable">This route requires a different platform to deliver the approved capability.</p> : null}

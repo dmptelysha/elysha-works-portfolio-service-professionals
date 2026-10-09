@@ -3,18 +3,21 @@ import { buildRoadmapTiers, resolveRoadmapSelection } from "./roadmap-options.ts
 import type {
   CortexResult,
   ClientIdentity,
+  ProjectPriceQuote,
   ProposalContentViewModel,
   ProposalDraftViewModel,
   ProposalViewModel,
   QuizAnswers,
   RoadmapSelection,
 } from "./types.ts";
+import { PROPOSAL_SNAPSHOT_VERSION } from "./types.ts";
 
 function buildContent(
   contact: ClientIdentity,
   answers: QuizAnswers,
   result: CortexResult,
   selection: RoadmapSelection,
+  priceQuote: ProjectPriceQuote,
 ): ProposalContentViewModel {
   const firstName = contact.firstName.trim();
   const businessName = contact.businessName.trim();
@@ -22,7 +25,10 @@ function buildContent(
     throw new Error("Valid client identity is required");
   }
 
-  resolveRoadmapSelection(result, selection);
+  const selected = resolveRoadmapSelection(result, selection);
+  if (Math.round(priceQuote.originalTotalUsd * 100) !== Math.round(selected.estimatedProjectInvestmentUsd * 100)) {
+    throw new Error("Price quote does not match the selected roadmap");
+  }
   const pointAB = buildPointABSummary(businessName, result.audienceKey, answers);
   const ownership = Object.freeze([
     Object.freeze({ item: "Strategy and system architecture", elyshaWorks: "Included", client: "Provides business information" }),
@@ -35,6 +41,7 @@ function buildContent(
     Object.freeze({ item: "Final approved system", elyshaWorks: "Builds, tests, and hands over", client: "Owns after full payment" }),
   ]);
   return Object.freeze({
+    proposalSnapshotVersion: PROPOSAL_SNAPSHOT_VERSION,
     audienceKey: result.audienceKey,
     client: Object.freeze({ firstName, businessName }),
     ...pointAB,
@@ -46,12 +53,12 @@ function buildContent(
     missingSystem: result.solutionSummary,
     customerJourney: Object.freeze([...result.recommendedCustomerJourney]),
     platform: Object.freeze({
-      recommended: result.recommendedPlatform,
+      recommended: selection.platform,
       reasons: Object.freeze([...result.platformReasons]),
       alternatives: Object.freeze({ ...result.alternativePlatformReasons }),
     }),
     package: Object.freeze({
-      offerName: result.recommendedOfferName,
+      offerName: selected.offer.name,
       reasons: Object.freeze([...result.packageReasons]),
     }),
     pages: Object.freeze([...result.recommendedPages]),
@@ -66,24 +73,27 @@ function buildContent(
       businessEmail: "The client owns the professional mailbox; Elysha Works configures it for confirmations and automated messages where required.",
     }),
     investment: Object.freeze({
-      basePriceUsd: result.basePriceUsd,
-      estimatedTotalUsd: result.estimatedProjectInvestmentUsd,
-      currency: result.displayCurrency,
-      symbol: result.currencySymbol,
-      localTotal: result.displayPriceLocal,
-      fxRate: result.fxRate,
-      fxRateTimestamp: result.fxRateTimestamp,
+      basePriceUsd: selected.offer.basePriceUsd,
+      originalTotalUsd: priceQuote.originalTotalUsd,
+      discountAmountUsd: priceQuote.discountAmountUsd,
+      finalTotalUsd: priceQuote.finalTotalUsd,
+      localCurrency: priceQuote.localCurrency,
+      localSymbol: priceQuote.localSymbol,
+      finalTotalLocal: priceQuote.finalTotalLocal,
+      fxRate: priceQuote.fxRate,
+      fxRateTimestamp: priceQuote.fxRateTimestamp,
+      campaign: priceQuote.campaign ? Object.freeze({ ...priceQuote.campaign }) : null,
     }),
-    includedScope: Object.freeze([...result.recommendedOfferIncludedFeatures]),
+    includedScope: Object.freeze([...selected.offer.includedFeatures]),
     optionalEnhancements: Object.freeze([...result.optionalEnhancements]),
-    ongoingCosts: Object.freeze([...result.thirdPartyCosts]),
+    ongoingCosts: Object.freeze([...selected.estimatedRecurringCosts]),
     clientRequirements: Object.freeze([...result.clientRequirements]),
     ownership,
     paymentSchedule: Object.freeze({
       depositPercent: 50 as const,
       balancePercent: 50 as const,
-      depositAmount: result.projectDepositLocal,
-      balanceAmount: result.projectBalanceLocal,
+      depositAmount: priceQuote.finalTotalLocal === null ? null : priceQuote.finalTotalLocal / 2,
+      balanceAmount: priceQuote.finalTotalLocal === null ? null : priceQuote.finalTotalLocal / 2,
     }),
     pathToPointB: Object.freeze({
       today: result.pointASummary,
@@ -94,13 +104,13 @@ function buildContent(
     recommendation: Object.freeze({
       title: result.recommendedSolutionTitle,
       reason: result.recommendationReason,
-      buildRoute: result.recommendedBuildRoute,
-      platform: result.recommendedPlatform,
-      offerKey: result.recommendedOfferKey,
-      offerName: result.recommendedOfferName,
-      basePriceUsd: result.basePriceUsd,
-      includedFeatures: Object.freeze([...result.recommendedOfferIncludedFeatures]),
-      estimatedProjectInvestmentUsd: result.estimatedProjectInvestmentUsd,
+      buildRoute: selected.offer.buildRoute,
+      platform: selection.platform,
+      offerKey: selected.offer.offerKey,
+      offerName: selected.offer.name,
+      basePriceUsd: selected.offer.basePriceUsd,
+      includedFeatures: Object.freeze([...selected.offer.includedFeatures]),
+      estimatedProjectInvestmentUsd: priceQuote.finalTotalUsd,
     }),
     selection: Object.freeze({ ...selection }),
     tiers: Object.freeze([...buildRoadmapTiers(result)]),
@@ -112,8 +122,9 @@ export function buildProposalDraft(
   answers: QuizAnswers,
   result: CortexResult,
   selection: RoadmapSelection,
+  priceQuote: ProjectPriceQuote,
 ): ProposalDraftViewModel {
-  return Object.freeze({ ...buildContent(contact, answers, result, selection), expiresAt: null });
+  return Object.freeze({ ...buildContent(contact, answers, result, selection, priceQuote), expiresAt: null });
 }
 
 export function buildProposalViewModel(
@@ -121,12 +132,13 @@ export function buildProposalViewModel(
   answers: QuizAnswers,
   result: CortexResult,
   selection: RoadmapSelection,
+  priceQuote: ProjectPriceQuote,
   expiresAt: string,
 ): ProposalViewModel {
   const parsedExpiry = Date.parse(expiresAt);
   if (!Number.isFinite(parsedExpiry)) throw new Error("A valid proposal expiration timestamp is required");
   return Object.freeze({
-    ...buildContent(contact, answers, result, selection),
+    ...buildContent(contact, answers, result, selection, priceQuote),
     expiresAt: new Date(parsedExpiry).toISOString(),
   });
 }

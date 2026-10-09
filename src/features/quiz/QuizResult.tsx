@@ -1,10 +1,13 @@
 import { RelatedWorkCards } from "./RelatedWorkCards";
 import { RoadmapComparison } from "./RoadmapComparison";
 import { RoadmapSelectionSummary } from "./RoadmapSelectionSummary";
+import { ProjectInvestment } from "./ProjectInvestment";
+import { formatViewerAmount, viewerCurrencyFromLocation } from "./viewer-currency";
 import type {
   CortexResult,
   ProposalDraftViewModel,
   ProposalViewModel,
+  ProjectPriceQuote,
   ReadinessLevel,
   RoadmapSelection,
   SolutionType,
@@ -17,6 +20,17 @@ interface QuizResultProps {
   onSelect: (selection: RoadmapSelection) => void;
   onStartOver: () => void;
   onRetryProposal: () => Promise<void>;
+  onApplyCoupon?: () => Promise<void>;
+  onCouponInput?: (value: string) => void;
+  onRemoveCoupon?: () => void;
+  onRetryConversion?: () => Promise<void>;
+  onConfirmProposal?: () => Promise<void>;
+  priceQuote?: ProjectPriceQuote;
+  couponInput?: string;
+  couponMessage?: string | null;
+  countryCode?: string;
+  proposalLocked?: boolean;
+  deliveryRetryRequired?: boolean;
   issuing: boolean;
   issueError: string | null;
   persistenceAvailable: boolean;
@@ -56,11 +70,24 @@ export function QuizResult({
   onSelect,
   onStartOver,
   onRetryProposal,
+  onApplyCoupon = async () => undefined,
+  onCouponInput = () => undefined,
+  onRemoveCoupon = () => undefined,
+  onRetryConversion = async () => undefined,
+  onConfirmProposal = async () => undefined,
+  priceQuote,
+  couponInput = "",
+  couponMessage = null,
+  countryCode = "ZZ",
+  proposalLocked = false,
+  deliveryRetryRequired = false,
   issuing,
   issueError,
   persistenceAvailable,
 }: QuizResultProps) {
   if (proposal) {
+    const selectedPriceQuote = priceQuote ?? proposal.investment;
+    const viewerCurrency = selectedPriceQuote;
     const completeTier = proposal.tiers.find((tier) => tier.tierKey === "complete");
     const completeVariant = completeTier?.variants.find(
       (variant) => variant.platform === selection.platform && variant.feasibility.available,
@@ -73,7 +100,7 @@ export function QuizResult({
           <h1 id="result-title">Hi {proposal.client.firstName}, here&apos;s the roadmap for {proposal.client.businessName}.</h1>
           <p>{proposal.recommendation.title}</p>
           <strong className="result-confidence result-confidence--standard">Server-ready recommendation</strong>
-          <span>Review your path and compare the three working options. Your protected proposal is prepared and emailed automatically.</span>
+          <span>Review your path, compare the three working options, then confirm the roadmap you want emailed.</span>
         </header>
 
         <div className="result-grid">
@@ -98,7 +125,7 @@ export function QuizResult({
             <h2 id="recommended-path-title">{proposal.recommendation.title}</h2>
             <p>{proposal.recommendation.reason}</p>
             <strong className="result-price">
-              {proposal.recommendation.offerName}: ${proposal.recommendation.basePriceUsd.toLocaleString("en-US")}
+              {proposal.recommendation.offerName}: {formatViewerAmount(proposal.recommendation.basePriceUsd, viewerCurrency) ?? `${viewerCurrency.localCurrency} conversion unavailable`}
             </strong>
           </section>
 
@@ -141,11 +168,11 @@ export function QuizResult({
           </section>
 
           <div className="result-card result-card--wide result-card--comparison">
-            <RoadmapComparison result={result} selection={selection} onSelect={onSelect} />
+            <RoadmapComparison result={result} selection={selection} onSelect={onSelect} locked={proposalLocked} currency={viewerCurrency} />
           </div>
 
           <div className="result-card result-card--wide result-card--selection">
-            <RoadmapSelectionSummary result={result} selection={selection} />
+            <RoadmapSelectionSummary result={result} selection={selection} quote={selectedPriceQuote} />
           </div>
 
           <section className="result-card" aria-labelledby="pages-title">
@@ -176,10 +203,19 @@ export function QuizResult({
           <section className="result-card result-card--gold" aria-labelledby="investment-title">
             <p className="result-number">13 · Investment</p>
             <h2 id="investment-title">Project investment</h2>
-            <strong className="result-price">${proposal.investment.estimatedTotalUsd.toLocaleString("en-US")} USD</strong>
-            {proposal.investment.localTotal !== null && proposal.investment.currency !== "USD" ? (
-              <p>Approximately {proposal.investment.symbol}{proposal.investment.localTotal.toLocaleString("en-US")} {proposal.investment.currency}. USD remains the source price; conversion is indicative.</p>
-            ) : <p>Displayed in the approved USD source currency.</p>}
+            <ProjectInvestment
+              quote={selectedPriceQuote}
+              couponInput={couponInput}
+              couponMessage={couponMessage}
+              countryCode={countryCode}
+              locked={proposalLocked}
+              busy={issuing}
+              onCouponInput={onCouponInput}
+              onApplyCoupon={onApplyCoupon}
+              onRemoveCoupon={onRemoveCoupon}
+              onRetryConversion={onRetryConversion}
+              onConfirm={onConfirmProposal}
+            />
           </section>
 
           <section className="result-card" aria-labelledby="scope-title">
@@ -261,17 +297,17 @@ export function QuizResult({
             <p className="result-number">Proposal access</p>
             <h2>{proposal.expiresAt
               ? "Proposal sent · Available for 72 hours"
-              : issueError
+              : deliveryRetryRequired
                 ? "Your roadmap is ready; email delivery needs attention"
-                : "Preparing and emailing your proposal…"}</h2>
+                : "Choose and confirm your roadmap"}</h2>
             <p>{proposal.expiresAt
               ? `Access expires at ${new Date(proposal.expiresAt).toLocaleString("en-US")}.`
-              : issueError
+              : deliveryRetryRequired
                 ? "The roadmap remains available here. Retry sending its protected access details."
-                : "This happens automatically. Your exact 72-hour access period begins after the email is delivered."}</p>
-            {issueError ? <p className="quiz-validation" role="alert">{issueError}</p> : null}
+                : "Your exact 72-hour access period begins only after you confirm and the email is delivered."}</p>
+            {deliveryRetryRequired && issueError ? <p className="quiz-validation" role="alert">{issueError}</p> : null}
           </div>
-          {!proposal.expiresAt && issueError ? (
+          {!proposal.expiresAt && deliveryRetryRequired ? (
             <button className="quiz-primary" disabled={issuing} onClick={() => void onRetryProposal()} type="button">
               {issuing ? "Sending email…" : "Retry sending email"} <span aria-hidden="true">→</span>
             </button>
@@ -329,11 +365,11 @@ export function QuizResult({
           <p className="result-number">05 · Cortex recommendation</p>
           <h2 id="cortex-title">{result.recommendedOfferName}</h2>
           <p>{result.recommendationReason}</p>
-          <strong className="result-price">Recommended starting build: ${result.basePriceUsd.toLocaleString("en-US")}{result.recommendedOfferKey === "custom_complete" ? "+" : ""}</strong>
+          <strong className="result-price">Recommended starting build: {formatViewerAmount(result.basePriceUsd, viewerCurrencyFromLocation(result.location)) ?? `${result.location.displayCurrency} conversion unavailable`}{result.recommendedOfferKey === "custom_complete" ? "+" : ""}</strong>
         </section>
 
         <div className="result-card result-card--wide result-card--comparison">
-          <RoadmapComparison result={result} selection={selection} onSelect={onSelect} />
+          <RoadmapComparison result={result} selection={selection} onSelect={onSelect} currency={viewerCurrencyFromLocation(result.location)} />
         </div>
 
         <div className="result-card result-card--wide result-card--selection">

@@ -1,5 +1,6 @@
 import { hmacSha256Hex } from "./crypto.ts";
 import { getMakeWebhookEnv } from "./env.ts";
+import type { ProjectPriceQuote } from "./quiz-engine/types.ts";
 
 export interface InitialProposalDelivery {
   operationId: string;
@@ -17,6 +18,7 @@ export interface InitialProposalDelivery {
     tierKey: string;
     platform: string;
     offerKey: string;
+    price: ProjectPriceQuote;
   };
 }
 
@@ -36,6 +38,13 @@ export async function deliverInitialProposal(
     tier_key: payload.proposal.tierKey,
     platform: payload.proposal.platform,
     offer_key: payload.proposal.offerKey,
+    original_total_usd: payload.proposal.price.originalTotalUsd,
+    discount_amount_usd: payload.proposal.price.discountAmountUsd,
+    final_total_usd: payload.proposal.price.finalTotalUsd,
+    discount_code: payload.proposal.price.campaign?.code ?? null,
+    discount_percent: payload.proposal.price.campaign?.percentage ?? null,
+    local_total: payload.proposal.price.finalTotalLocal,
+    local_currency: payload.proposal.price.localCurrency,
     proposal_url: payload.proposal.url,
     access_key: payload.proposal.accessKey,
     expires_at: payload.proposal.expiresAt,

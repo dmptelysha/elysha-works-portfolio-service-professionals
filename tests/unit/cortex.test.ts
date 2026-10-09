@@ -41,6 +41,23 @@ const coachCourse = assessment("coaches_educators", {
 });
 
 describe("business systems assessment validation", () => {
+  it("preserves the viewer currency when its live conversion rate is unavailable", () => {
+    const result = calculateRecommendation({
+      ...coachCourse,
+      location: {
+        businessCountry: "Philippines",
+        countryCode: "PH",
+        displayCurrency: "PHP",
+        currencySymbol: "₱",
+        fxRate: null,
+        fxRateTimestamp: null,
+      },
+    });
+
+    expect(result.location).toMatchObject({ displayCurrency: "PHP", currencySymbol: "₱", fxRate: null });
+    expect(result.displayPriceLocal).toBeNull();
+  });
+
   it("requires every diagnostic question and accepts complete answers", () => {
     expect(validateAnswers(coachCourse)).toEqual({ valid: true, missingQuestionKeys: [] });
     expect(validateAnswers({ ...coachCourse, answers: { q1_business_model: coachCourse.answers.q1_business_model } })).toEqual({

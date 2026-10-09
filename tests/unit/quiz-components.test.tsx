@@ -4,18 +4,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QuizExperience } from "@/features/quiz/QuizExperience";
 import { calculateRecommendation } from "@/features/quiz/cortex";
+import { calculateProjectPriceQuote } from "@/features/quiz/discounts";
 import { InlineEmailVerification } from "@/features/quiz/InlineEmailVerification";
 import { LeadContactStep } from "@/features/quiz/LeadContactStep";
-import type { OwnedQuizContext } from "@/features/quiz/quiz-service";
+import { ProposalServiceError, type OwnedQuizContext } from "@/features/quiz/quiz-service";
 import { QUIZ_DEFINITIONS } from "@/features/quiz/questions";
 import { QUIZ_STORAGE_KEY, QUIZ_TTL_MS } from "@/features/quiz/persistence";
 import { buildProposalDraft } from "@/features/quiz/proposal-view";
-import { defaultRoadmapSelection } from "@/features/quiz/roadmap-options";
+import { defaultRoadmapSelection, resolveRoadmapSelection } from "@/features/quiz/roadmap-options";
 import {
   CATALOG_VERSION,
   CORTEX_VERSION,
   QUESTION_SET_VERSION,
   type CustomEmailOtpChallenge,
+  type BusinessLocation,
   type LeadContactInput,
   type LeadContactSubmissionResult,
   type SavedQuizAttempt,
@@ -63,6 +65,7 @@ const ownedContext: OwnedQuizContext = {
 
 function createFakeQuizService() {
   let answers: Record<string, readonly string[]> = {};
+  let savedLocation: BusinessLocation | undefined;
   let identity = { firstName: "Mara", businessName: "Mara Consulting" };
   const createOwnedQuizContext = vi.fn(async (audienceKey: typeof ownedContext.audienceKey) => ({ ...ownedContext, audienceKey }));
   const submitLeadContact = vi.fn(async (
@@ -73,19 +76,41 @@ function createFakeQuizService() {
     identity = { firstName: contact.firstName, businessName: contact.businessName };
     return { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId };
   });
-  const saveOwnedQuizProgress = vi.fn(async (_context: OwnedQuizContext, progress: { answers: Record<string, readonly string[]> }) => {
+  const saveOwnedQuizProgress = vi.fn(async (_context: OwnedQuizContext, progress: { answers: Record<string, readonly string[]>; location?: BusinessLocation | null }) => {
     answers = progress.answers;
+    if (progress.location) savedLocation = progress.location;
   });
-  const previewProposal = vi.fn(async (context: OwnedQuizContext) => {
-    const result = calculateRecommendation({ audienceKey: context.audienceKey, answers });
-    return buildProposalDraft(identity, answers, result, defaultRoadmapSelection(result));
+  const previewProposal = vi.fn(async (context: OwnedQuizContext, requestedSelection?: Parameters<typeof resolveRoadmapSelection>[1], couponCode?: string) => {
+    const result = calculateRecommendation({ audienceKey: context.audienceKey, answers, location: savedLocation });
+    const selection = requestedSelection ?? defaultRoadmapSelection(result);
+    const campaign = couponCode?.trim().toUpperCase() === "PINOYAKO"
+      ? { campaignKey: "pinoyako", code: "PINOYAKO", percentage: 50 } as const
+      : couponCode?.trim().toUpperCase() === "EARLYBIRDWORKS"
+        ? { campaignKey: "earlybirdworks", code: "EARLYBIRDWORKS", percentage: 15 } as const
+        : null;
+    const quote = calculateProjectPriceQuote({
+      originalTotalUsd: resolveRoadmapSelection(result, selection).estimatedProjectInvestmentUsd,
+      location: result.location,
+      campaign,
+    });
+    return buildProposalDraft(identity, answers, result, selection, quote);
   });
-  const issueProposal = vi.fn(async (context: OwnedQuizContext, selection: { tierKey: "basic" | "advanced" | "complete"; platform: "systeme_io" | "gohighlevel" | "custom_app"; offerKey: string }) => {
-    const result = calculateRecommendation({ audienceKey: context.audienceKey, answers });
+  const issueProposal = vi.fn(async (context: OwnedQuizContext, selection: { tierKey: "basic" | "advanced" | "complete"; platform: "systeme_io" | "gohighlevel" | "custom_app"; offerKey: string }, couponCode?: string) => {
+    const result = calculateRecommendation({ audienceKey: context.audienceKey, answers, location: savedLocation });
+    const campaign = couponCode === "PINOYAKO"
+      ? { campaignKey: "pinoyako", code: "PINOYAKO", percentage: 50 } as const
+      : couponCode === "EARLYBIRDWORKS"
+        ? { campaignKey: "earlybirdworks", code: "EARLYBIRDWORKS", percentage: 15 } as const
+        : null;
+    const quote = calculateProjectPriceQuote({
+      originalTotalUsd: resolveRoadmapSelection(result, selection).estimatedProjectInvestmentUsd,
+      location: result.location,
+      campaign,
+    });
     return {
       proposalReference: "70000000-0000-4000-8000-000000000001",
       accessKey: "ABCD234567",
-      proposal: { ...buildProposalDraft(identity, answers, result, selection), expiresAt: "2026-09-25T05:00:00.000Z" },
+      proposal: { ...buildProposalDraft(identity, answers, result, selection, quote), expiresAt: "2026-09-25T05:00:00.000Z" },
     };
   });
   const requestEmailOtp = vi.fn(async (email: string, _token: string, _visitorId: string): Promise<CustomEmailOtpChallenge> => ({
@@ -104,9 +129,9 @@ function createFakeQuizService() {
     businessCountry: "Philippines",
     countryCode: "PH",
     displayCurrency: "PHP",
-    currencySymbol: "PHP",
+    currencySymbol: "₱",
     fxRate: 58,
-    fxRateTimestamp: "2026-09-23T00:00:00.000Z",
+    fxRateTimestamp: "2026-09-24T00:00:00.000Z",
   }));
   return { getCurrencyQuote, requestEmailOtp, verifyEmailOtp, createOwnedQuizContext, submitLeadContact, saveOwnedQuizProgress, previewProposal, issueProposal };
 }
@@ -380,9 +405,11 @@ describe("local portfolio quiz", () => {
     await screen.findByTestId("turnstile-runtime");
     expect(turnstileControls.options).toEqual(expect.objectContaining({ appearance: "always", retry: "never" }));
     await act(async () => turnstileControls.onSuccess?.("audience-token"));
+    expect(screen.getByTestId("turnstile-runtime")).not.toBeVisible();
     await user.click(await screen.findByRole("button", { name: /service-based business/i }));
     await waitFor(() => expect(service.createOwnedQuizContext).toHaveBeenCalledOnce());
     await waitFor(() => expect(turnstileControls.mounts).toBeGreaterThanOrEqual(2));
+    expect(screen.getByTestId("turnstile-runtime")).toBeInTheDocument();
     await user.type(screen.getByLabelText(/first name/i), "Mara");
     await user.type(screen.getByLabelText(/last name/i), "Santos");
     await user.type(screen.getByLabelText(/business name/i), "Mara Consulting");
@@ -395,6 +422,7 @@ describe("local portfolio quiz", () => {
 
     act(() => turnstileControls.onSuccess?.("valid-turnstile-token"));
     await waitFor(() => expect(submit).toBeEnabled());
+    expect(screen.getByTestId("turnstile-runtime")).not.toBeVisible();
 
     act(() => turnstileControls.onExpire?.());
     await waitFor(() => expect(submit).toBeDisabled());
@@ -579,7 +607,7 @@ describe("local portfolio quiz", () => {
     expect(screen.getByLabelText(/^email/i)).toHaveValue("Mara@Example.com");
   });
 
-  it("automatically issues and confirms the emailed proposal after calculation", async () => {
+  it("waits for explicit confirmation before issuing the emailed proposal", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
     render(<QuizExperience service={service} />);
@@ -598,9 +626,12 @@ describe("local portfolio quiz", () => {
 
     await waitFor(() => expect(service.previewProposal).toHaveBeenCalledWith(expect.objectContaining({ quizSessionId: ownedContext.quizSessionId })));
     expect(service.saveOwnedQuizProgress).toHaveBeenCalled();
+    expect(service.issueProposal).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
     await waitFor(() => expect(service.issueProposal).toHaveBeenCalledWith(
       expect.objectContaining({ quizSessionId: ownedContext.quizSessionId }),
       expect.objectContaining({ tierKey: expect.any(String), platform: expect.any(String) }),
+      undefined,
     ));
     const issuePayload = service.issueProposal.mock.calls[0][1];
     expect(Object.keys(issuePayload).sort()).toEqual(["offerKey", "platform", "tierKey"]);
@@ -613,6 +644,160 @@ describe("local portfolio quiz", () => {
     expect(screen.queryByRole("dialog", { name: /your proposal is ready/i })).not.toBeInTheDocument();
   });
 
+  it("uses the fresh PHP quote for the first preview and shows the default package amount", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:10:00.000Z")} />);
+
+    await completeServiceBusinessAssessment(user);
+
+    const investment = (await screen.findByRole("heading", { name: /project investment/i })).closest("section")!;
+    expect(within(investment).getByText("₱261,000 PHP")).toBeInTheDocument();
+    expect(within(investment).queryByText(/PHP conversion is unavailable/i)).not.toBeInTheDocument();
+    expect(service.getCurrencyQuote).toHaveBeenCalledOnce();
+    expect(service.saveOwnedQuizProgress.mock.invocationCallOrder.at(-1)!).toBeLessThan(service.previewProposal.mock.invocationCallOrder[0]);
+  });
+
+  it("still shows the roadmap without fabricated PHP amounts when the initial refresh fails", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    service.getCurrencyQuote
+      .mockResolvedValueOnce({
+        businessCountry: "Philippines",
+        countryCode: "PH",
+        displayCurrency: "PHP",
+        currencySymbol: "₱",
+        fxRate: 58,
+        fxRateTimestamp: "2026-09-24T00:00:00.000Z",
+      })
+      .mockRejectedValueOnce(new Error("FX unavailable"));
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:20:00.000Z")} />);
+
+    await completeServiceBusinessAssessment(user);
+
+    const investment = (await screen.findByRole("heading", { name: /project investment/i })).closest("section")!;
+    expect(within(investment).getByText(/live PHP conversion is unavailable/i)).toBeInTheDocument();
+    expect(within(investment).queryByText(/₱[\d,]+ PHP/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /try that calculation again/i })).not.toBeInTheDocument();
+
+    const basicCard = screen.getByRole("heading", { name: /^basic$/i }).closest("article")!;
+    await user.click(within(basicCard).getByRole("button", { name: /^systeme\.io$/i }));
+    expect(within(investment).getByText(/live PHP conversion is unavailable/i)).toBeInTheDocument();
+    expect(within(investment).queryByText(/₱[\d,]+ PHP/)).not.toBeInTheDocument();
+  });
+
+  it("applies a coupon and shows the original and discounted totals only in PHP", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.000Z")} />);
+    await completeServiceBusinessAssessment(user);
+
+    const couponInput = await screen.findByLabelText(/coupon code/i);
+    expect(couponInput).toHaveAttribute("placeholder", "Input your coupon code here");
+    await user.type(couponInput, "pinoyako");
+    await user.click(screen.getByRole("button", { name: /apply coupon/i }));
+
+    await waitFor(() => expect(document.querySelector("del")).not.toBeNull());
+    expect(document.querySelector("del")?.textContent).toBe("₱261,000 PHP");
+    expect(screen.getAllByText("₱130,500 PHP").length).toBeGreaterThan(0);
+    expect(screen.getByText(/you save ₱130,500 PHP.*50% off/i)).toBeInTheDocument();
+    expect(screen.queryByText(/USD/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/coupon code/i)).toBeDisabled();
+    expect(screen.getByRole("button", { name: /remove/i })).toBeEnabled();
+    expect(service.previewProposal).toHaveBeenLastCalledWith(
+      expect.anything(),
+      { tierKey: "complete", platform: "gohighlevel", offerKey: "platform_scale" },
+      "pinoyako",
+    );
+  });
+
+  it("refreshes PHP pricing before coupon validation even when the current quote is fresh", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:10:00.000Z")} />);
+    await completeServiceBusinessAssessment(user);
+    service.getCurrencyQuote.mockClear();
+    service.getCurrencyQuote.mockResolvedValue({
+      businessCountry: "Philippines",
+      countryCode: "PH",
+      displayCurrency: "PHP",
+      currencySymbol: "₱",
+      fxRate: 58,
+      fxRateTimestamp: "2026-09-24T00:15:00.001Z",
+    });
+    service.saveOwnedQuizProgress.mockClear();
+    service.previewProposal.mockClear();
+
+    await user.type(await screen.findByLabelText(/coupon code/i), "pinoyako");
+    await user.click(screen.getByRole("button", { name: /apply coupon/i }));
+
+    await waitFor(() => expect(document.querySelector("del")).not.toBeNull());
+    expect(service.getCurrencyQuote).toHaveBeenCalledOnce();
+    expect(service.saveOwnedQuizProgress).toHaveBeenCalledOnce();
+    expect(service.previewProposal).toHaveBeenCalledOnce();
+    expect(service.getCurrencyQuote.mock.invocationCallOrder[0]).toBeLessThan(service.previewProposal.mock.invocationCallOrder[0]);
+    expect(service.saveOwnedQuizProgress.mock.invocationCallOrder[0]).toBeLessThan(service.previewProposal.mock.invocationCallOrder[0]);
+    expect(screen.queryByText(/PHP conversion unavailable/i)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["2026-09-24T00:15:00.000Z", 0],
+    ["2026-09-24T00:15:00.001Z", 1],
+  ])("refreshes FX only after the exact 15-minute boundary at %s", async (timestamp, expectedCalls) => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} now={() => new Date(timestamp)} />);
+    await completeServiceBusinessAssessment(user);
+    service.getCurrencyQuote.mockClear();
+    service.saveOwnedQuizProgress.mockClear();
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
+    await waitFor(() => expect(service.issueProposal).toHaveBeenCalledOnce());
+    expect(service.getCurrencyQuote).toHaveBeenCalledTimes(expectedCalls);
+    if (expectedCalls) {
+      expect(service.saveOwnedQuizProgress).toHaveBeenCalled();
+      expect(service.getCurrencyQuote.mock.invocationCallOrder[0]).toBeLessThan(service.issueProposal.mock.invocationCallOrder[0]);
+      expect(service.saveOwnedQuizProgress.mock.invocationCallOrder[0]).toBeLessThan(service.issueProposal.mock.invocationCallOrder[0]);
+    }
+  });
+
+  it("blocks proposal issuance when a stale local-currency quote cannot be refreshed", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.001Z")} />);
+    await completeServiceBusinessAssessment(user);
+    service.getCurrencyQuote.mockRejectedValueOnce(new Error("FX unavailable"));
+    service.issueProposal.mockClear();
+
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
+
+    expect((await screen.findAllByText(/live PHP conversion is unavailable/i)).length).toBeGreaterThan(0);
+    expect(service.issueProposal).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /retry conversion/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /confirm roadmap and email proposal/i })).toBeDisabled();
+  });
+
+  it("does not require an FX refresh when USD is the viewer currency", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    service.getCurrencyQuote.mockResolvedValue({
+      businessCountry: "United States",
+      countryCode: "US",
+      displayCurrency: "USD",
+      currencySymbol: "$",
+      fxRate: 1,
+      fxRateTimestamp: "2026-09-24T00:00:00.000Z",
+    });
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.001Z")} />);
+    await completeServiceBusinessAssessment(user);
+    service.getCurrencyQuote.mockClear();
+    service.getCurrencyQuote.mockRejectedValueOnce(new Error("FX unavailable"));
+
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
+
+    await waitFor(() => expect(service.issueProposal).toHaveBeenCalledOnce());
+    expect(service.getCurrencyQuote).not.toHaveBeenCalled();
+  });
+
   it("keeps an undismissable sending dialog open until durable delivery succeeds", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
@@ -622,6 +807,7 @@ describe("local portfolio quiz", () => {
     render(<QuizExperience service={service} />);
 
     await completeServiceBusinessAssessment(user);
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
 
     const sendingDialog = await screen.findByRole("dialog", { name: /preparing and sending your proposal/i });
     expect(within(sendingDialog).getByText(/keep this page open/i)).toBeInTheDocument();
@@ -639,14 +825,15 @@ describe("local portfolio quiz", () => {
     expect(within(successDialog).getByRole("link", { name: /book a discovery call/i })).toHaveAttribute("href", "/booking/");
   });
 
-  it("keeps the roadmap visible and allows a failed automatic email to be retried", async () => {
+  it("keeps the roadmap visible and allows an ambiguous delivery failure to be retried", async () => {
     const user = userEvent.setup();
     const service = createFakeQuizService();
     const successfulIssue = service.issueProposal.getMockImplementation()!;
-    service.issueProposal.mockRejectedValueOnce(new Error("Email delivery unavailable"));
+    service.issueProposal.mockRejectedValueOnce(new ProposalServiceError("proposal_delivery_failed"));
     render(<QuizExperience service={service} />);
 
     await completeServiceBusinessAssessment(user);
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
 
     const errorDialog = await screen.findByRole("dialog", { name: /roadmap is ready, but the email was not sent/i });
     expect(screen.getByRole("heading", { name: /mara.*roadmap/i })).toBeInTheDocument();
@@ -658,6 +845,25 @@ describe("local portfolio quiz", () => {
     expect(await screen.findByRole("dialog", { name: /your proposal is ready/i })).toBeInTheDocument();
     expect(service.issueProposal).toHaveBeenCalledTimes(2);
     expect(service.issueProposal.mock.calls[1]).toEqual(service.issueProposal.mock.calls[0]);
+  });
+
+  it("keeps selection and coupon controls editable after a capacity rejection", async () => {
+    const user = userEvent.setup();
+    const service = createFakeQuizService();
+    service.issueProposal.mockRejectedValueOnce(new ProposalServiceError("coupon_exhausted"));
+    render(<QuizExperience service={service} now={() => new Date("2026-09-24T00:15:00.000Z")} />);
+    await completeServiceBusinessAssessment(user);
+    await user.type(await screen.findByLabelText(/coupon code/i), "pinoyako");
+    await user.click(screen.getByRole("button", { name: /apply coupon/i }));
+    await waitFor(() => expect(document.querySelector("del")).not.toBeNull());
+    await user.click(await screen.findByRole("button", { name: /confirm roadmap and email proposal/i }));
+
+    expect(await screen.findByText(/coupon has reached its client limit/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/coupon code/i)).toBeEnabled();
+    expect(screen.getByLabelText(/coupon code/i)).toHaveValue("");
+    expect(document.querySelector("del")).toBeNull();
+    expect(screen.getByRole("button", { name: /confirm roadmap and email proposal/i })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /retry sending email/i })).not.toBeInTheDocument();
   });
 
   it("disables duplicate contact submissions while the owned RPC is pending", async () => {
@@ -724,10 +930,10 @@ describe("local portfolio quiz", () => {
     await user.click(screen.getAllByRole("button", { name: /^custom app$/i })[0]);
     const selectedSummary = screen.getByRole("region", { name: /your selected roadmap/i });
     expect(within(selectedSummary).getAllByText("Custom Starter").length).toBeGreaterThan(0);
-    expect(within(selectedSummary).getAllByText("$3,000").length).toBeGreaterThan(0);
+    expect(within(selectedSummary).getAllByText("₱174,000 PHP").length).toBeGreaterThan(0);
     await user.click(screen.getAllByRole("button", { name: /^custom app$/i })[2]);
     expect(within(selectedSummary).getAllByText("Custom Growth").length).toBeGreaterThan(0);
-    expect(within(selectedSummary).getAllByText("$7,500").length).toBeGreaterThan(0);
+    expect(within(selectedSummary).getAllByText("₱435,000 PHP").length).toBeGreaterThan(0);
     for (const heading of [
       /where Mara Consulting is now/i,
       /where the business wants to go/i,
@@ -823,6 +1029,49 @@ describe("local portfolio quiz", () => {
     await user.click(within(await screen.findByRole("dialog", { name: /continue your roadmap/i })).getByRole("button", { name: /start over/i }));
     expect(screen.getByRole("heading", { name: /which best describes your business/i })).toBeInTheDocument();
     expect(localStorage.getItem(QUIZ_STORAGE_KEY)).toBeNull();
+  });
+
+  it("resets a resumed assessment when the verified email selects another business", async () => {
+    const user = userEvent.setup();
+    const now = Date.now();
+    const attempt: SavedQuizAttempt = {
+      storageVersion: 4,
+      cortexVersion: CORTEX_VERSION,
+      questionSetVersion: QUESTION_SET_VERSION,
+      catalogVersion: CATALOG_VERSION,
+      status: "in_progress",
+      audienceKey: "service_businesses",
+      answers: { q1_business_model: ["service_model_project"] },
+      currentQuestionIndex: 10,
+      result: null,
+      roadmapSelection: null,
+      location: null,
+      createdAt: new Date(now - 60_000).toISOString(),
+      updatedAt: new Date(now - 30_000).toISOString(),
+      expiresAt: new Date(now + QUIZ_TTL_MS).toISOString(),
+    };
+    localStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(attempt));
+    const service = createFakeQuizService();
+    service.submitLeadContact.mockImplementation(async (_context, _challengeId, contact) => contact.businessScope
+      ? { status: "accepted" as const, leadId: "60000000-0000-4000-8000-000000000001", quizSessionId: ownedContext.quizSessionId }
+      : {
+        status: "business_scope_required" as const,
+        quizSessionId: ownedContext.quizSessionId,
+        existingBusinessId: "60000000-0000-4000-8000-000000000001",
+        existingBusinessName: "Mara Consulting",
+      } as LeadContactSubmissionResult);
+    render(<QuizExperience service={service} />);
+
+    await user.click(within(await screen.findByRole("dialog", { name: /continue your roadmap/i })).getByRole("button", { name: /resume/i }));
+    await fillContactStep(user, { firstName: "Mara", lastName: "Santos", businessName: "Mara Academy", email: "mara@example.com" });
+    await user.type(await screen.findByLabelText(/verification code/i), "123456");
+    await user.click(screen.getByRole("button", { name: /verify code/i }));
+    await user.click(screen.getByRole("button", { name: /continue to assessment/i }));
+    await user.click(await screen.findByRole("button", { name: /another business/i }));
+    await completeLocationStep(user);
+    await user.click(screen.getByRole("button", { name: /start my assessment/i }));
+
+    expect(screen.getByText("Question 1 of 11")).toBeInTheDocument();
   });
 
   it("renders a contact-qualified personalized proposal without persisting contact identity", async () => {

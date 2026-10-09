@@ -42,13 +42,14 @@ SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 PROPOSAL_KEY_PEPPER
 PROPOSAL_STOP_SIGNING_SECRET
+COUPON_REDEMPTION_SECRET
 MAKE_PROPOSAL_WEBHOOK_URL
 MAKE_PROPOSAL_WEBHOOK_SECRET
 MAKE_AUTOMATION_SECRET
 PUBLIC_PROPOSAL_BASE_URL
 ```
 
-Some older tooling/docs call the public key `SUPABASE_PUBLISHABLE_KEY`; application code uses the explicit names above. `SUPABASE_SERVICE_ROLE_KEY`, Make credentials, Gmail tokens, proposal pepper, stop-signing secret, database passwords, JWT secrets, and CAPTCHA secrets must never appear in browser code, `.env.local`, generated types, logs, or documentation values.
+Some older tooling/docs call the public key `SUPABASE_PUBLISHABLE_KEY`; application code uses the explicit names above. `SUPABASE_SERVICE_ROLE_KEY`, Make credentials, Gmail tokens, proposal pepper, stop-signing secret, coupon-redemption secret, database passwords, JWT secrets, and CAPTCHA secrets must never appear in browser code, `.env.local`, generated types, logs, or documentation values. `COUPON_REDEMPTION_SECRET` must be at least 32 characters and is configured only through the approved Supabase secret workflow; never print its value.
 
 ## Local and remote-first verification
 
@@ -146,6 +147,16 @@ Make uses two scenarios. Scenario A receives one signed idempotent immediate-del
 Roadmap and protected-proposal views render the **complete approved inclusions** for the selected package/platform; they do not truncate the catalog for presentation. Make receives only the sanitized proposal summaries and access data required for delivery.
 
 Assessment V2 also stores the selected business country plus the currency code, symbol, conversion rate, and rate timestamp used for the displayed local estimate. The package catalog remains authoritative in USD. Local currency is clearly labeled as an estimate; if a live quote cannot be validated, the assessment continues safely in USD instead of blocking the visitor or inventing a conversion.
+
+### Proposal discounts and capacity ledger
+
+Migration `202609240005_add_proposal_discount_campaigns.sql` adds private, RLS-enabled `discount_campaigns` and `discount_redemptions` tables plus service-role-only preview, reserve, release, V2 finalize, and V2 delivery RPCs. Both campaigns are seeded inactive so applying the migration cannot expose a promotion. `PINOYAKO` is 50% off for eligible PH businesses and the first 50 successfully delivered proposals. `EARLYBIRDWORKS` is 15% off for eligible non-PH, non-`ZZ` international businesses and the first 100 successfully delivered proposals.
+
+The Edge Function derives a one-way HMAC identity from the canonical verified email using `COUPON_REDEMPTION_SECRET`; neither the email nor digest is accepted from the browser. One campaign redemption is allowed per verified email and one coupon per proposal. Capacity counts pending plus redeemed records while a row lock serializes the last slot. A pending reservation expires if abandoned, becomes redeemed only when the protected proposal email is acknowledged, and is released when initialization or delivery fails. Retrying the same quiz is idempotent and reuses its reservation and proposal reference. Never delete redemption audit history to recover capacity.
+
+The immutable selected snapshot version is `proposal-snapshot-2026.09-v2`. Calculation order is selected base price plus priced one-time add-ons, integer-cent discount, then indicative local conversion. The original USD amount, discount, final USD amount, campaign metadata, FX snapshot, and selected offer are persisted together and reused by the result page, email, and protected proposal. Existing issued snapshots remain readable and are never recalculated.
+
+Before activation, run static, Edge, browser, and pgTAP checks, configure the secret, deploy `finalize-proposal`, and perform preview-only PH/international smoke tests. Activate campaigns only through a separately reviewed additive migration after owner approval. Rollback is campaign deactivation; preserve issued snapshots and every redemption row. If Docker is unavailable, pgTAP and generated database-type verification remain release blockers.
 
 Direct booking prefill is gated by the booking handoff external consumer defined in `docs/contracts/quiz-booking-handoff.md`. Until that backend is deployed and contract-tested, production uses the safe `/booking/` form fallback.
 

@@ -82,7 +82,7 @@ flowchart TD
 3. Verify the email inline with the custom six-digit OTP before the qualified lead is created.
 4. Complete the multi-step quiz without navigation or page reload.
 5. Review the personalized Point A, Point B, recommended solution, and Basic/Advanced/Complete comparison.
-6. Receive the server-verified roadmap while the recommended feasible tier/platform is automatically finalized and emailed.
+6. Receive the server-verified roadmap, choose a feasible tier/platform, optionally apply one eligible coupon, and explicitly confirm the selection for email delivery.
 7. Confirm the success message, or retry email delivery without losing the visible roadmap.
 8. Open the protected proposal from the emailed reference link by entering the separate access key.
 9. Optionally compare the three packages, review platform feasibility, and book a discovery call.
@@ -219,7 +219,11 @@ Pricing note:
 
 The visitor first receives a server-verified draft. Changing a feasible tier/platform updates the selected estimate and comparison without rewriting the original Cortex recommendation. Unsupported Systeme.io or HighLevel choices are disabled with a specific explanation when inventory, production stages, specialized permissions, or non-standard operational workflows require a Custom App.
 
-After calculation, trusted finalization runs automatically with the server-recommended feasible tier/platform. It recalculates the answers and catalog prices, records the recommendation and selected option separately, issues a proposal reference plus a separate 10-character access key, and requests the initial email through Make. The result page remains visible during delivery. A success dialog confirms that the protected proposal and access details were emailed and that access lasts 72 hours; a delivery failure opens a retry dialog without discarding the roadmap. There is no separate **Create My 3-Day Proposal** action and no PDF attachment. The raw access key is never placed in the URL, database, analytics, browser storage, or source control.
+After calculation, the visitor explicitly chooses **Confirm roadmap and email proposal**. Trusted finalization then recalculates the answers, selected tier/platform, add-ons, coupon eligibility, and catalog prices before it records an immutable selection, issues a proposal reference plus a separate 10-character access key, and requests the initial email through Make. The result page remains visible during delivery. A success dialog confirms that the protected proposal and access details were emailed and that access lasts 72 hours; an ambiguous delivery failure locks the initialized selection and offers an idempotent retry without discarding the roadmap. There is no separate **Create My 3-Day Proposal** action and no PDF attachment. The raw access key is never placed in the URL, database, analytics, browser storage, or source control.
+
+Coupon pricing is selected-roadmap pricing, not recommendation-only pricing. `PINOYAKO` gives eligible Philippine businesses 50% off the full selected one-time estimate, including priced add-ons, for the first 50 successfully delivered client proposals. `EARLYBIRDWORKS` gives eligible international businesses outside PH and unknown `ZZ` locations 15% off for the first 100 successfully delivered client proposals. Coupons do not stack, and each campaign can be redeemed only once per canonical verified email. The original total is crossed out, the final USD total and savings are explicit, and PHP or another local currency is converted live from the discounted total. USD remains authoritative; a missing conversion never blocks confirmation.
+
+The browser preview is advisory. The server owns eligibility, capacity, and the `proposal-snapshot-2026.09-v2` totals. A short-lived pending reservation prevents oversubscription; successful delivery redeems it, failed delivery releases it, and a same-session retry reuses the proposal reference and operation identity.
 
 The static Firebase-hosted route is `/proposal/?ref=<uuid>`. It reveals no client or proposal data until the correct access key is verified through a Supabase Edge Function. Unknown, incorrect, expired, revoked, and temporarily locked proposals return the same generic unavailable response. Five consecutive failures lock verification for 15 minutes; successful access may be cached in `sessionStorage` for the current tab only and never beyond expiry.
 
@@ -601,7 +605,7 @@ flowchart TD
     E --> F[Show Point A and Point B]
     F --> G[Compare Basic, Advanced, Complete]
     G --> H[Select server-recommended feasible tier and platform]
-    H --> I[Automatically finalize proposal]
+    H --> I[Apply one eligible coupon and confirm roadmap]
     I --> J[Issue reference and separate access key]
     J --> K[Private Make immediate-delivery webhook]
     K --> L[Email proposal link, key, summary, and discovery CTA]
@@ -1911,7 +1915,7 @@ The release is ready only when:
 - Results recommend a technically justified platform/build route and base offer starting at $1,500.
 - Results itemize base inclusions, non-included add-ons, adjustments, and recurring costs paid separately by the client.
 - Projects automatically filter to the selected audience.
-- Proposal issuance starts automatically after the server-calculated roadmap selects its recommended feasible tier/platform; successful delivery shows an accessible confirmation dialog, and failed delivery keeps the roadmap visible with a narrowly scoped retry action.
+- Proposal issuance starts only after the visitor explicitly confirms the selected feasible tier/platform and validated coupon; successful delivery shows an accessible confirmation dialog, and an ambiguous failed delivery locks the initialized pricing while keeping the roadmap visible with a narrowly scoped idempotent retry action.
 - Proposal reference alone reveals no data; the separate access key works only before exact expiry and locks for 15 minutes after five failures.
 - Content, questions, package data, and projects are isolated from UI rendering, and display-copy edits do not rewrite core scoring logic.
 - Mobile, tablet, and desktop layouts are usable and visually consistent.
