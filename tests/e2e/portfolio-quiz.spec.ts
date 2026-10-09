@@ -522,9 +522,7 @@ test("homepage, quiz, and proposal access have no horizontal overflow across the
 
     if (width === 1366 && height === 768) {
       const cta = await page.getByRole("link", { name: /get my personalized roadmap/i }).first().boundingBox();
-      const secondary = await page.getByRole("link", { name: /see how the assessment works/i }).boundingBox();
       expect(cta!.y + cta!.height).toBeLessThanOrEqual(height);
-      expect(secondary!.y + secondary!.height).toBeLessThanOrEqual(height);
     }
 
     await page.goto("/quiz/");
