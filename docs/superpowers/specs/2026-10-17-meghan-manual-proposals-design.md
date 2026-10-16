@@ -1,0 +1,51 @@
+# Reusable manual proposals, starting with Meghan
+
+**Status:** Design approved in conversation on 2026-10-17; implementation plan awaits review of this written spec.
+
+## Purpose and boundaries
+
+Elysha Works needs a private, manually authored proposal journey for prospective clients who did not complete QuizUp. Meghan Escobar of The Emotional Anchor is the first client. She should open a proposal with a link and a separately supplied access key, review a view-only concept preview inside the proposal, compare three offers, see an automatic total and 50% deposit amount, and choose a discovery call. The deposit checkout is prepared but cannot accept money until Elysha connects a provider in a later phase.
+
+The work belongs in the service-professionals portfolio repository on `codex/megan-proposal`. The QuizUp result and existing `/proposal/` access flow remain intact. The offline design at `D:\CODEX\Meghan -  Emotional Anchor\sales-page-concept\index.html` is read-only and may continue changing independently. No portfolio, Supabase, or Firebase deployment occurs under this design work; the workspace instruction requires an explicit deployment request.
+
+## Selected approach
+
+Build a reusable manual-proposal flow beside the existing QuizUp flow. A generic `/proposal/client/` static route contains only the locked shell. Private proposal data and preview assets stay behind Supabase service-role operations. The visitor's URL carries an opaque proposal reference; the access key is delivered separately and never appears in the URL. Meghan is the first record, not a hard-coded client page.
+
+A client-side password over public static HTML would reveal the proposal and images in the Firebase export. A separate microsite would duplicate branding, hosting, and access logic. The selected approach reuses the portfolio's established Supabase Edge patterns while keeping manual proposals independent of quiz sessions and quiz analytics.
+
+## Authoring and issuance
+
+A checked-in schema/template and a local authoring command create or update a draft from an ignored local input file. The input contains client identity, business name, strategic copy, three offer definitions, optional inclusion definitions, preview asset references, booking destination, currency, and expiry. The command validates required fields and money as integer cents. It never stores the plaintext access key in Git, migration files, browser bundles, persistent logs, or the database. On issue, it generates a random opaque reference and a separate human-readable access key, stores only a peppered hash of the key, and prints the share link and key once to Elysha's interactive terminal for delivery through her chosen channel. Updating an issued proposal creates a new version; its original offer and price snapshot is not silently changed.
+
+The initial draft uses the existing public tier labels **Basic, Advanced, and Complete** and the current platform catalog prices of **$1,500, $2,500, and $4,000 USD** as editable starting values. Those catalog offers cover broader systems than Meghan's current static sales-page concept, so their scope text must be reviewed and tailored before issuance. This design does not claim those figures are Meghan's approved quote. There is no client-facing optional-inclusion picker until priced options are entered; the data and quote model allow it later.
+
+## Access and data model
+
+Use a `private.manual_proposals` table, accessible only to service-role server code. Each proposal stores its reference, status (`draft`, `active`, `revoked`, or `expired`), issued and expiry times, failed-attempt/lockout state, key hash, immutable content version, offer prices and scope, optional inclusions, and private preview object paths. No direct anonymous table or storage read is granted.
+
+An Edge verification endpoint accepts `POST { reference, accessKey }`, validates the portfolio origin and input shape, checks status/expiry/lockout, compares hashes in constant time, records the attempt atomically, and returns one generic unavailable response for invalid, revoked, expired, or locked access. Successful verification returns only display-safe proposal content and short-lived signed URLs for the three private preview images. The browser fetches these into in-memory Blob URLs while the signed URLs are valid, then holds the unlocked content for the current page session. A refresh requires the access key again. Cache headers are `no-store`, and the route is `noindex`.
+
+Meghan's link and access key are not issued or sent by merely building the page. Issuance is an explicit authoring action after the draft content and preview capture have been reviewed.
+
+## Meghan preview
+
+Capture the current offline Emotional Anchor HTML at desktop, tablet, and mobile viewport widths when the proposal draft is prepared. Use a local HTTP server and real browser rendering so fonts, imagery, responsive layout, and scroll sections match the source at that point in time. Capture full-page images, bake a subtle `Prepared for Meghan · Elysha Works concept` watermark into each rendered capture, and upload only the images to a private Supabase Storage bucket. Record the capture time and a hash of the HTML plus its local CSS, JavaScript, and asset dependencies to make later updates deliberate. Keep the HTML, CSS, JavaScript, and original assets out of the portfolio's public directory and proposal payload.
+
+The proposal shows a single preview invitation. Clicking it opens an accessible modal with Desktop, Tablet, and Mobile controls. The selected image scrolls vertically inside the modal; the page behind it does not scroll. The modal traps keyboard focus, closes with Escape or its close button, restores focus, and labels the concept clearly. It does not open a standalone preview URL or provide an interactive copy of Meghan's website. The current source contains concept social-proof figures and some unconfirmed service details; the proposal must label the preview as a concept requiring Meghan's confirmation before publication.
+
+Right-click, dragging, common Save/Print/View Source/DevTools shortcuts, and printing can be discouraged within the proposal and preview without blocking the access form, keyboard navigation, or assistive technology. These controls **cannot prevent** operating-system screenshots, browser inspection, an authenticated visitor saving delivered pixels, or someone photographing the screen. Access control, short-lived asset URLs, and watermarks are the actual deterrents; client-facing copy must not promise screenshot prevention.
+
+## Proposal page and pricing
+
+Use the existing QuizUp result's strategic sequence as the content reference: personalized opening, Point A and Point B, recommended path, the concept preview, comparison of three offers, selected investment, and next steps. Keep the portfolio's Elysha Works visual language and approved assets. Meghan's breathwork site styling appears only inside the concept preview. Do not copy her service-offer prices ($150/$35/$20) into Elysha Works project pricing.
+
+Exactly one of the three offers is selected at a time. The page shows what that offer includes, the base amount, priced optional inclusions if configured, the total, the 50% deposit, and the remaining balance. Calculate in integer cents; for an odd-cent total, round the deposit up by one cent and let the balance receive the remaining cents. Selection updates the summary immediately. Before issuance, local authoring previews are estimates. The client-facing page uses the immutable issued record as the authoritative source of offer amounts. Future checkout creation must re-read and recalculate the issued record server-side instead of trusting the browser's total.
+
+`Book a Discovery Call` uses the existing `/booking/` route. A `Reserve My Slot` area displays the calculated 50% deposit but its payment control is disabled and explicitly says checkout is being connected. It does not create a reservation, accept payment details, or report that a slot is held. A later payment-provider adapter will create a server-side checkout session for the selected offer and inclusions, then mark a reservation only after a verified payment webhook. No provider is selected in this phase.
+
+## Errors, accessibility, and verification
+
+The locked page handles missing/invalid references and keys, network failure, expiry, and temporary lockout without exposing which part failed. Signed image URLs can expire after the Blob URLs have loaded; the modal can reopen from those in-memory images until refresh, when the access key is required again. Missing preview assets show a clear unavailable state without breaking offers or booking.
+
+Verification covers inaccessible proposal data before authentication; invalid, expired, revoked, and rate-limited keys; no public preview objects; accurate three-viewport captures from the current source; modal keyboard behavior and mobile layout; selection and cent-level quote arithmetic; functional discovery-call navigation; and an unmistakably disabled deposit flow. Existing QuizUp proposal tests and the production build must remain green. No live payment, email, deployment, or client delivery is represented as tested until those separate actions occur.
