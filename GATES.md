@@ -19,3 +19,8 @@ Scope: Define and review the reusable manual-proposal design before implementati
 
 - [x] G4: The spec has no placeholders or conflicting descriptions of what works before checkout is connected.
   EVIDENCE: Placeholder scan returned no matches; spec lines 7, 45, and 51 consistently describe the deposit control as unavailable until a provider is connected.
+
+- [x] G5: Elysha chooses the access code privately when issuing; Meghan enters it on the locked page.
+  CHECK: rg -n "prompts Elysha privately|Access code|does not echo" docs/superpowers/specs/2026-10-17-meghan-manual-proposals-design.md
+  EXPECT: /prompts Elysha privately/
+  EVIDENCE: Spec line 19 requires Elysha's private code prompt; line 27 labels Meghan's field Access code.
