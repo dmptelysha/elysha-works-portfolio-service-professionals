@@ -1,6 +1,6 @@
 # Reusable manual proposals, starting with Meghan
 
-**Status:** Design approved in conversation on 2026-10-17; implementation plan awaits review of this written spec.
+**Status:** Design approved in conversation on 2026-10-17; implementation plan awaits review.
 
 ## Purpose and boundaries
 
