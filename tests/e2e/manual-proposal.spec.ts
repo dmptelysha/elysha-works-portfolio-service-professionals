@@ -59,6 +59,11 @@ test("a direct link needs its separate code, unlocks only in memory, and preview
   await page.getByRole("button", { name: /open proposal/i }).click();
   await expect(page.getByRole("heading", { name: /Meghan.*Emotional Anchor/i })).toBeVisible();
   expect(accessRequests).toBe(1);
+  await expect(page.getByTestId("manual-preview-panel")).toBeVisible();
+  await page.getByRole("button", { name: /minimize preview/i }).click();
+  await expect(page.getByRole("img", { name: /desktop concept/i })).toHaveCount(0);
+  await expect(page.getByRole("radio", { name: "Basic" })).toBeVisible();
+  await page.getByRole("button", { name: /show preview/i }).click();
   await expect(page.getByTestId("selected-total")).toHaveText("$1,500.00");
   await page.getByRole("radio", { name: "Advanced" }).check();
   await page.getByRole("checkbox", { name: /additional page/i }).check();

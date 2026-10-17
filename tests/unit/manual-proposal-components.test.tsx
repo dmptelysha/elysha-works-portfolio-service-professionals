@@ -27,7 +27,7 @@ const proposal: ManualProposalView = {
 const previewBlobs = { desktop: "blob:desktop", tablet: "blob:tablet", mobile: "blob:mobile" };
 
 describe("manual proposal document", () => {
-  it("shows the strategy before three issued offers and updates a cent-accurate total", async () => {
+  it("shows three offers and updates a cent-accurate total", async () => {
     const user = userEvent.setup();
     render(<ManualProposalDocument proposal={proposal} previewBlobs={previewBlobs} />);
     expect(screen.getByRole("heading", { name: /Meghan.*Emotional Anchor/i })).toBeInTheDocument();
@@ -48,6 +48,22 @@ describe("manual proposal document", () => {
     expect(screen.getByRole("button", { name: /reserve my slot/i })).toBeDisabled();
     expect(screen.getByText(/50% down payment/i)).toHaveTextContent("$1,250.51");
     expect(screen.getByText(/checkout is being connected/i)).toBeInTheDocument();
+  });
+
+  it("puts the design preview ahead of the offers and lets the client minimize it", async () => {
+    const user = userEvent.setup();
+    render(<ManualProposalDocument proposal={proposal} previewBlobs={previewBlobs} />);
+    const preview = screen.getByTestId("manual-preview-panel");
+    const offers = screen.getByRole("heading", { name: /three ways to bring it to life/i });
+    expect(preview.compareDocumentPosition(offers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("img", { name: /desktop concept/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /minimize preview/i }));
+    expect(screen.queryByRole("img", { name: /desktop concept/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /show preview/i })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("radio", { name: /basic/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /show preview/i }));
+    await user.click(screen.getByRole("tab", { name: "Tablet" }));
+    expect(screen.getByRole("img", { name: /tablet concept/i })).toBeInTheDocument();
   });
 
   it("hides optional inclusions when none are priced", () => {
@@ -77,7 +93,7 @@ describe("manual proposal document", () => {
     const user = userEvent.setup();
     render(<ManualProposalDocument proposal={proposal} previewBlobs={{ ...previewBlobs, tablet: null }} />);
     await user.click(screen.getByRole("button", { name: /view the concept/i }));
-    await user.click(screen.getByRole("tab", { name: "Tablet" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("tab", { name: "Tablet" }));
     expect(within(screen.getByRole("dialog")).getByText(/tablet preview unavailable/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /book a discovery call/i })).toBeInTheDocument();
   });

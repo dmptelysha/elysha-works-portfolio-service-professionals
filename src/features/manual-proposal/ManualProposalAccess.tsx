@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
@@ -97,8 +96,8 @@ function ManualProposalSession({ reference, service }: { reference: string | nul
   return (
     <div className="manual-proposal-shell">
       <header className="manual-proposal-header">
-        <Link href="/" aria-label="Elysha Works home">
-          <Image src="/assets/insight-system/elysha-works-logo.png" alt="Elysha Works" width={220} height={29} unoptimized />
+        <Link href="/" aria-label="Elysha Works home" className="manual-proposal-brand">
+          <span aria-hidden="true">&lt;</span><b>Elysha Works</b><span aria-hidden="true">/&gt;</span>
         </Link>
         <span>Private proposal</span>
       </header>

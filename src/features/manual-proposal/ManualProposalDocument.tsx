@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 
 import { calculateManualQuote, type ManualProposalView, type TierKey } from "./model";
 import { ManualProposalPreviewDialog } from "./ManualProposalPreviewDialog";
-import type { PreviewBlobs } from "./service";
+import type { PreviewBlobs, PreviewMode } from "./service";
+
+const PREVIEW_MODES: readonly PreviewMode[] = ["desktop", "tablet", "mobile"];
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -22,6 +24,8 @@ export function ManualProposalDocument({
   const [tier, setTier] = useState<TierKey>("basic");
   const [included, setIncluded] = useState<string[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewExpanded, setPreviewExpanded] = useState(true);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("desktop");
   const quote = calculateManualQuote(proposal, tier, included);
   const selected = proposal.offers.find((offer) => offer.key === tier)!;
 
@@ -55,7 +59,16 @@ export function ManualProposalDocument({
     dateStyle: "long",
     timeZone: "Asia/Manila",
   }).format(new Date(proposal.expiresAt));
-  const hasPreview = Object.values(previewBlobs).some(Boolean);
+  const inlinePreview = previewBlobs[previewMode];
+
+  function onPreviewKeyDown(event: KeyboardEvent<HTMLButtonElement>, current: PreviewMode) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const index = PREVIEW_MODES.indexOf(current);
+    const next = PREVIEW_MODES[(index + (event.key === "ArrowRight" ? 1 : -1) + PREVIEW_MODES.length) % PREVIEW_MODES.length];
+    setPreviewMode(next);
+    document.getElementById("manual-preview-tab-" + next)?.focus();
+  }
 
   return (
     <main className="manual-proposal-main">
@@ -68,58 +81,48 @@ export function ManualProposalDocument({
             <p>{proposal.recommendation.title}</p>
             <span>Available for review until {expiration} (Philippine time)</span>
           </div>
-          <aside className="manual-proposal-hero-aside">
-            <span className="manual-proposal-aside-mark" aria-hidden="true">↗</span>
-            <p>From a considered concept to a page people can use.</p>
-            <small>Scope and project investment can be reviewed together before any commitment.</small>
-          </aside>
         </section>
 
-        <div className="manual-proposal-strategy">
-          <section aria-labelledby="manual-point-a">
-            <p className="manual-proposal-eyebrow">Where things stand</p>
-            <h2 id="manual-point-a">{proposal.pointA.heading}</h2>
-            <p>{proposal.pointA.summary}</p>
-            <ul>{proposal.pointA.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
-          </section>
-          <section aria-labelledby="manual-point-b">
-            <p className="manual-proposal-eyebrow">Where we can go</p>
-            <h2 id="manual-point-b">{proposal.pointB.heading}</h2>
-            <p>{proposal.pointB.summary}</p>
-            <ul>{proposal.pointB.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
-          </section>
-        </div>
-
-        <section className="manual-proposal-recommendation" aria-labelledby="manual-recommendation">
-          <p className="manual-proposal-eyebrow">Recommended direction</p>
-          <h2 id="manual-recommendation">{proposal.recommendation.title}</h2>
-          <p>{proposal.recommendation.reason}</p>
-        </section>
-
-        <section className="manual-proposal-concept" aria-labelledby="manual-concept-title">
-          <div className="manual-proposal-concept-copy">
-            <p className="manual-proposal-eyebrow">The concept</p>
-            <h2 id="manual-concept-title">See the design in context.</h2>
-            <p>Explore the current page direction in three sizes, here inside your proposal.</p>
-            <p className="manual-proposal-concept-note">This is a concept. {proposal.clientName}&apos;s service details, claims, and booking paths need confirmation before publication.</p>
-            {Object.entries(previewBlobs).filter(([, url]) => !url && !previewLoading).map(([mode]) => (
-              <p key={mode} className="manual-proposal-preview-status">{mode[0].toUpperCase() + mode.slice(1)} preview unavailable.</p>
-            ))}
+        <section className="manual-proposal-concept" aria-labelledby="manual-concept-title" data-testid="manual-preview-panel">
+          <div className="manual-proposal-concept-heading">
+            <div>
+              <p className="manual-proposal-eyebrow">01 · Your page concept</p>
+              <h2 id="manual-concept-title">Take a look at the design.</h2>
+              <p>Preview the page here, then minimize it to focus on the offer.</p>
+            </div>
+            <div className="manual-proposal-concept-actions">
+              <button type="button" aria-controls="manual-inline-preview" aria-expanded={previewExpanded} onClick={() => setPreviewExpanded((current) => !current)}>
+                {previewExpanded ? "Minimize preview" : "Show preview"}
+              </button>
+              <a href="#manual-offers-title" onClick={() => setPreviewExpanded(false)}>See the offers <span aria-hidden="true">↓</span></a>
+            </div>
           </div>
-          <button type="button" className="manual-proposal-preview-invite" onClick={() => setPreviewOpen(true)}>
-            {previewBlobs.desktop ? (
-              <span className="manual-proposal-preview-cover" style={{ backgroundImage: "url(" + previewBlobs.desktop + ")" }} aria-hidden="true" />
-            ) : <span className="manual-proposal-preview-empty" aria-hidden="true" />}
-            <span className="manual-proposal-preview-action">View the concept <span aria-hidden="true">↗</span></span>
-            {!hasPreview ? <span className="manual-proposal-preview-unavailable">{previewLoading ? "Preview loading" : "Preview currently unavailable"}</span> : null}
-          </button>
+          {previewExpanded ? (
+            <div id="manual-inline-preview" className="manual-proposal-inline-preview">
+              <div className="manual-proposal-inline-toolbar">
+                <div role="tablist" aria-label="Preview size" className="manual-proposal-inline-tabs">
+                  {PREVIEW_MODES.map((mode) => (
+                    <button key={mode} id={"manual-preview-tab-" + mode} type="button" role="tab" aria-selected={previewMode === mode} tabIndex={previewMode === mode ? 0 : -1} onClick={() => setPreviewMode(mode)} onKeyDown={(event) => onPreviewKeyDown(event, mode)}>
+                      {mode[0].toUpperCase() + mode.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className="manual-proposal-full-preview" onClick={() => setPreviewOpen(true)}>View the concept <span aria-hidden="true">↗</span></button>
+              </div>
+              <div className="manual-proposal-inline-frame" role="tabpanel" aria-label={previewMode[0].toUpperCase() + previewMode.slice(1) + " preview"}>
+                {inlinePreview ? <img className={"manual-proposal-inline-image manual-proposal-inline-image--" + previewMode} src={inlinePreview} alt={previewMode[0].toUpperCase() + previewMode.slice(1) + " concept"} draggable={false} onDragStart={(event) => event.preventDefault()} />
+                  : <p className="manual-proposal-preview-status">{previewLoading ? "Preview loading…" : previewMode[0].toUpperCase() + previewMode.slice(1) + " preview unavailable."}</p>}
+              </div>
+              <p className="manual-proposal-concept-note">Concept preview for {proposal.clientName}. Service details, claims, and booking paths need confirmation before publication.</p>
+            </div>
+          ) : null}
         </section>
 
         <section className="manual-proposal-offers" aria-labelledby="manual-offers-title">
           <div className="manual-proposal-section-heading">
-            <p className="manual-proposal-eyebrow">Choose the scope</p>
+            <p className="manual-proposal-eyebrow">02 · Choose the scope</p>
             <h2 id="manual-offers-title">Three ways to bring it to life.</h2>
-            <p>These are the issued proposal amounts. Choose the scope you want to discuss.</p>
+            <p>Compare the three options, select a scope, and review the total below.</p>
           </div>
           <fieldset className="manual-proposal-offer-grid">
             <legend className="manual-proposal-sr-only">Project offers</legend>
@@ -191,6 +194,27 @@ export function ManualProposalDocument({
               <p>Checkout is being connected. No payment is taken and no slot is held yet.</p>
             </div>
           </div>
+        </section>
+
+        <div className="manual-proposal-strategy">
+          <section aria-labelledby="manual-point-a">
+            <p className="manual-proposal-eyebrow">Where things stand</p>
+            <h2 id="manual-point-a">{proposal.pointA.heading}</h2>
+            <p>{proposal.pointA.summary}</p>
+            <ul>{proposal.pointA.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+          </section>
+          <section aria-labelledby="manual-point-b">
+            <p className="manual-proposal-eyebrow">Where we can go</p>
+            <h2 id="manual-point-b">{proposal.pointB.heading}</h2>
+            <p>{proposal.pointB.summary}</p>
+            <ul>{proposal.pointB.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+          </section>
+        </div>
+
+        <section className="manual-proposal-recommendation" aria-labelledby="manual-recommendation">
+          <p className="manual-proposal-eyebrow">The thinking behind the offer</p>
+          <h2 id="manual-recommendation">{proposal.recommendation.title}</h2>
+          <p>{proposal.recommendation.reason}</p>
         </section>
       </article>
       <footer className="manual-proposal-footer"><span>Elysha Works</span><span>Prepared privately for {proposal.clientName}</span></footer>
