@@ -28,6 +28,7 @@ const expectedMigrations = [
   '202609240005_add_proposal_discount_campaigns.sql',
   '202609240006_activate_proposal_discount_campaigns.sql',
   '202609240007_fix_discount_rpc_column_references.sql',
+  '202610170001_manual_proposals.sql',
 ];
 
 const phaseOneTables = [
@@ -87,6 +88,28 @@ test('Supabase scaffold has the ordered reproducible assets', () => {
     assert.doesNotMatch(html, /\.ConfirmationURL/, `${template} must not render a sign-in link`);
     assert.doesNotMatch(html, /supabase/i, `${template} must remain Elysha Works branded`);
   }
+});
+
+test('manual proposals keep snapshots, access, and preview objects private', () => {
+  const sql = read('supabase/migrations/202610170001_manual_proposals.sql');
+  assert.match(sql, /create\s+table\s+private\.manual_proposals/i);
+  assert.match(sql, /enable\s+row\s+level\s+security/i);
+  assert.match(sql, /manual-proposal-previews/i);
+  assert.match(sql, /'manual-proposal-previews'[^;]*false/is);
+  for (const fn of [
+    'create_manual_proposal_draft', 'issue_manual_proposal',
+    'verify_manual_proposal_access', 'rotate_manual_proposal_code',
+    'revoke_manual_proposal', 'list_expired_manual_preview_objects',
+    'mark_manual_preview_cleaned',
+  ]) {
+    assert.match(sql, new RegExp('function\\s+public\\.' + fn + '\\s*\\(', 'i'), fn);
+  }
+  assert.match(sql, /for\s+update/i);
+  assert.match(sql, /private\.constant_time_equal_32/i);
+  assert.match(sql, /interval\s+'15 minutes'/i);
+  assert.match(sql, /set\s+search_path\s*=\s*''/i);
+  assert.doesNotMatch(sql, /grant\s+execute[^;]+to\s+(?:anon|authenticated)/is);
+  assert.ok(read('supabase/tests/08_manual_proposals.test.sql').length > 0);
 });
 
 test('proposal migration is additive, keeps eleven tables, and locks trusted functions down', () => {
@@ -298,8 +321,8 @@ test('migrations create exactly the Phase 1 public tables', () => {
   }
   assert.equal(
     (sql.match(/create\s+table\s+(?:public|private)\.[a-z_]+/gi) ?? []).length,
-    14,
-    'the custom OTP challenge and two private discount tables are the only additional runtime tables',
+    15,
+    'the custom OTP challenge, two private discount tables, and manual proposals are the only additional runtime tables',
   );
 });
 
