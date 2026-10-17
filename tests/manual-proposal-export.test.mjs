@@ -11,7 +11,7 @@ test("static export includes a direct locked proposal route without client conte
   const html = readFileSync(route, "utf8");
   assert.match(html, /Private Proposal/);
   assert.match(html, /noindex/);
-  assert.doesNotMatch(html, /The Emotional Anchor|Meghan|ABCDEFGHJKLM/);
+  assert.doesNotMatch(html, /Emotional Anchor|Meghan|ABCDEFGHJKLM/);
 });
 
 test("offline Meghan source and captured previews are absent from the public export", () => {

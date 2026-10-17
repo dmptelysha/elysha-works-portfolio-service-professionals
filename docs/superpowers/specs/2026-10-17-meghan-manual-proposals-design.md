@@ -4,7 +4,7 @@
 
 ## Purpose and boundaries
 
-Elysha Works needs a private, manually authored proposal journey for prospective clients who did not complete QuizUp. Meghan Escobar of The Emotional Anchor is the first client. She should open a proposal with a link and a separately supplied access key, review a view-only concept preview inside the proposal, compare three offers, see an automatic total and 50% deposit amount, and choose a discovery call. The deposit checkout is prepared but cannot accept money until Elysha connects a provider in a later phase.
+Elysha Works needs a private, manually authored proposal journey for prospective clients who did not complete QuizUp. Meghan Escobar of Emotional Anchor is the first client. She should open a proposal with a link and a separately supplied access key, review a view-only concept preview inside the proposal, compare three offers, see an automatic total and 50% deposit amount, and choose a discovery call. The deposit checkout is prepared but cannot accept money until Elysha connects a provider in a later phase.
 
 The work belongs in the service-professionals portfolio repository on `codex/megan-proposal`. The QuizUp result and existing `/proposal/` access flow remain intact. The offline design at `D:\CODEX\Meghan -  Emotional Anchor\sales-page-concept\index.html` is read-only and may continue changing independently. No portfolio, Supabase, or Firebase deployment occurs under this design work; the workspace instruction requires an explicit deployment request.
 

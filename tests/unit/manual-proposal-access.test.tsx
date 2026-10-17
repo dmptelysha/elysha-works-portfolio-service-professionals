@@ -12,7 +12,7 @@ const reference = "11111111-1111-4111-8111-111111111111";
 const proposal: VerifiedManualProposal["proposal"] = {
   reference,
   clientName: "Meghan",
-  businessName: "The Emotional Anchor",
+  businessName: "Emotional Anchor",
   pointA: { heading: "Today", summary: "Offline", evidence: ["Concept"] },
   pointB: { heading: "Next", summary: "Online", evidence: ["Page"] },
   recommendation: { title: "Launch", reason: "Confirm details." },
@@ -76,6 +76,7 @@ describe("manual proposal lock", () => {
     await user.type(screen.getByLabelText(/access code/i), "abcdefgh2345");
     await user.click(screen.getByRole("button", { name: /open proposal/i }));
     expect(await screen.findByRole("heading", { name: /proposal unlocked/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Tablet" }));
     expect(screen.getByText(/tablet preview unavailable/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /book a discovery call/i })).toHaveAttribute("href", "/booking/");
     expect(sessionStorage.length).toBe(0);
@@ -102,7 +103,7 @@ describe("manual proposal lock", () => {
     });
     await act(async () => { release?.(unlocked); });
     expect(screen.getByRole("heading", { name: /open your private proposal/i })).toBeInTheDocument();
-    expect(screen.queryByText("The Emotional Anchor")).not.toBeInTheDocument();
+    expect(screen.queryByText("Emotional Anchor")).not.toBeInTheDocument();
   });
 
   it("relocks immediately when the reference changes after unlock", async () => {
@@ -116,7 +117,7 @@ describe("manual proposal lock", () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     expect(screen.getByRole("heading", { name: /open your private proposal/i })).toBeInTheDocument();
-    expect(screen.queryByText("The Emotional Anchor")).not.toBeInTheDocument();
+    expect(screen.queryByText("Emotional Anchor")).not.toBeInTheDocument();
   });
 });
 

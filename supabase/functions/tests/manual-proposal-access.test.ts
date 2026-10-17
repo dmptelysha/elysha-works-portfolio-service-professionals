@@ -12,7 +12,7 @@ const code = "ABCDEFGH2345";
 const pepper = "pepper-for-manual-proposals-long-enough";
 const snapshot = {
   clientName: "Meghan",
-  businessName: "The Emotional Anchor",
+  businessName: "Emotional Anchor",
   pointA: { heading: "Today", summary: "An offline concept", evidence: ["Source"] },
   pointB: { heading: "Next", summary: "An online path", evidence: ["Launch"] },
   recommendation: { title: "Thoughtful launch", reason: "A focused page" },

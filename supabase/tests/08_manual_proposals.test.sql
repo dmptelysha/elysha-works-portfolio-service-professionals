@@ -31,7 +31,7 @@ select is(
 
 with created as (
   select public.create_manual_proposal_draft(
-    '{"clientName":"Meghan","businessName":"The Emotional Anchor","offers":[{"key":"basic","priceCents":150000},{"key":"advanced","priceCents":250000},{"key":"complete","priceCents":400000}]}'::jsonb,
+    '{"clientName":"Meghan","businessName":"Emotional Anchor","offers":[{"key":"basic","priceCents":150000},{"key":"advanced","priceCents":250000},{"key":"complete","priceCents":400000}]}'::jsonb,
     now() + interval '7 days', null
   ) as id
 )
@@ -120,7 +120,7 @@ select is(
 
 select ok(
   public.create_manual_proposal_draft(
-    '{"clientName":"Meghan","businessName":"The Emotional Anchor","offers":[{"key":"basic","priceCents":150000},{"key":"advanced","priceCents":250000},{"key":"complete","priceCents":400000}]}'::jsonb,
+    '{"clientName":"Meghan","businessName":"Emotional Anchor","offers":[{"key":"basic","priceCents":150000},{"key":"advanced","priceCents":250000},{"key":"complete","priceCents":400000}]}'::jsonb,
     now() + interval '7 days',
     (select id from private.manual_proposals where reference = '22222222-2222-4222-8222-222222222222')
   ) is not null,

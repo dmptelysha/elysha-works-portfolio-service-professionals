@@ -4,6 +4,7 @@ The reusable proposal route is `/proposal/client/?ref=<opaque reference>`. The l
 
 ## Review Meghan's current draft
 
+- Client brand: **Emotional Anchor** (without “The”). Use this exact name in the proposal and any later owner dashboard entry.
 - Offline source: `D:\CODEX\Meghan -  Emotional Anchor\sales-page-concept\index.html`. Keep it read-only from this repo.
 - Ignored draft: `.tmp/manual-proposals/meghan/draft.json`.
 - Ignored captures: `.tmp/manual-proposals/meghan/{desktop,tablet,mobile}.png` and `manifest.json`. They are full-page, watermarked, raster-only snapshots from 1440, 768, and 390 pixel viewports. The manifest records capture time and the source dependency hash.

@@ -15,7 +15,7 @@ import { reviewedInputDigest } from "../scripts/manual-proposal.mjs";
 
 const draft = {
   clientName: "Meghan",
-  businessName: "The Emotional Anchor",
+  businessName: "Emotional Anchor",
   pointA: { heading: "Current state", summary: "An offline concept", evidence: ["Design exists"] },
   pointB: { heading: "Future state", summary: "A live page", evidence: ["Responsive launch"] },
   recommendation: { title: "Focus on launch", reason: "Confirm scope together." },

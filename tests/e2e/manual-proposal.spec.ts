@@ -10,7 +10,7 @@ const png = Buffer.from(
 const proposal = {
   reference,
   clientName: "Meghan",
-  businessName: "The Emotional Anchor",
+  businessName: "Emotional Anchor",
   pointA: { heading: "A thoughtful concept", summary: "An offline first draft.", evidence: ["Current page direction"] },
   pointB: { heading: "A clear invitation", summary: "A launch ready page.", evidence: ["Responsive design"] },
   recommendation: { title: "A focused launch", reason: "Review the content and scope together." },
@@ -54,7 +54,7 @@ test("a direct link needs its separate code, unlocks only in memory, and preview
 
   await page.goto("/proposal/client/?ref=" + reference);
   await expect(page.getByRole("heading", { name: /open your private proposal/i })).toBeVisible();
-  await expect(page.getByText("The Emotional Anchor")).toHaveCount(0);
+  await expect(page.getByText("Emotional Anchor")).toHaveCount(0);
   await page.getByRole("textbox", { name: /access code/i }).fill(code);
   await page.getByRole("button", { name: /open proposal/i }).click();
   await expect(page.getByRole("heading", { name: /Meghan.*Emotional Anchor/i })).toBeVisible();
@@ -86,7 +86,7 @@ test("a direct link needs its separate code, unlocks only in memory, and preview
   await expect(dialog).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("heading", { name: /open your private proposal/i })).toBeVisible();
-  await expect(page.getByText("The Emotional Anchor")).toHaveCount(0);
+  await expect(page.getByText("Emotional Anchor")).toHaveCount(0);
   expect(accessRequests).toBe(1);
 });
 
@@ -95,7 +95,7 @@ test("an absent reference stays locked and cannot submit a code", async ({ page 
   await expect(page.getByRole("heading", { name: /open your private proposal/i })).toBeVisible();
   await page.getByRole("textbox", { name: /access code/i }).fill(code);
   await expect(page.getByRole("button", { name: /open proposal/i })).toBeDisabled();
-  await expect(page.getByText("The Emotional Anchor")).toHaveCount(0);
+  await expect(page.getByText("Emotional Anchor")).toHaveCount(0);
 });
 
 test("offers remain available while a private preview download is pending", async ({ page }, testInfo) => {

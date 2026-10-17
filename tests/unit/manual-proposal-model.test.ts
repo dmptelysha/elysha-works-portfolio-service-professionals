@@ -9,7 +9,7 @@ import {
 
 const draft = {
   clientName: "Meghan",
-  businessName: "The Emotional Anchor",
+  businessName: "Emotional Anchor",
   pointA: { heading: "Today", summary: "A concept in progress", evidence: ["Offline design"] },
   pointB: { heading: "Next", summary: "A clear online path", evidence: ["One focused page"] },
   recommendation: { title: "A considered launch", reason: "Confirm the scope together." },

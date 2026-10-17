@@ -8,7 +8,7 @@ import type { ManualProposalView } from "@/features/manual-proposal/model";
 const proposal: ManualProposalView = {
   reference: "11111111-1111-4111-8111-111111111111",
   clientName: "Meghan",
-  businessName: "The Emotional Anchor",
+  businessName: "Emotional Anchor",
   pointA: { heading: "A thoughtful concept", summary: "Offline for now.", evidence: ["Current design"] },
   pointB: { heading: "A clear invitation", summary: "Launch ready.", evidence: ["Responsive site"] },
   recommendation: { title: "A focused launch", reason: "Confirm details first." },
