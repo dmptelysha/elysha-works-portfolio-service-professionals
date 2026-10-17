@@ -103,6 +103,7 @@ export async function issueDraft({
   const uploaded = [];
   const paths = {};
   let issued;
+  let attemptedIssue = false;
   try {
     for (const mode of VIEWPORTS) {
       const bytes = await readCapture(manifest.files[mode]);
@@ -119,6 +120,7 @@ export async function issueDraft({
     }
     const reference = requireUuid(uuid(), "reference");
     const code = generateManualAccessCode(randomBytes);
+    attemptedIssue = true;
     const result = await client.rpc("issue_manual_proposal", {
       p_id: draftId,
       p_reference: reference,
@@ -130,7 +132,9 @@ export async function issueDraft({
     const link = site.origin + "/proposal/client/?ref=" + encodeURIComponent(reference);
     issued = { reference, link, code };
   } catch (error) {
-    if (uploaded.length) await storage.remove(uploaded);
+    // A failed RPC can be an ambiguous network result after a database commit.
+    // Keep previews in that case so an active proposal never points at deleted files.
+    if (!attemptedIssue && uploaded.length) await storage.remove(uploaded);
     throw error;
   }
   write("Share link: " + issued.link + "\nAccess code: " + issued.code + "\n");

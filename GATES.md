@@ -1,6 +1,6 @@
-# Gates: Meghan manual proposal design
+# Gates: Meghan manual proposal implementation
 
-Scope: Define and review the reusable manual-proposal design before implementation.
+Scope: Design, build, and locally verify the reusable manual-proposal flow before deployment.
 
 Implementation scope: Build and locally verify the approved reusable manual-proposal flow in the isolated Meghan branch; do not deploy or issue a live code.
 
@@ -44,16 +44,16 @@ Implementation scope: Build and locally verify the approved reusable manual-prop
   EVIDENCE: Private SQL migration and service-only RPCs passed the new 27-assertion pgTAP file; Edge access tests 5/5 and all Edge tests 49/49 passed; static migration checks 21/21 passed.
 
 - [x] G10: The offline Meghan design is captured read-only at three viewports, watermarked, and kept outside the public export.
-  EVIDENCE: Current ignored .tmp/manual-proposals/meghan desktop/tablet/mobile PNGs and manifest were visually inspected; source hash 9a8f261aab529ec24d7f45b45995fe132cfb52b911cb1d4dcae4882e1d6985c9. Capture tests 2/2 and export absence test 2/2 passed; source directory remained untouched.
+  EVIDENCE: Current ignored .tmp/manual-proposals/meghan desktop/tablet/mobile PNGs and manifest were visually inspected; source hash 9a8f261aab529ec24d7f45b45995fe132cfb52b911cb1d4dcae4882e1d6985c9. Capture tests 3/3 and export absence test 2/2 passed; source directory remained untouched.
 
 - [x] G11: Meghan's locked proposal route supports a separate code, in-page preview, offers, quote, and booking; checkout remains disabled.
-  EVIDENCE: Access/document component tests 9/9 and desktop browser tests 2/2 passed. Static export has the locked /proposal/client/ route without client data. The 50% reserve button is disabled and booking links to /booking/.
+  EVIDENCE: Access/document component tests 11/11 and production-export browser tests 9 passed across four viewports. Static export has the locked /proposal/client/ route without client data; ref changes relock; preview images load after content. The 50% reserve button is disabled and booking links to /booking/.
 
 - [x] G12: The reusable local authoring flow has a client-neutral template and supports draft, issue, rotate, revoke, and cleanup without a live issue.
-  EVIDENCE: Authoring tests 7/7 passed, Meghan staged draft validates with three offers and captures, capture now accepts a client-specific watermark, and docs/manual-proposal-operations.md records the CLI and review process. No live draft or code was issued.
+  EVIDENCE: Authoring tests 9/9 passed, Meghan staged draft validates with three offers and captures, capture accepts a client-specific watermark, receipts hash image bytes, and docs/manual-proposal-operations.md records the CLI and review process. No live draft or code was issued.
 
 - [x] G13: Unit, Edge, database/static, export, build, and browser checks have fresh evidence or documented environment limitations.
-  EVIDENCE: Unit 182/182, Edge 49/49, migration static 21/21, authoring/capture/export Node 11/11, Playwright 8/8 across four viewports, typecheck, lint (0 errors, 3 image warnings), and production static build passed. New pgTAP migration 27/27 passed. The full historical database suite failed older QuizUp pgTAP files 01 and 03-06 under local Supabase CLI 2.121.0; that existing suite incompatibility is outside this branch's SQL changes and remains a limitation.
+  EVIDENCE: Unit 184/184, Edge 49/49, migration static 21/21, authoring/capture/export Node 14/14, and production-export Playwright 9 passed with 3 viewport-independent skips across four viewports. Static source tests 19/19, typecheck, lint (0 errors, 3 image warnings), and production static build passed. New pgTAP migration 27/27 passed. The full historical database suite failed older QuizUp pgTAP files 01 and 03-06 under local Supabase CLI 2.121.0; that existing suite incompatibility is outside this branch's SQL changes and remains a limitation.
 
 - [ ] G14: Whole-branch review and clean working-tree handoff are complete.
   EVIDENCE: pending

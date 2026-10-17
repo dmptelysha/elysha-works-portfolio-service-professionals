@@ -2,13 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { FormEvent, useEffect, useState, useSyncExternalStore } from "react";
+import { FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { ManualProposalDocument } from "./ManualProposalDocument";
 import {
   defaultManualProposalService,
   isManualProposalReference,
   type ManualProposalService,
+  type PreviewBlobs,
   type VerifiedManualProposal,
 } from "./service";
 
@@ -24,20 +25,34 @@ export function ManualProposalAccess({
   service = defaultManualProposalService,
 }: { service?: ManualProposalService } = {}) {
   const reference = useSyncExternalStore(subscribeReference, browserReference, serverReference);
+  return <ManualProposalSession key={reference ?? "pending"} reference={reference} service={service} />;
+}
+
+function revokePreviews(blobs: PreviewBlobs) {
+  for (const url of Object.values(blobs)) if (url) URL.revokeObjectURL(url);
+}
+
+function ManualProposalSession({ reference, service }: { reference: string | null; service: ManualProposalService }) {
   const ready = reference !== null;
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [unlocked, setUnlocked] = useState<VerifiedManualProposal | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const active = useRef(false);
+  const abort = useRef<AbortController | null>(null);
+  const ownedUrls = useRef(new Set<string>());
 
   useEffect(() => {
+    active.current = true;
+    const urls = ownedUrls.current;
     return () => {
-      if (!unlocked) return;
-      for (const url of Object.values(unlocked.previewBlobs)) {
-        if (url) URL.revokeObjectURL(url);
-      }
+      active.current = false;
+      abort.current?.abort();
+      for (const url of urls) URL.revokeObjectURL(url);
+      urls.clear();
     };
-  }, [unlocked]);
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,12 +61,36 @@ export function ManualProposalAccess({
     setError("");
     try {
       const result = await service.verify(reference, code.toUpperCase());
+      if (!active.current || browserReference() !== reference || result.proposal.reference !== reference) {
+        revokePreviews(result.previewBlobs);
+        return;
+      }
+      for (const url of Object.values(result.previewBlobs)) if (url) ownedUrls.current.add(url);
       setUnlocked(result);
       setCode("");
+      if (result.loadPreviews) {
+        setPreviewLoading(true);
+        const controller = new AbortController();
+        abort.current = controller;
+        void result.loadPreviews((mode, url) => {
+          if (!active.current || browserReference() !== reference) {
+            if (url) URL.revokeObjectURL(url);
+            return;
+          }
+          if (url) ownedUrls.current.add(url);
+          setUnlocked((current) => current?.proposal.reference === reference
+            ? { ...current, previewBlobs: { ...current.previewBlobs, [mode]: url } }
+            : current);
+        }, controller.signal).catch(() => {
+          // A failed image fetch leaves its mode unavailable without hiding the proposal.
+        }).finally(() => {
+          if (active.current && browserReference() === reference) setPreviewLoading(false);
+        });
+      }
     } catch {
-      setError(unavailable);
+      if (active.current && browserReference() === reference) setError(unavailable);
     } finally {
-      setBusy(false);
+      if (active.current && browserReference() === reference) setBusy(false);
     }
   }
 
@@ -75,6 +114,7 @@ export function ManualProposalAccess({
                 id="manual-proposal-code"
                 name="accessCode"
                 type="text"
+                disabled={!ready}
                 inputMode="text"
                 autoComplete="off"
                 autoCapitalize="characters"
@@ -92,7 +132,7 @@ export function ManualProposalAccess({
             </form>
           </section>
         </main>
-      ) : <ManualProposalDocument proposal={unlocked.proposal} previewBlobs={unlocked.previewBlobs} />}
+      ) : <ManualProposalDocument proposal={unlocked.proposal} previewBlobs={unlocked.previewBlobs} previewLoading={previewLoading} />}
     </div>
   );
 }

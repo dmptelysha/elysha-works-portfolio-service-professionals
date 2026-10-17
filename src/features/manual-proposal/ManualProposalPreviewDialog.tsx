@@ -9,10 +9,12 @@ const MODES: readonly PreviewMode[] = ["desktop", "tablet", "mobile"];
 
 export function ManualProposalPreviewDialog({
   previewBlobs,
+  previewLoading,
   clientName,
   onClose,
 }: {
   previewBlobs: PreviewBlobs;
+  previewLoading: boolean;
   clientName: string;
   onClose: () => void;
 }) {
@@ -110,7 +112,7 @@ export function ManualProposalPreviewDialog({
               <img src={image} alt={mode[0].toUpperCase() + mode.slice(1) + " concept"} draggable={false} onDragStart={(event) => event.preventDefault()} />
             </div>
           ) : (
-            <p className="manual-preview-unavailable">{mode[0].toUpperCase() + mode.slice(1)} preview unavailable. You can still review the offers and book a call.</p>
+            <p className="manual-preview-unavailable">{previewLoading ? "Loading " + mode + " preview…" : mode[0].toUpperCase() + mode.slice(1) + " preview unavailable. You can still review the offers and book a call."}</p>
           )}
         </div>
       </div>

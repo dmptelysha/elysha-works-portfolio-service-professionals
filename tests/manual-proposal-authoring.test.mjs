@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
+import { resolve } from "node:path";
 
 import {
   cleanupPreviews,
@@ -10,6 +11,7 @@ import {
   revokeDraft,
   rotateCode,
 } from "../scripts/manual-proposal-core.mjs";
+import { reviewedInputDigest } from "../scripts/manual-proposal.mjs";
 
 const draft = {
   clientName: "Meghan",
@@ -40,7 +42,24 @@ const manifest = {
 const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0]);
 const pepper = "secret-pepper-for-testing-long-enough";
 
-function fakeClient({ failIssue = false } = {}) {
+test("draft receipt digest detects a capture changed in place after review", async () => {
+  const files = Object.fromEntries(["desktop", "tablet", "mobile"].map((mode) => [
+    mode, resolve(".tmp/manual-proposals/digest-test/" + mode + ".png"),
+  ]));
+  const capture = { desktop: Buffer.from("first"), tablet: Buffer.from("tablet"), mobile: Buffer.from("mobile") };
+  const stagedManifest = { ...manifest, files };
+  const digest = () => reviewedInputDigest(draft, stagedManifest,
+    async (path) => capture[Object.keys(files).find((mode) => files[mode] === path)],
+    async (path) => path);
+  const before = await digest();
+  capture.desktop = Buffer.from("changed");
+  assert.notEqual(await digest(), before);
+  await assert.rejects(() => reviewedInputDigest(draft, {
+    ...stagedManifest, files: { ...files, desktop: resolve("public/leak.png") },
+  }, async () => png, async (path) => path), /ignored staging/);
+});
+
+function fakeClient({ failIssue = false, failUploadMode = null } = {}) {
   const calls = [];
   const uploads = [];
   const removed = [];
@@ -60,7 +79,7 @@ function fakeClient({ failIssue = false } = {}) {
         return {
           upload: async (path, bytes, options) => {
             uploads.push([path, bytes, options]);
-            return { data: {}, error: null };
+            return { data: {}, error: path.endsWith("/" + failUploadMode + ".png") ? new Error("upload failed") : null };
           },
           remove: async (paths) => {
             removed.push(paths);
@@ -125,7 +144,7 @@ test("issue uploads only PNG captures privately and persists a hash, then prints
   assert.match(output[0], /222222222222/);
 });
 
-test("failed issue emits no code and removes uploaded private objects", async () => {
+test("an uncertain issue result emits no code and preserves private images for reconciliation", async () => {
   const fake = fakeClient({ failIssue: true });
   const output = [];
   await assert.rejects(() => issueDraft({
@@ -138,8 +157,20 @@ test("failed issue emits no code and removes uploaded private objects", async ()
     write: (message) => output.push(message),
   }));
   assert.deepEqual(output, []);
-  assert.equal(fake.removed.length, 1);
-  assert.equal(fake.removed[0].length, 3);
+  assert.deepEqual(fake.removed, []);
+});
+
+test("a failed preview upload removes only the successfully uploaded images", async () => {
+  const fake = fakeClient({ failUploadMode: "tablet" });
+  await assert.rejects(() => issueDraft({
+    client: fake.client, draftId: "22222222-2222-4222-8222-222222222222",
+    draft, manifest, pepper,
+    baseUrl: "https://elyshaworks.com",
+    readCapture: async () => png,
+    write: () => { throw new Error("code must not be printed"); },
+  }), /Private preview upload failed/);
+  assert.deepEqual(fake.removed, [["manual/22222222-2222-4222-8222-222222222222/desktop.png"]]);
+  assert.equal(fake.calls.some(([name]) => name === "issue_manual_proposal"), false);
 });
 
 test("a failed output write after issuance leaves active private previews intact", async () => {

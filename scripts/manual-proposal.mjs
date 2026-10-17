@@ -30,8 +30,18 @@ function required(value, name) {
   if (!value) throw new Error(name + " is required");
   return value;
 }
-function digest(value) {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+export async function reviewedInputDigest(draft, manifest, readCapture = readFile, resolveCapture = realpath) {
+  const realStage = await realpath(STAGING);
+  const hash = createHash("sha256").update(JSON.stringify({ draft, manifest }));
+  for (const mode of ["desktop", "tablet", "mobile"]) {
+    const path = manifest.files?.[mode];
+    if (typeof path !== "string") throw new Error("Capture manifest is incomplete");
+    const realCapture = await resolveCapture(resolve(path));
+    if (!inside(realStage, realCapture)) throw new Error("Captures must stay in ignored staging");
+    hash.update(mode);
+    hash.update(await readCapture(realCapture));
+  }
+  return hash.digest("hex");
 }
 async function checkedLocalJson(path) {
   const realStage = await realpath(STAGING);
@@ -74,11 +84,12 @@ export async function main(args = process.argv.slice(2)) {
     const { draft, manifest } = await inputAndManifest(required(option(args, "input"), "--input"));
     const supersedesId = option(args, "supersedes");
     if (supersedesId && !UUID_PATTERN.test(supersedesId)) throw new Error("Invalid superseded ID");
+    const inputDigest = await reviewedInputDigest(draft, manifest);
     const id = await createDraft({ client, draft, manifest, supersedesId });
     await mkdir(RECEIPTS, { recursive: true });
     await writeFile(join(RECEIPTS, id + ".json"), JSON.stringify({
       id,
-      inputDigest: digest({ draft, manifest }),
+      inputDigest,
     }, null, 2) + "\n", { flag: "wx" });
     process.stdout.write("Draft created: " + id + "\nReceipt: .tmp/manual-proposals/receipts/" + id + ".json\n");
     return;
@@ -88,7 +99,7 @@ export async function main(args = process.argv.slice(2)) {
     if (!UUID_PATTERN.test(id)) throw new Error("Invalid draft ID");
     const { draft, manifest } = await inputAndManifest(required(option(args, "input"), "--input"));
     const receipt = await checkedLocalJson(join(RECEIPTS, id + ".json"));
-    if (receipt.id !== id || receipt.inputDigest !== digest({ draft, manifest })) {
+    if (receipt.id !== id || receipt.inputDigest !== await reviewedInputDigest(draft, manifest)) {
       throw new Error("Draft changed after creation; create a new revision");
     }
     await issueDraft({

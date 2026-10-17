@@ -13,9 +13,11 @@ function money(cents: number) {
 export function ManualProposalDocument({
   proposal,
   previewBlobs,
+  previewLoading = false,
 }: {
   proposal: ManualProposalView;
   previewBlobs: PreviewBlobs;
+  previewLoading?: boolean;
 }) {
   const [tier, setTier] = useState<TierKey>("basic");
   const [included, setIncluded] = useState<string[]>([]);
@@ -100,7 +102,7 @@ export function ManualProposalDocument({
             <h2 id="manual-concept-title">See the design in context.</h2>
             <p>Explore the current page direction in three sizes, here inside your proposal.</p>
             <p className="manual-proposal-concept-note">This is a concept. {proposal.clientName}&apos;s service details, claims, and booking paths need confirmation before publication.</p>
-            {Object.entries(previewBlobs).filter(([, url]) => !url).map(([mode]) => (
+            {Object.entries(previewBlobs).filter(([, url]) => !url && !previewLoading).map(([mode]) => (
               <p key={mode} className="manual-proposal-preview-status">{mode[0].toUpperCase() + mode.slice(1)} preview unavailable.</p>
             ))}
           </div>
@@ -109,7 +111,7 @@ export function ManualProposalDocument({
               <span className="manual-proposal-preview-cover" style={{ backgroundImage: "url(" + previewBlobs.desktop + ")" }} aria-hidden="true" />
             ) : <span className="manual-proposal-preview-empty" aria-hidden="true" />}
             <span className="manual-proposal-preview-action">View the concept <span aria-hidden="true">↗</span></span>
-            {!hasPreview ? <span className="manual-proposal-preview-unavailable">Preview currently unavailable</span> : null}
+            {!hasPreview ? <span className="manual-proposal-preview-unavailable">{previewLoading ? "Preview loading" : "Preview currently unavailable"}</span> : null}
           </button>
         </section>
 
@@ -184,6 +186,7 @@ export function ManualProposalDocument({
             <p>A discovery call is the next step to confirm the scope, content, and launch details together.</p>
             <a href={proposal.bookingPath} className="manual-proposal-primary">Book a Discovery Call <span aria-hidden="true">↗</span></a>
             <div className="manual-proposal-reserve">
+              <p>50% down payment: <strong>{money(quote.depositCents)}</strong></p>
               <button type="button" disabled>Reserve My Slot</button>
               <p>Checkout is being connected. No payment is taken and no slot is held yet.</p>
             </div>
@@ -191,7 +194,7 @@ export function ManualProposalDocument({
         </section>
       </article>
       <footer className="manual-proposal-footer"><span>Elysha Works</span><span>Prepared privately for {proposal.clientName}</span></footer>
-      {previewOpen ? <ManualProposalPreviewDialog previewBlobs={previewBlobs} clientName={proposal.clientName} onClose={() => setPreviewOpen(false)} /> : null}
+      {previewOpen ? <ManualProposalPreviewDialog previewBlobs={previewBlobs} previewLoading={previewLoading} clientName={proposal.clientName} onClose={() => setPreviewOpen(false)} /> : null}
     </main>
   );
 }

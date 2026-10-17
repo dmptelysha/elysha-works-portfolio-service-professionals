@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -88,6 +88,36 @@ describe("manual proposal lock", () => {
     expect(verify).toHaveBeenCalledOnce();
     revoke.mockRestore();
   });
+
+  it("locks a different reference and ignores an old verification that finishes after navigation", async () => {
+    const user = userEvent.setup();
+    let release: ((value: VerifiedManualProposal) => void) | undefined;
+    const verify = vi.fn(() => new Promise<VerifiedManualProposal>((done) => { release = done; }));
+    render(<ManualProposalAccess service={{ verify }} />);
+    await user.type(screen.getByLabelText(/access code/i), "abcdefgh2345");
+    await user.click(screen.getByRole("button", { name: /open proposal/i }));
+    act(() => {
+      window.history.pushState({}, "", "/proposal/client/?ref=22222222-2222-4222-8222-222222222222");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await act(async () => { release?.(unlocked); });
+    expect(screen.getByRole("heading", { name: /open your private proposal/i })).toBeInTheDocument();
+    expect(screen.queryByText("The Emotional Anchor")).not.toBeInTheDocument();
+  });
+
+  it("relocks immediately when the reference changes after unlock", async () => {
+    const user = userEvent.setup();
+    render(<ManualProposalAccess service={{ verify: async () => unlocked }} />);
+    await user.type(screen.getByLabelText(/access code/i), "abcdefgh2345");
+    await user.click(screen.getByRole("button", { name: /open proposal/i }));
+    expect(await screen.findByRole("heading", { name: /proposal unlocked/i })).toBeInTheDocument();
+    act(() => {
+      window.history.pushState({}, "", "/proposal/client/?ref=22222222-2222-4222-8222-222222222222");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(screen.getByRole("heading", { name: /open your private proposal/i })).toBeInTheDocument();
+    expect(screen.queryByText("The Emotional Anchor")).not.toBeInTheDocument();
+  });
 });
 
 it("fetches signed images into Blob URLs and treats expired images as unavailable", async () => {
@@ -117,7 +147,11 @@ it("fetches signed images into Blob URLs and treats expired images as unavailabl
     revokeObjectURL: vi.fn(),
   }));
   const result = await verifyManualProposal(reference, "ABCDEFGH2345");
-  expect(result.previewBlobs).toEqual({ desktop: "blob:desktop", tablet: null, mobile: null });
+  expect(result.previewBlobs).toEqual({ desktop: null, tablet: null, mobile: null });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  const previews: Record<string, string | null> = {};
+  await result.loadPreviews?.((mode, url) => { previews[mode] = url; });
+  expect(previews).toEqual({ desktop: "blob:desktop", tablet: null, mobile: null });
   expect(fetcher).toHaveBeenCalledTimes(3);
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();

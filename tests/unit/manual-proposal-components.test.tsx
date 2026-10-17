@@ -46,6 +46,7 @@ describe("manual proposal document", () => {
     expect(screen.getByTestId("selected-total")).toHaveTextContent("$2,501.01");
     expect(screen.getByRole("link", { name: /book a discovery call/i })).toHaveAttribute("href", "/booking/");
     expect(screen.getByRole("button", { name: /reserve my slot/i })).toBeDisabled();
+    expect(screen.getByText(/50% down payment/i)).toHaveTextContent("$1,250.51");
     expect(screen.getByText(/checkout is being connected/i)).toBeInTheDocument();
   });
 

@@ -117,7 +117,7 @@ async function addWatermark(page, watermarkText) {
   }, watermarkText);
 }
 
-export async function captureManualPreview({ sourceDir, outputDir, clientName, browser } = {}) {
+export async function captureManualPreview({ sourceDir, outputDir, clientName, browser, launchBrowser = () => chromium.launch({ headless: true }), onServerStarted } = {}) {
   if (typeof clientName !== "string" || !/^[\p{L}\p{M}\p{N} .'-]{1,80}$/u.test(clientName.trim())) {
     throw new Error("A valid client name is required for the watermark");
   }
@@ -135,10 +135,12 @@ export async function captureManualPreview({ sourceDir, outputDir, clientName, b
   const served = new Set();
   const server = await startSourceServer(sourceRoot, served);
   const ownBrowser = !browser;
-  const activeBrowser = browser ?? await chromium.launch({ headless: true });
+  let activeBrowser = browser;
   const files = {};
   const capturedAt = new Date().toISOString();
   try {
+    onServerStarted?.(server);
+    if (!activeBrowser) activeBrowser = await launchBrowser();
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("Source server unavailable");
     for (const [mode, viewport] of Object.entries(VIEWPORTS)) {
@@ -172,8 +174,11 @@ export async function captureManualPreview({ sourceDir, outputDir, clientName, b
     }, null, 2) + "\n");
     return { sourceHash, capturedAt, files, watermarkText };
   } finally {
-    await new Promise((done) => server.close(done));
-    if (ownBrowser) await activeBrowser.close();
+    try {
+      if (ownBrowser && activeBrowser) await activeBrowser.close();
+    } finally {
+      await new Promise((done) => server.close(done));
+    }
   }
 }
 

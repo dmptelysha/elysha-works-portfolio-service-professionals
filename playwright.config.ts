@@ -1,10 +1,13 @@
 import { defineConfig } from "@playwright/test";
 
+const staticExport = process.env.PLAYWRIGHT_STATIC_EXPORT === "1";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
+  workers: staticExport ? 1 : undefined,
   reporter: "line",
   use: {
     baseURL: "http://127.0.0.1:3000",
@@ -12,7 +15,9 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: {
-    command: "npm run dev -- --hostname 127.0.0.1 --port 3000",
+    command: staticExport
+      ? "python -m http.server 3000 --bind 127.0.0.1 --directory out"
+      : "npm run dev -- --hostname 127.0.0.1 --port 3000",
     env: {
       NEXT_PUBLIC_TURNSTILE_SITE_KEY: "",
       NEXT_PUBLIC_BOOKING_FIREBASE_API_KEY: "local-playwright-test-key",
@@ -20,7 +25,7 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "local-playwright-test-key",
     },
     url: "http://127.0.0.1:3000",
-    reuseExistingServer: true,
+    reuseExistingServer: !staticExport,
     timeout: 120_000,
   },
   projects: [

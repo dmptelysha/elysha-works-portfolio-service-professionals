@@ -5,6 +5,7 @@ export type PreviewBlobs = Record<PreviewMode, string | null>;
 export interface VerifiedManualProposal {
   proposal: ManualProposalView;
   previewBlobs: PreviewBlobs;
+  loadPreviews?: (onPreview: (mode: PreviewMode, url: string | null) => void, signal?: AbortSignal) => Promise<void>;
 }
 export interface ManualProposalService {
   verify(reference: string, accessKey: string): Promise<VerifiedManualProposal>;
@@ -41,24 +42,30 @@ export async function verifyManualProposal(reference: string, accessKey: string)
       !result.proposal.expiresAt || Date.parse(result.proposal.expiresAt) <= Date.now()) {
     throw new Error("proposal_unavailable");
   }
-  const previewBlobs = {} as PreviewBlobs;
-  await Promise.all(MODES.map(async (mode) => {
-    const url = result.previewUrls?.[mode];
-    if (!url) {
-      previewBlobs[mode] = null;
-      return;
-    }
-    try {
-      const image = await fetch(url, { cache: "no-store", credentials: "omit" });
-      if (!image.ok) throw new Error("preview_unavailable");
-      const blob = await image.blob();
-      if (!blob.type.startsWith("image/")) throw new Error("preview_unavailable");
-      previewBlobs[mode] = URL.createObjectURL(blob);
-    } catch {
-      previewBlobs[mode] = null;
-    }
-  }));
-  return { proposal: result.proposal, previewBlobs };
+  const previewBlobs: PreviewBlobs = { desktop: null, tablet: null, mobile: null };
+  return {
+    proposal: result.proposal,
+    previewBlobs,
+    loadPreviews: async (onPreview, signal) => {
+      await Promise.all(MODES.map(async (mode) => {
+        const url = result.previewUrls?.[mode];
+        if (!url) {
+          onPreview(mode, null);
+          return;
+        }
+        try {
+          const image = await fetch(url, { cache: "no-store", credentials: "omit", signal });
+          if (!image.ok) throw new Error("preview_unavailable");
+          const blob = await image.blob();
+          if (!blob.type.startsWith("image/")) throw new Error("preview_unavailable");
+          if (signal?.aborted) return;
+          onPreview(mode, URL.createObjectURL(blob));
+        } catch {
+          if (!signal?.aborted) onPreview(mode, null);
+        }
+      }));
+    },
+  };
 }
 
 export const defaultManualProposalService: ManualProposalService = { verify: verifyManualProposal };

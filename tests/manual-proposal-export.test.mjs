@@ -10,6 +10,7 @@ test("static export includes a direct locked proposal route without client conte
   assert.ok(existsSync(route), "Run npm run build before this test; the proposal route must export.");
   const html = readFileSync(route, "utf8");
   assert.match(html, /Private Proposal/);
+  assert.match(html, /noindex/);
   assert.doesNotMatch(html, /The Emotional Anchor|Meghan|ABCDEFGHJKLM/);
 });
 

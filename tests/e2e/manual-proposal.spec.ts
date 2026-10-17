@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
 
 const reference = "11111111-1111-4111-8111-111111111111";
 const code = "ABCDEFGHJKLM";
@@ -91,4 +91,26 @@ test("an absent reference stays locked and cannot submit a code", async ({ page 
   await page.getByRole("textbox", { name: /access code/i }).fill(code);
   await expect(page.getByRole("button", { name: /open proposal/i })).toBeDisabled();
   await expect(page.getByText("The Emotional Anchor")).toHaveCount(0);
+});
+
+test("offers remain available while a private preview download is pending", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "The background download behavior is viewport independent.");
+  let heldPreview: Route | undefined;
+  await page.route("**/mock-supabase/functions/v1/manual-proposal-access", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ proposal, previewUrls: {
+      desktop: "http://127.0.0.1:3000/mock-private/desktop.png",
+      tablet: null, mobile: null,
+    } }),
+  }));
+  await page.route("**/mock-private/desktop.png", (route) => { heldPreview = route; });
+  await page.goto("/proposal/client/?ref=" + reference);
+  await page.getByRole("textbox", { name: /access code/i }).fill(code);
+  await page.getByRole("button", { name: /open proposal/i }).click();
+  await expect(page.getByRole("heading", { name: /Meghan.*Emotional Anchor/i })).toBeVisible();
+  await expect(page.getByTestId("selected-total")).toHaveText("$1,500.00");
+  await expect(page.getByRole("link", { name: /book a discovery call/i })).toBeVisible();
+  await expect.poll(() => Boolean(heldPreview)).toBe(true);
+  await heldPreview?.fulfill({ status: 200, contentType: "image/png", body: png });
 });

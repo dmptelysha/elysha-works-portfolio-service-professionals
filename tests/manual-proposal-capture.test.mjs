@@ -60,3 +60,23 @@ test("capture refuses output outside ignored staging or inside the source", asyn
     outputDir: resolve("public/manual"),
   }));
 });
+
+test("browser launch failure closes the temporary source server", async (t) => {
+  const sourceDir = await mkdtemp(join(tmpdir(), "manual-proposal-launch-"));
+  const outputDir = join(stagingRoot, "launch-test");
+  let server;
+  assert.ok(relative(tmpdir(), sourceDir) && !relative(tmpdir(), sourceDir).startsWith(".."));
+  assert.ok(relative(stagingRoot, outputDir) && !relative(stagingRoot, outputDir).startsWith(".."));
+  t.after(async () => {
+    if (server?.listening) await new Promise((done) => server.close(done));
+    await rm(sourceDir, { recursive: true, force: true });
+    await rm(outputDir, { recursive: true, force: true });
+  });
+  await writeFile(join(sourceDir, "index.html"), "<!doctype html><title>Concept</title>");
+  await assert.rejects(() => captureManualPreview({
+    sourceDir, outputDir, clientName: "Avery",
+    onServerStarted: (started) => { server = started; },
+    launchBrowser: async () => { throw new Error("Chromium unavailable"); },
+  }), /Chromium unavailable/);
+  assert.equal(server?.listening, false);
+});
