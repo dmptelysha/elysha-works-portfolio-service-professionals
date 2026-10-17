@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
 
+import { ManualProposalDocument } from "./ManualProposalDocument";
 import {
   defaultManualProposalService,
   isManualProposalReference,
@@ -89,16 +90,7 @@ export function ManualProposalAccess({
             </form>
           </section>
         </main>
-      ) : (
-        <main className="manual-proposal-open">
-          <h1>Proposal unlocked</h1>
-          <p>{unlocked.proposal.clientName}, your proposal for {unlocked.proposal.businessName} is ready.</p>
-          {Object.entries(unlocked.previewBlobs).filter(([, url]) => !url).map(([mode]) => (
-            <p key={mode}>{mode[0].toUpperCase() + mode.slice(1)} preview unavailable.</p>
-          ))}
-          <a href={unlocked.proposal.bookingPath}>Book a Discovery Call</a>
-        </main>
-      )}
+      ) : <ManualProposalDocument proposal={unlocked.proposal} previewBlobs={unlocked.previewBlobs} />}
     </div>
   );
 }
