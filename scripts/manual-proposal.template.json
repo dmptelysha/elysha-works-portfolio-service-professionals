@@ -1,0 +1,28 @@
+{
+  "clientName": "",
+  "businessName": "",
+  "pointA": {
+    "heading": "",
+    "summary": "",
+    "evidence": []
+  },
+  "pointB": {
+    "heading": "",
+    "summary": "",
+    "evidence": []
+  },
+  "recommendation": {
+    "title": "",
+    "reason": ""
+  },
+  "offers": [
+    { "key": "basic", "label": "Basic", "priceCents": 150000, "included": [] },
+    { "key": "advanced", "label": "Advanced", "priceCents": 250000, "included": [] },
+    { "key": "complete", "label": "Complete", "priceCents": 400000, "included": [] }
+  ],
+  "inclusions": [],
+  "bookingPath": "/booking/",
+  "currency": "USD",
+  "expiresAt": "",
+  "captureManifestPath": ".tmp/manual-proposals/client/manifest.json"
+}
