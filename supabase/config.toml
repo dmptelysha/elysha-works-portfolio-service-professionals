@@ -56,6 +56,9 @@ verify_jwt = true
 [functions.verify-proposal]
 verify_jwt = false
 
+[functions.manual-proposal-access]
+verify_jwt = false
+
 [functions.make-proposal-followups]
 verify_jwt = false
 

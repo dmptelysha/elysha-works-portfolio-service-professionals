@@ -49,6 +49,10 @@ export function getProposalEnv(get: EnvGetter = Deno.env.get) {
   };
 }
 
+export function getManualProposalEnv(get: EnvGetter = Deno.env.get) {
+  return { keyPepper: required(get, "PROPOSAL_KEY_PEPPER", 32) };
+}
+
 export function getMakeWebhookEnv(get: EnvGetter = Deno.env.get) {
   const webhookUrl = required(get, "MAKE_PROPOSAL_WEBHOOK_URL");
   if (new URL(webhookUrl).protocol !== "https:") {
