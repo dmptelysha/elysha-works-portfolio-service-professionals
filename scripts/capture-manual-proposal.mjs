@@ -11,7 +11,6 @@ const VIEWPORTS = {
   tablet: { width: 768, height: 1024 },
   mobile: { width: 390, height: 844 },
 };
-const WATERMARK = "Prepared for Meghan · Elysha Works concept";
 const STAGING_ROOT = resolve(".tmp/manual-proposals");
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -101,7 +100,7 @@ async function startSourceServer(sourceRoot, served) {
   return server;
 }
 
-async function addWatermark(page) {
+async function addWatermark(page, watermarkText) {
   await page.evaluate((label) => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="440" height="250"><g transform="rotate(-24 220 125)"><text x="20" y="125" font-family="Arial,sans-serif" font-size="18" font-weight="700" fill="#171717" fill-opacity=".19">' + label + "</text></g></svg>";
     const overlay = document.createElement("div");
@@ -115,10 +114,14 @@ async function addWatermark(page) {
     overlay.style.backgroundImage = 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
     overlay.style.backgroundRepeat = "repeat";
     document.body.append(overlay);
-  }, WATERMARK);
+  }, watermarkText);
 }
 
-export async function captureManualPreview({ sourceDir, outputDir, browser } = {}) {
+export async function captureManualPreview({ sourceDir, outputDir, clientName, browser } = {}) {
+  if (typeof clientName !== "string" || !/^[\p{L}\p{M}\p{N} .'-]{1,80}$/u.test(clientName.trim())) {
+    throw new Error("A valid client name is required for the watermark");
+  }
+  const watermarkText = "Prepared for " + clientName.trim() + " · Elysha Works concept";
   if (typeof sourceDir !== "string" || typeof outputDir !== "string") {
     throw new Error("Source and output directories are required");
   }
@@ -152,7 +155,7 @@ export async function captureManualPreview({ sourceDir, outputDir, browser } = {
           window.scrollTo(0, 0);
         });
         await page.waitForTimeout(200);
-        await addWatermark(page);
+        await addWatermark(page, watermarkText);
         const file = join(outputRoot, mode + ".png");
         await page.screenshot({ path: file, fullPage: true, animations: "disabled" });
         files[mode] = file;
@@ -165,9 +168,9 @@ export async function captureManualPreview({ sourceDir, outputDir, browser } = {
       sourceHash,
       capturedAt,
       files,
-      watermarkText: WATERMARK,
+      watermarkText,
     }, null, 2) + "\n");
-    return { sourceHash, capturedAt, files, watermarkText: WATERMARK };
+    return { sourceHash, capturedAt, files, watermarkText };
   } finally {
     await new Promise((done) => server.close(done));
     if (ownBrowser) await activeBrowser.close();
@@ -178,7 +181,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const args = process.argv.slice(2);
   const sourceDir = args[args.indexOf("--source") + 1];
   const outputDir = args[args.indexOf("--output") + 1];
-  captureManualPreview({ sourceDir, outputDir }).then((result) => {
+  const clientName = args[args.indexOf("--client") + 1];
+  captureManualPreview({ sourceDir, outputDir, clientName }).then((result) => {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
   }).catch((error) => {
     process.stderr.write(String(error) + "\n");

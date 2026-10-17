@@ -37,20 +37,20 @@ test("three watermarked viewport captures preserve the source and track CSS and 
   await writeFile(join(sourceDir, "assets/dot.svg"), '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><circle cx="16" cy="16" r="16" fill="red"/></svg>');
   const sourceBefore = await readFile(join(sourceDir, "index.html"));
 
-  const first = await captureManualPreview({ sourceDir, outputDir });
+  const first = await captureManualPreview({ sourceDir, outputDir, clientName: "Avery" });
   assert.equal(first.sourceHash.length, 64);
   assert.deepEqual(await readFile(join(sourceDir, "index.html")), sourceBefore);
   for (const [mode, width] of [["desktop", 1440], ["tablet", 768], ["mobile", 390]]) {
     assert.equal(pngWidth(await readFile(first.files[mode])), width);
   }
   assert.notEqual(hash(await readFile(first.files.desktop)), hash(await readFile(first.files.tablet)));
-  assert.equal(first.watermarkText, "Prepared for Meghan · Elysha Works concept");
+  assert.equal(first.watermarkText, "Prepared for Avery · Elysha Works concept");
 
   await writeFile(join(sourceDir, "style.css"), "body{margin:0;background:#ddd}main{height:1300px}");
-  const cssChange = await captureManualPreview({ sourceDir, outputDir });
+  const cssChange = await captureManualPreview({ sourceDir, outputDir, clientName: "Avery" });
   assert.notEqual(cssChange.sourceHash, first.sourceHash);
   await writeFile(join(sourceDir, "assets/dot.svg"), '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><circle cx="16" cy="16" r="16" fill="blue"/></svg>');
-  const assetChange = await captureManualPreview({ sourceDir, outputDir });
+  const assetChange = await captureManualPreview({ sourceDir, outputDir, clientName: "Avery" });
   assert.notEqual(assetChange.sourceHash, cssChange.sourceHash);
 });
 

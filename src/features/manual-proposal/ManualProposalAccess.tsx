@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
+import { FormEvent, useEffect, useState, useSyncExternalStore } from "react";
 
 import { ManualProposalDocument } from "./ManualProposalDocument";
 import {
@@ -12,21 +13,22 @@ import {
 } from "./service";
 
 const unavailable = "We could not verify this proposal. Check the link and access code, or ask Elysha for a new one.";
+const subscribeReference = (notify: () => void) => {
+  window.addEventListener("popstate", notify);
+  return () => window.removeEventListener("popstate", notify);
+};
+const browserReference = () => new URLSearchParams(window.location.search).get("ref") ?? "";
+const serverReference = () => null;
 
 export function ManualProposalAccess({
   service = defaultManualProposalService,
 }: { service?: ManualProposalService } = {}) {
-  const [reference, setReference] = useState("");
-  const [ready, setReady] = useState(false);
+  const reference = useSyncExternalStore(subscribeReference, browserReference, serverReference);
+  const ready = reference !== null;
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [unlocked, setUnlocked] = useState<VerifiedManualProposal | null>(null);
-
-  useEffect(() => {
-    setReference(new URLSearchParams(window.location.search).get("ref") ?? "");
-    setReady(true);
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -39,7 +41,7 @@ export function ManualProposalAccess({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!isManualProposalReference(reference) || code.length !== 12 || busy) return;
+    if (!reference || !isManualProposalReference(reference) || code.length !== 12 || busy) return;
     setBusy(true);
     setError("");
     try {
@@ -56,9 +58,9 @@ export function ManualProposalAccess({
   return (
     <div className="manual-proposal-shell">
       <header className="manual-proposal-header">
-        <a href="/" aria-label="Elysha Works home">
+        <Link href="/" aria-label="Elysha Works home">
           <Image src="/assets/insight-system/elysha-works-logo.png" alt="Elysha Works" width={220} height={29} unoptimized />
-        </a>
+        </Link>
         <span>Private proposal</span>
       </header>
       {!unlocked ? (
@@ -81,10 +83,10 @@ export function ManualProposalAccess({
                 value={code}
                 onChange={(event) => setCode(event.target.value.replace(/\s/gu, "").toUpperCase())}
               />
-              <button type="submit" disabled={!ready || !isManualProposalReference(reference) || code.length !== 12 || busy}>
+              <button type="submit" disabled={!ready || !isManualProposalReference(reference ?? "") || code.length !== 12 || busy}>
                 {busy ? "Opening…" : "Open proposal"}
               </button>
-              {error || (ready && !isManualProposalReference(reference))
+              {error || (ready && !isManualProposalReference(reference ?? ""))
                 ? <p role="alert">{unavailable}</p>
                 : null}
             </form>

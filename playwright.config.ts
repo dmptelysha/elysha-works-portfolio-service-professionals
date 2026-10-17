@@ -13,7 +13,12 @@ export default defineConfig({
   },
   webServer: {
     command: "npm run dev -- --hostname 127.0.0.1 --port 3000",
-    env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: "" },
+    env: {
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "",
+      NEXT_PUBLIC_BOOKING_FIREBASE_API_KEY: "local-playwright-test-key",
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:3000/mock-supabase",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "local-playwright-test-key",
+    },
     url: "http://127.0.0.1:3000",
     reuseExistingServer: true,
     timeout: 120_000,

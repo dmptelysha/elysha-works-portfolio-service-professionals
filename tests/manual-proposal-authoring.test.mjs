@@ -142,6 +142,21 @@ test("failed issue emits no code and removes uploaded private objects", async ()
   assert.equal(fake.removed[0].length, 3);
 });
 
+test("a failed output write after issuance leaves active private previews intact", async () => {
+  const fake = fakeClient();
+  await assert.rejects(() => issueDraft({
+    client: fake.client, draftId: "22222222-2222-4222-8222-222222222222",
+    draft, manifest, pepper,
+    baseUrl: "https://elyshaworks.com",
+    randomBytes: (length) => Buffer.alloc(length, 0),
+    uuid: () => "33333333-3333-4333-8333-333333333333",
+    readCapture: async () => png,
+    write: () => { throw new Error("output failed"); },
+  }), /output failed/);
+  assert.equal(fake.calls.some(([name]) => name === "issue_manual_proposal"), true);
+  assert.deepEqual(fake.removed, []);
+});
+
 test("rotation prints a new code after hash update; revoke prints none", async () => {
   const fake = fakeClient();
   const output = [];

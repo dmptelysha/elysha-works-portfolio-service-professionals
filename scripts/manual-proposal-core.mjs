@@ -102,6 +102,7 @@ export async function issueDraft({
   const storage = client.storage.from(BUCKET);
   const uploaded = [];
   const paths = {};
+  let issued;
   try {
     for (const mode of VIEWPORTS) {
       const bytes = await readCapture(manifest.files[mode]);
@@ -127,12 +128,13 @@ export async function issueDraft({
     });
     requireRpc(result, "Issue proposal");
     const link = site.origin + "/proposal/client/?ref=" + encodeURIComponent(reference);
-    write("Share link: " + link + "\nAccess code: " + code + "\n");
-    return { reference, link };
+    issued = { reference, link, code };
   } catch (error) {
     if (uploaded.length) await storage.remove(uploaded);
     throw error;
   }
+  write("Share link: " + issued.link + "\nAccess code: " + issued.code + "\n");
+  return { reference: issued.reference, link: issued.link };
 }
 
 export async function rotateCode({

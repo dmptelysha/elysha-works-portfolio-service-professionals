@@ -99,7 +99,7 @@ export function ManualProposalDocument({
             <p className="manual-proposal-eyebrow">The concept</p>
             <h2 id="manual-concept-title">See the design in context.</h2>
             <p>Explore the current page direction in three sizes, here inside your proposal.</p>
-            <p className="manual-proposal-concept-note">This is a concept. Meghan's service details, claims, and booking paths need confirmation before publication.</p>
+            <p className="manual-proposal-concept-note">This is a concept. {proposal.clientName}&apos;s service details, claims, and booking paths need confirmation before publication.</p>
             {Object.entries(previewBlobs).filter(([, url]) => !url).map(([mode]) => (
               <p key={mode} className="manual-proposal-preview-status">{mode[0].toUpperCase() + mode.slice(1)} preview unavailable.</p>
             ))}
@@ -180,7 +180,7 @@ export function ManualProposalDocument({
             </dl>
           </div>
           <div className="manual-proposal-action-panel">
-            <h3>Let's talk through the plan.</h3>
+            <h3>Let&apos;s talk through the plan.</h3>
             <p>A discovery call is the next step to confirm the scope, content, and launch details together.</p>
             <a href={proposal.bookingPath} className="manual-proposal-primary">Book a Discovery Call <span aria-hidden="true">↗</span></a>
             <div className="manual-proposal-reserve">

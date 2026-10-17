@@ -2,6 +2,8 @@
 
 Scope: Define and review the reusable manual-proposal design before implementation.
 
+Implementation scope: Build and locally verify the approved reusable manual-proposal flow in the isolated Meghan branch; do not deploy or issue a live code.
+
 - [x] G1: A written spec exists on the Megan branch and records the agreed preview, access, offer, and CTA behavior.
   CHECK: rg -n "private preview|Basic, Advanced, and Complete|50%|Discovery Call|access key" docs/superpowers/specs/2026-10-17-meghan-manual-proposals-design.md
   EXPECT: /50%/
@@ -37,3 +39,21 @@ Scope: Define and review the reusable manual-proposal design before implementati
 
 - [x] G8: The plan's interfaces and tests have been checked against the spec and contain no placeholders.
   EVIDENCE: Self-review matched the spec's draft template, currency, booking path, capture metadata, version cleanup, server-side future checkout, and browser limits; placeholder scan was clear.
+
+- [x] G9: A private, hash-only, rate-limited manual proposal access path exists and is tested.
+  EVIDENCE: Private SQL migration and service-only RPCs passed the new 27-assertion pgTAP file; Edge access tests 5/5 and all Edge tests 49/49 passed; static migration checks 21/21 passed.
+
+- [x] G10: The offline Meghan design is captured read-only at three viewports, watermarked, and kept outside the public export.
+  EVIDENCE: Current ignored .tmp/manual-proposals/meghan desktop/tablet/mobile PNGs and manifest were visually inspected; source hash 9a8f261aab529ec24d7f45b45995fe132cfb52b911cb1d4dcae4882e1d6985c9. Capture tests 2/2 and export absence test 2/2 passed; source directory remained untouched.
+
+- [x] G11: Meghan's locked proposal route supports a separate code, in-page preview, offers, quote, and booking; checkout remains disabled.
+  EVIDENCE: Access/document component tests 9/9 and desktop browser tests 2/2 passed. Static export has the locked /proposal/client/ route without client data. The 50% reserve button is disabled and booking links to /booking/.
+
+- [x] G12: The reusable local authoring flow has a client-neutral template and supports draft, issue, rotate, revoke, and cleanup without a live issue.
+  EVIDENCE: Authoring tests 7/7 passed, Meghan staged draft validates with three offers and captures, capture now accepts a client-specific watermark, and docs/manual-proposal-operations.md records the CLI and review process. No live draft or code was issued.
+
+- [x] G13: Unit, Edge, database/static, export, build, and browser checks have fresh evidence or documented environment limitations.
+  EVIDENCE: Unit 182/182, Edge 49/49, migration static 21/21, authoring/capture/export Node 11/11, Playwright 8/8 across four viewports, typecheck, lint (0 errors, 3 image warnings), and production static build passed. New pgTAP migration 27/27 passed. The full historical database suite failed older QuizUp pgTAP files 01 and 03-06 under local Supabase CLI 2.121.0; that existing suite incompatibility is outside this branch's SQL changes and remains a limitation.
+
+- [ ] G14: Whole-branch review and clean working-tree handoff are complete.
+  EVIDENCE: pending
